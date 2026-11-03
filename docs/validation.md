@@ -1,0 +1,136 @@
+# Validação da revisão naca-digital — 14/10/2026
+
+## Identidade inicial do Esporte — 03/11/2026
+
+- Paletas vermelha/vinho, cabeçalho, navegação, início, carteira e textos de clube adaptados à referência fornecida.
+- Perfis visuais Esporte/Nacional centralizados no JSON compartilhado e selecionados por `EXPO_PUBLIC_CLUB`; configuração Expo de ambos conferida.
+- Escudo gerado por edição image_gen para remover fundo externo, salvo no workspace e inspecionado. PNG RGBA com alpha 0 nos cantos externos.
+- TypeScript e 15 testes do app passaram. Exportação iOS passou com 2.964 módulos e assets em `.artifacts/esporte-ios`.
+- Sem alterações nos registros do banco ou início de serviços/prévia. Conferência visual no aparelho ainda pendente.
+
+[Arquivos, seleção do clube e limites da configuração visual](identidade-clubes.md).
+
+## Correção do cadastro no iPhone — 03/11/2026
+
+- Erro reportado: impossibilidade de conectar à API. O app usava `localhost:3333`, que no iPhone aponta para o próprio telefone. O endereço explícito local foi corrigido para `192.168.0.100:3333`; o app também resolve localhost pelo host do Expo em desenvolvimento nativo.
+- API já iniciada pelo responsável: `/health` e `/ready` responderam 200 pela rede local. O banco estava acessível, mas só tinha a migration inicial; faltavam colunas do perfil/roles e tabelas de refresh e portaria.
+- `npm run db:prepare` executado com sucesso: Prisma gerado, seis migrations pendentes aplicadas (sete no total) e administrador configurado. Nenhum serviço foi iniciado pelo agente.
+- Cadastro HTTP real pela API existente retornou 201; perfil autenticado e login retornaram 200; cadastro duplicado retornou 409 `EMAIL_IN_USE`. Somente a conta temporária exclusiva desta verificação foi removida, junto às suas sessões por cascade. Nenhuma credencial ou token foi exibido.
+- Transporte do app diferencia erro de rede, timeout, resposta inválida e rejeição da API; detalhes Zod e protocolo ficam disponíveis. Banco sem schema atualizado retorna 503 específico.
+- Passaram 15 testes isolados do mobile, 13 testes HTTP da API, sintaxe/TypeScript e `expo install --check`. A conectividade do iPhone deve ser conferida no aparelho após recarregar o Expo com a URL atualizada.
+
+As seções abaixo registram verificações anteriores; as referências a migrations ainda não aplicadas descrevem o estado daquela data.
+
+## Expo SDK 58 — 03/11/2026
+
+- App e lockfile atualizados para Expo 58.0.22, React Native 0.88.1, React 19.3.0 e módulos recomendados pelo SDK.
+- `expo install --check`: dependências atualizadas; `expo-doctor`: 20/20 checks passaram.
+- `npm run check`: sintaxe e TypeScript passaram. Foi ajustado o caso `undefined` retornado por `Linking.getInitialURL` nas novas tipagens.
+- 9 testes isolados do mobile passaram. Não foi iniciada a API, o banco ou uma prévia do app.
+- Exportação iOS passou: 2.957 módulos, assets e bundle Hermes gerados em `.artifacts/sdk58-ios`, sem abrir o app no aparelho.
+- Comando de reinício com cache limpo preparado: `npm run dev:mobile:clear`. Validação nativa no iPhone continua pendente.
+
+[Versões e abertura pelo Expo Go 58](expo-sdk58.md).
+
+## Migração HTTP para Express — 03/11/2026
+
+- Express 5.3.0 instalado na API, com Router, middlewares de contexto/CORS/acesso e tratamento central de erros.
+- `npm run check`: sintaxe JavaScript e TypeScript passaram.
+- `npm run test:unit`: 72 testes da API e 9 do app passaram (81 no total). Incluem 13 testes HTTP executados com streams Node em memória, sem listener, rede ou banco.
+- As 66 rotas de negócio foram montadas no Express; as 60 rotas privadas rejeitaram requisições sem sessão antes dos controllers e do parser de JSON.
+- `npm ls express --workspace @nacional/api` confirmou Express 5.3.0. Package e lockfile atualizados.
+- Nenhuma migration é necessária para esta alteração. Integração com PostgreSQL, execução em aparelho e validação do deploy continuam pendentes. App, API, Docker e prévia não foram iniciados.
+
+[Estrutura e contratos da migração](express-migration.md).
+
+## Central de compra no app — 30/10/2026
+
+- Catálogo com busca e filtro, setores/vagas, revisão de compra, carteira com estados/prazos, cancelamento não pago e QR/código de portaria implementados.
+- `npm run test:unit`: 59 testes da API e 9 do mobile passaram (68 no total), sem listener ou PostgreSQL. Os novos testes cobrem revisão sem reserva, cálculo do total, mudança de preço/desconto, lotação após consulta, prazo durante espera, gratuidade, duplicidade, auditoria e estados do catálogo.
+- `npm run check`: sintaxe JavaScript, testes/scripts da API e TypeScript do app passaram. As 66 rotas foram importadas e os guards admin/portaria conferidos sem abrir um servidor.
+- O fluxo HTTP administrativo foi preparado para consultar `/tickets/quote` e comparar `expectedTotalCents`. A integração com PostgreSQL não foi executada. Esta etapa não exige migration nova; as migrations preparadas anteriormente continuam necessárias.
+- Nenhuma execução visual em navegador/aparelho foi feita. Não foram iniciados app, API, Docker ou prévia. O pagamento permanece por conferência externa, com gateway pendente de escolha.
+
+[Jornada do torcedor e contrato do checkout](ticket-purchase-app.md).
+
+## Ingressos com QR curto e portaria por partida/setor — 30/10/2026
+
+- `npm run test:unit`: 43 testes de backend e 4 de sessão mobile passaram (47 no total).
+- Novos testes exercitam assinatura/tipo/prazo do ingresso, partida/setor, recibo/titular, janela, inspeção sem autorização, versão consumida, repetição e rollback. A persistência desses testes é em memória atômica; eles não comprovam SSI/concor­rência do PostgreSQL.
+- `npm run check` passou. Schema Prisma válido e cliente gerado.
+- Conectividade PostgreSQL novamente recusada (`ECONNREFUSED`), então a migration `20261030020000_secure_ticket_entry` não foi aplicada.
+
+O teste PostgreSQL de dois operadores disputando o mesmo QR enquanto ainda há lugares foi preparado em `ticket-entry-integration.test.js`. O fluxo HTTP administrativo foi atualizado para o novo QR. Nenhum teste com banco, preview web ou execução em aparelho foi realizado; app, API e Docker não foram iniciados. [Estado, proteção e limites](ticket-security.md).
+
+## Autenticação JWT — 30/10/2026
+
+- `npm run check`: JavaScript, scripts/testes da API e TypeScript mobile passaram.
+- `npm run test:unit`: 34 testes de backend e 4 da máquina de sessão mobile passaram (38 no total), sem iniciar servidores ou consultar PostgreSQL.
+- Testes novos cobrem assinatura, expiração, issuer/audience/algoritmo/tipo, rejeição de adulteração, cadastro, login, rotação/reutilização de refresh, revogação imediata, logout-all, troca de senha e concorrência de renovação no app.
+- `prisma validate` e `db:generate`: schema válido e cliente gerado.
+- As 54 rotas foram importadas e os guards administrativos conferidos, sem listener HTTP.
+- A verificação de conectividade encontrou novamente `ECONNREFUSED` no PostgreSQL configurado. A migration `20261030010000_jwt_sessions` foi preparada, mas não aplicada. Nenhuma conta/senha foi alterada no banco.
+
+O teste de autenticação com PostgreSQL foi adicionado a `test:integration` e não foi executado. Ele verifica sessão/refresh reais, replay, permissões atuais, logout, senha e suspensão. A nova tela Segurança não foi executada em aparelho. `setup` gerou segredos JWT locais sem imprimir seus valores. API, app e Docker não foram iniciados. [Contrato e aplicação da migration](authentication.md).
+
+## Contas reais e administração de ingressos
+
+O modo padrão foi alterado para API real. A implementação inclui cadastro/login, roles USER/ADMIN, publicação/janela de jogos, setores/capacidade, emissão por confirmação manual, cortesias, QR de ingresso, entradas parciais e auditoria.
+
+- `npm run check`: sintaxe JavaScript e TypeScript passaram.
+- Schema Prisma validado e cliente gerado.
+- `npm run test:unit`: 22 testes isolados passaram, incluindo autorização, janela, recebimento, QR e consumo de entradas. Um teste identificou que PATCH aplicava defaults indevidos; os defaults foram removidos do schema de atualização, e o teste passou após a correção.
+- `db:deploy` foi tentado; a conexão PostgreSQL falhou. Consulta independente confirmou `ECONNREFUSED` em `localhost:55432`.
+
+Migration `20261014030000_admin_ticketing` criada e **não aplicada**. O bootstrap do administrador também não foi executado no banco indisponível. O teste `admin-integration.test.js` cobre contas reais, RBAC, publicação, disputa por capacidade, pagamento duplicado, entradas concorrentes, cortesia, associação e suspensão; está preparado e **não foi executado**. Nenhum app, API, Docker ou PostgreSQL foi iniciado pelo agente. Não houve conferência visual nesta revisão.
+
+Quando o responsável iniciar o banco, execute `npm run db:prepare` e depois `npm run test:integration` em ambiente de desenvolvimento. [Instruções completas](real-accounts-ticketing.md).
+
+## Revisão visual e cashback anterior
+
+Nesta revisão não foram iniciados app, API, PostgreSQL, Docker ou prévia no navegador, conforme solicitado. Foram executados:
+
+- `npm run check`: sintaxe JavaScript da API e TypeScript do app passaram.
+- `prisma validate` e `npm run db:generate`: schema válido e cliente Prisma 7.10.0 gerado, sem consultar o banco.
+- `node --test apps/api/test/crypto.test.js apps/api/test/business-rules.test.js apps/api/test/payment-rules.test.js`: 16 testes passaram, sem abrir portas ou conectar ao PostgreSQL. Cobrem criptografia, validadores, limites, fuso do check-in, preço/quantidade, capacidade, repetição de transações, split em centavos, vinculação, validade e eventos de estorno fora de ordem.
+
+A migration `20261014010000_engagement_and_reservations` foi escrita e **não aplicada**. O teste de integração foi ampliado para reservas expiradas/capacidade, preferências, interesse na escolinha, check-ins e resgates concorrentes; **não foi executado nesta revisão**. O aspecto visual precisa ser comparado com a referência em Android/iOS e nas telas pequenas. A checagem TypeScript não comprova equivalência visual.
+
+A migration `20261014020000_cashback_payments` foi gerada offline por comparação dos schemas e recebeu constraints de valores/divisão. Também **não foi aplicada**. Caixa, leitor de QR e carteira passaram na checagem TypeScript, mas não foram executados em aparelho/navegador. O novo teste financeiro com PostgreSQL está preparado e não foi executado. O gateway real continua desabilitado.
+
+Para validar quando o ambiente for iniciado pelo responsável:
+
+```powershell
+npm run db:generate
+npm run db:deploy
+npm run db:seed
+npm run test:integration
+```
+
+O teste de integração usa o banco configurado de desenvolvimento, abre um servidor de teste temporário e remove somente os registros que cria. Nunca use dados de produção.
+
+## Histórico da base anterior — 13/10/2026
+
+Os resultados abaixo pertencem à implementação anterior baseada em `base.js`; não validam as mudanças desta revisão.
+
+Executado no ambiente Windows do projeto:
+
+| Verificação | Resultado |
+| --- | --- |
+| `npm run check` | Sintaxe da API e TypeScript mobile válidos |
+| `prisma validate` e `prisma generate` | Schema válido, cliente 7.10.0 gerado |
+| Migration inicial | Aplicada ao PostgreSQL 17 em Docker |
+| Seed | Conta, associação, plano, jogo, setores e parceiros criados |
+| `npm test` | 10 testes passaram; teste com banco é executado separadamente |
+| `npm run test:integration` | Fluxo completo com PostgreSQL passou |
+| `expo install --check` | Dependências compatíveis com SDK 57 |
+| Exportação Expo | Bundles Android, iOS e web gerados |
+| Prévia web em Chromium | Cinco abas, dois temas, filtro, perfil, palpite, ingresso e modo estádio passaram |
+| App conectado à API | Login, dashboard real, QR dinâmico e logout passaram no navegador |
+| Visual responsivo | Capturas em 390 × 844 e 320 × 740 inspecionadas |
+| Build Docker API | Imagem criada com `npm ci` e geração Prisma |
+| API no container | Migration deploy e `/ready` passaram |
+
+Os testes HTTP cobrem autenticação, CORS, validação, limites de corpo e ocultação de erros internos. A integração verifica cadastro/login, proteção da carteirinha, sessão armazenada em hash, desconto, ingresso pendente, duplicidade, palpite, atualização de perfil, saldo protegido, indicação, expiração da associação e revogação por logout.
+
+As capturas e scripts temporários da revisão estão em `.artifacts/`, ignorados pelo Git e pelo Docker. A prévia web é uma conferência adicional; ainda falta execução em Android/iOS físicos e geração de APK/IPA. Integrações futuras estão descritas no [roadmap](roadmap.md). Os alertas encontrados no audit estão registrados nesse mesmo documento.

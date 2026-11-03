@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "Nacional • Sócio Canário",
+    "slug": "nacional-socio-canario",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "scheme": "nacional",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "br.com.nacional.sociocanario"
+    },
+    "android": {
+      "package": "br.com.nacional.sociocanario"
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permitir que o Naça leia QRs de ingressos na portaria e de vendas.",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": true
+        }
+      ],
+      "expo-font",
+      "expo-status-bar"
+    ]
+  }
+}

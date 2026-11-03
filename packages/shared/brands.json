@@ -1,0 +1,38 @@
+{
+  "esporte": {
+    "id": "esporte", "name": "Esporte Clube de Patos", "shortName": "Esporte", "upperName": "ESPORTE", "location": "DE PATOS",
+    "appName": "Sócio Esporte", "programName": "Sócio Esporte", "supporterLabel": "TERROR", "nickname": "Patinho Terror",
+    "tvName": "Esporte TV", "schoolName": "Ninho do Patinho", "schoolSubtitle": "Escolinha do Esporte", "quizName": "Quiz do Esporte",
+    "lightColor": "#c4262c", "darkColor": "#ae1b24", "stadiumColor": "#d72d35", "stadiumWhite": "#fff4f2",
+    "dark": {
+      "background": "#160707", "outer": "#090303", "surface": "#251014", "text": "#fff4f3", "muted": "#c4afb2", "subtle": "#bba1a5", "border": "#ffffff14", "soft": "#ffffff06",
+      "primary": "#f07d86", "primarySoft": "#b6253026", "primaryStrong": "#bc2029", "primaryEnd": "#8b161d", "onPrimary": "#ffffff",
+      "gold": "#e6c16d", "danger": "#ffaaa3", "header": "#130707", "nav": "#28191c", "navActive": "#4a171e", "heroStart": "#391013", "heroEnd": "#130505",
+      "cardStart": "#4b151c", "cardMiddle": "#290b10", "cardEnd": "#100405", "onHero": "#fff4f3", "heroMuted": "#d8b8bd", "brandBorder": "#ae39424d", "ink": "#351015"
+    },
+    "light": {
+      "background": "#fff7f6", "outer": "#f3e9e8", "surface": "#ffffff", "text": "#35151b", "muted": "#795f65", "subtle": "#876d74", "border": "#ecdadd", "soft": "#f9edef",
+      "primary": "#b4212b", "primarySoft": "#f9e3e6", "primaryStrong": "#bd222b", "primaryEnd": "#951821", "onPrimary": "#ffffff",
+      "gold": "#926c20", "danger": "#b3322c", "header": "#fff9f8", "nav": "#ffffff", "navActive": "#f9e1e5", "heroStart": "#fae4e6", "heroEnd": "#fff9f8",
+      "cardStart": "#641c27", "cardMiddle": "#360f16", "cardEnd": "#190609", "onHero": "#35151b", "heroMuted": "#86616a", "brandBorder": "#d49ba34d", "ink": "#351015"
+    }
+  },
+  "nacional": {
+    "id": "nacional", "name": "Nacional de Patos", "shortName": "Naça", "upperName": "NACIONAL", "location": "DE PATOS",
+    "appName": "Nacional • Sócio Canário", "programName": "Sócio Canário", "supporterLabel": "CANÁRIO", "nickname": "Canário do Sertão",
+    "tvName": "Naça TV", "schoolName": "Ninho do Canário", "schoolSubtitle": "Escolinha do Nacional", "quizName": "Quiz do Naça",
+    "lightColor": "#249c6a", "darkColor": "#18894d", "stadiumColor": "#43d188", "stadiumWhite": "#f3fff4",
+    "dark": {
+      "background": "#08150f", "outer": "#030906", "surface": "#101f18", "text": "#f1f6f2", "muted": "#a6b5ab", "subtle": "#9fb4a6", "border": "#ffffff14", "soft": "#ffffff06",
+      "primary": "#57dca0", "primarySoft": "#14492b26", "primaryStrong": "#28b881", "primaryEnd": "#18894d", "onPrimary": "#ffffff",
+      "gold": "#f0cd72", "danger": "#f1a397", "header": "#07110c", "nav": "#101c16", "navActive": "#16442c", "heroStart": "#123527", "heroEnd": "#040b07",
+      "cardStart": "#103c2b", "cardMiddle": "#072017", "cardEnd": "#020704", "onHero": "#f1f6f2", "heroMuted": "#b8c8bd", "brandBorder": "#58c3912d", "ink": "#082116"
+    },
+    "light": {
+      "background": "#f5f8f5", "outer": "#eaf0eb", "surface": "#ffffff", "text": "#1b3526", "muted": "#556f5c", "subtle": "#566e5b", "border": "#dfe8e0", "soft": "#edf5ef",
+      "primary": "#187c48", "primarySoft": "#e4f3e6", "primaryStrong": "#249c6a", "primaryEnd": "#167441", "onPrimary": "#ffffff",
+      "gold": "#947025", "danger": "#993b2e", "header": "#f5f8f5", "nav": "#ffffff", "navActive": "#e4f3e6", "heroStart": "#e7f3e9", "heroEnd": "#ffffff",
+      "cardStart": "#103c2b", "cardMiddle": "#072017", "cardEnd": "#020704", "onHero": "#1b3526", "heroMuted": "#556f5c", "brandBorder": "#4ea86f3b", "ink": "#082116"
+    }
+  }
+}

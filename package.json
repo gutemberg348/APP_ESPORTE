@@ -1,0 +1,28 @@
+{
+  "name": "nacional",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "engines": { "node": ">=22.13.0 <23 || >=24.3.0" },
+  "scripts": {
+    "dev:api": "npm run dev --workspace @nacional/api",
+    "dev:mobile": "npm run start --workspace @nacional/mobile",
+    "dev:mobile:clear": "npm run start --workspace @nacional/mobile -- --clear",
+    "android": "npm run android --workspace @nacional/mobile",
+    "web": "npm run web --workspace @nacional/mobile",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose stop postgres",
+    "db:generate": "npm run db:generate --workspace @nacional/api",
+    "db:migrate": "npm run db:migrate --workspace @nacional/api",
+    "db:deploy": "npm run db:deploy --workspace @nacional/api",
+    "db:seed": "npm run db:seed --workspace @nacional/api",
+    "db:bootstrap": "npm run db:bootstrap --workspace @nacional/api",
+    "db:prepare": "npm run db:prepare --workspace @nacional/api",
+    "db:studio": "npm run db:studio --workspace @nacional/api",
+    "check": "npm run check --workspaces --if-present",
+    "test": "npm run test --workspace @nacional/api",
+    "test:unit": "npm run test:unit --workspaces --if-present",
+    "test:integration": "npm run test:integration --workspace @nacional/api",
+    "setup": "node scripts/setup.mjs"
+  }
+}

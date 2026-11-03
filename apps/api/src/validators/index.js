@@ -1,0 +1,18 @@
+import { z } from 'zod';
+const email = z.string().trim().toLowerCase().email().max(254);
+const password = z.string().min(10, 'Use pelo menos 10 caracteres.').max(128);
+const name = z.string().trim().min(2).max(100);
+export const registerSchema = z.object({ name, email, password }).strict();
+export const loginSchema = z.object({ email, password: z.string().min(1).max(128), portal: z.enum(['APP', 'GATE']).default('APP') }).strict();
+export const refreshSchema = z.object({ refreshToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }).strict();
+export const changePasswordSchema = z.object({ currentPassword: z.string().min(1).max(128), newPassword: password }).strict();
+export const profileSchema = z.object({ name, city: z.string().trim().max(60).optional(), contact: z.string().trim().max(80).optional() }).strict();
+export const ticketSchema = z.object({ matchId: z.uuid(), sectorId: z.uuid(), quantity: z.number().int().min(1).max(4).default(1) }).strict();
+export const ticketPurchaseSchema = ticketSchema.extend({ expectedTotalCents: z.number().int().min(0).max(2147483647).optional() }).strict();
+export const predictionSchema = z.object({ matchId: z.uuid(), homeScore: z.number().int().min(0).max(30), awayScore: z.number().int().min(0).max(30) }).strict();
+export const referralSchema = z.object({ kind: z.enum(['FRIEND', 'BUSINESS', 'PARTNER']), name, contact: z.string().trim().min(5).max(254), category: z.string().trim().min(2).max(60).default('Outro') }).strict();
+export const preferencesSchema = z.object({ family: z.boolean(), personalize: z.boolean(), notifications: z.boolean(), ranking: z.boolean() }).strict();
+export const schoolSchema = z.object({ interested: z.boolean() }).strict();
+export const redemptionSchema = z.object({ rewardId: z.uuid() }).strict();
+export const paginationSchema = z.object({ limit: z.coerce.number().int().min(1).max(100).default(50), offset: z.coerce.number().int().min(0).max(10000).default(0) }).strict();
+export const partnerQuerySchema = z.object({ category: z.string().trim().max(60).optional(), search: z.string().trim().max(100).optional() }).merge(paginationSchema);

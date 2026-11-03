@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+.git
+.env
+**/.env
+apps/mobile
+apps/api/generated
+.artifacts
+.expo
+.artifacts
+.npm-cache
+.docker-local
+docs
+base.js
+naca-digital

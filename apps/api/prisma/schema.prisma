@@ -1,0 +1,454 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MembershipStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+}
+
+enum TicketStatus {
+  PENDING
+  ISSUED
+  USED
+  CANCELED
+}
+
+enum ReferralKind {
+  FRIEND
+  BUSINESS
+  PARTNER
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  GATE
+}
+
+enum TicketPaymentMethod {
+  MANUAL
+  FREE
+}
+
+model User {
+  id           String      @id @default(uuid()) @db.Uuid
+  name         String      @db.VarChar(100)
+  email        String      @unique @db.VarChar(254)
+  passwordHash String
+  role         UserRole    @default(USER)
+  active       Boolean     @default(true)
+  avatar       String?
+  points       Int         @default(0)
+  city         String      @default("") @db.VarChar(60)
+  contact      String      @default("") @db.VarChar(80)
+  preferences  Json        @default("{\"family\":true,\"personalize\":true,\"notifications\":false,\"ranking\":false}")
+  schoolInterested Boolean @default(false)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  membership   Membership?
+  sessions     Session[]
+  tickets      Ticket[]
+  predictions  Prediction[]
+  referrals    Referral[]
+  pointEntries PointEntry[]
+  redemptions  Redemption[]
+  cashWallets CashWallet[]
+  merchantOperators MerchantOperator[]
+  createdCharges PaymentCharge[]
+  confirmedTicketPayments TicketPayment[]
+  ticketAdmissions TicketAdmission[]
+  auditLogs AuditLog[]
+  gateAssignments GateAssignment[]
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  tokenHash String   @unique
+  userId    String   @db.Uuid
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+  lastUsedAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokens RefreshToken[]
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([userId, revokedAt])
+}
+
+model RefreshToken {
+  id String @id @default(uuid()) @db.Uuid
+  tokenHash String @unique
+  sessionId String @db.Uuid
+  expiresAt DateTime
+  usedAt DateTime?
+  createdAt DateTime @default(now())
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  @@index([sessionId])
+  @@index([expiresAt])
+}
+
+model Plan {
+  id              String       @id @default(uuid()) @db.Uuid
+  name            String       @unique
+  priceCents      Int
+  discountPercent Int          @default(0)
+  memberships     Membership[]
+}
+
+model Membership {
+  id         String           @id @default(uuid()) @db.Uuid
+  userId     String           @unique @db.Uuid
+  planId     String           @db.Uuid
+  memberId   String           @unique
+  status     MembershipStatus @default(PENDING)
+  validUntil DateTime
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan       Plan             @relation(fields: [planId], references: [id])
+}
+
+model Match {
+  id          String       @id @default(uuid()) @db.Uuid
+  slug        String       @unique
+  homeTeam    String
+  awayTeam    String
+  startsAt    DateTime
+  stadium     String
+  competition String
+  isHome      Boolean      @default(true)
+  published   Boolean      @default(false)
+  salesEnabled Boolean     @default(true)
+  salesOpenAt DateTime?
+  salesCloseAt DateTime?
+  entryEnabled Boolean     @default(false)
+  gateOpenAt DateTime?
+  gateCloseAt DateTime?
+  sectors     Sector[]
+  tickets     Ticket[]
+  predictions Prediction[]
+
+  @@index([startsAt])
+}
+
+model Sector {
+  id         String   @id @default(uuid()) @db.Uuid
+  matchId    String   @db.Uuid
+  name       String
+  priceCents Int
+  capacity   Int      @default(500)
+  salesEnabled Boolean @default(true)
+  match      Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  tickets    Ticket[]
+  gateAssignments GateAssignment[]
+
+  @@unique([matchId, name])
+}
+
+model Ticket {
+  id         String       @id @default(uuid()) @db.Uuid
+  userId     String       @db.Uuid
+  matchId    String       @db.Uuid
+  sectorId   String       @db.Uuid
+  status     TicketStatus @default(PENDING)
+  priceCents Int
+  quantity   Int          @default(1)
+  usedQuantity Int        @default(0)
+  entryVersion Int        @default(0)
+  entryToken String?      @unique
+  expiresAt  DateTime?
+  createdAt  DateTime     @default(now())
+  user       User         @relation(fields: [userId], references: [id])
+  match      Match        @relation(fields: [matchId], references: [id])
+  sector     Sector       @relation(fields: [sectorId], references: [id])
+  payment    TicketPayment?
+  admissions TicketAdmission[]
+  accessCodes TicketAccessCode[]
+
+  @@unique([userId, matchId])
+  @@index([sectorId, status, expiresAt])
+}
+
+model Partner {
+  id       String  @id @default(uuid()) @db.Uuid
+  slug     String  @unique
+  name     String
+  discount String
+  category String
+  active   Boolean @default(true)
+  icon     String  @default("gift")
+  description String @default("")
+  conditions  String @default("")
+  location    String @default("")
+  merchant Merchant?
+
+  @@index([active, category])
+}
+
+model Prediction {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  matchId   String   @db.Uuid
+  homeScore Int
+  awayScore Int
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  match     Match    @relation(fields: [matchId], references: [id])
+
+  @@unique([userId, matchId])
+}
+
+model Referral {
+  id        String       @id @default(uuid()) @db.Uuid
+  userId    String       @db.Uuid
+  kind      ReferralKind
+  name      String       @db.VarChar(100)
+  contact   String       @db.VarChar(254)
+  category  String       @default("Outro") @db.VarChar(60)
+  status    String       @default("RECEIVED")
+  createdAt DateTime     @default(now())
+  user      User         @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model PointEntry {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  sourceKey String
+  amount    Int
+  reason    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sourceKey])
+  @@index([userId, createdAt])
+}
+
+model Reward {
+  id          String @id @default(uuid()) @db.Uuid
+  slug        String @unique
+  title       String
+  description String
+  cost        Int
+  stock       Int
+  icon        String @default("gift")
+  active      Boolean @default(true)
+  redemptions Redemption[]
+}
+
+model Redemption {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  rewardId  String   @db.Uuid
+  cost      Int
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  reward    Reward   @relation(fields: [rewardId], references: [id])
+
+  @@unique([userId, rewardId])
+}
+
+// Financial balances are separate from gamification points. A merchant is
+// shared across brands; each offer and each customer wallet belongs to a tenant.
+enum PaymentChannel {
+  CASHIER_QR
+  CUSTOMER_QR
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  REFUNDED
+  CANCELED
+}
+
+enum CashEntryKind {
+  CASHBACK
+  REVERSAL
+}
+
+model Tenant {
+  id String @id @default(uuid()) @db.Uuid
+  slug String @unique @db.VarChar(60)
+  name String
+  active Boolean @default(true)
+  offers MerchantOffer[]
+  wallets CashWallet[]
+}
+
+model Merchant {
+  id String @id @default(uuid()) @db.Uuid
+  slug String @unique
+  name String
+  publicCode String @unique @default(uuid()) @db.Uuid
+  active Boolean @default(true)
+  partnerId String? @unique @db.Uuid
+  partner Partner? @relation(fields: [partnerId], references: [id])
+  offers MerchantOffer[]
+  operators MerchantOperator[]
+}
+
+model MerchantOffer {
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  merchantId String @db.Uuid
+  cashbackBps Int
+  commissionBps Int
+  active Boolean @default(true)
+  customerQrEnabled Boolean @default(false)
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+  charges PaymentCharge[]
+  @@unique([tenantId, merchantId])
+}
+
+model MerchantOperator {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  merchantId String @db.Uuid
+  active Boolean @default(true)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+  @@unique([userId, merchantId])
+}
+
+model CashWallet {
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  userId String @db.Uuid
+  customerCode String @unique
+  balanceCents Int @default(0)
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+  entries CashEntry[]
+  charges PaymentCharge[]
+  @@unique([tenantId, userId])
+}
+
+model PaymentCharge {
+  id String @id @default(uuid()) @db.Uuid
+  offerId String @db.Uuid
+  creatorId String @db.Uuid
+  walletId String? @db.Uuid
+  channel PaymentChannel
+  status PaymentStatus @default(PENDING)
+  requestKey String @db.VarChar(80)
+  claimCode String @unique
+  grossCents Int
+  merchantCents Int
+  cashbackCents Int
+  commissionCents Int
+  gatewayFeeCents Int @default(0)
+  provider String
+  providerReference String? @unique
+  pixPayload String?
+  expiresAt DateTime
+  paidAt DateTime?
+  refundedAt DateTime?
+  createdAt DateTime @default(now())
+  offer MerchantOffer @relation(fields: [offerId], references: [id])
+  creator User @relation(fields: [creatorId], references: [id])
+  wallet CashWallet? @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  entries CashEntry[]
+  events PaymentEvent[]
+  @@unique([creatorId, requestKey])
+  @@index([offerId, createdAt])
+  @@index([walletId, createdAt])
+}
+
+model CashEntry {
+  id String @id @default(uuid()) @db.Uuid
+  walletId String @db.Uuid
+  chargeId String @db.Uuid
+  kind CashEntryKind
+  amountCents Int
+  balanceAfterCents Int
+  createdAt DateTime @default(now())
+  wallet CashWallet @relation(fields: [walletId], references: [id])
+  charge PaymentCharge @relation(fields: [chargeId], references: [id])
+  @@unique([chargeId, kind])
+  @@index([walletId, createdAt])
+}
+
+model PaymentEvent {
+  id String @id @default(uuid()) @db.Uuid
+  chargeId String @db.Uuid
+  provider String
+  externalId String
+  fingerprint String
+  type String
+  occurredAt DateTime
+  createdAt DateTime @default(now())
+  charge PaymentCharge @relation(fields: [chargeId], references: [id])
+  @@unique([provider, externalId])
+}
+
+model TicketPayment {
+  id String @id @default(uuid()) @db.Uuid
+  ticketId String @unique @db.Uuid
+  method TicketPaymentMethod
+  amountCents Int
+  reference String @unique @db.VarChar(100)
+  confirmedById String? @db.Uuid
+  confirmedAt DateTime @default(now())
+  ticket Ticket @relation(fields: [ticketId], references: [id])
+  confirmedBy User? @relation(fields: [confirmedById], references: [id], onDelete: Restrict)
+}
+
+model TicketAdmission {
+  id String @id @default(uuid()) @db.Uuid
+  ticketId String @db.Uuid
+  actorId String @db.Uuid
+  quantity Int
+  requestKey String @db.VarChar(80)
+  scanId String? @unique @db.Uuid
+  qrVersion Int?
+  createdAt DateTime @default(now())
+  ticket Ticket @relation(fields: [ticketId], references: [id])
+  actor User @relation(fields: [actorId], references: [id])
+  @@unique([ticketId, requestKey])
+}
+
+model AuditLog {
+  id String @id @default(uuid()) @db.Uuid
+  actorId String @db.Uuid
+  action String
+  entityId String
+  details Json
+  createdAt DateTime @default(now())
+  actor User @relation(fields: [actorId], references: [id])
+  @@index([createdAt])
+}
+
+model GateAssignment {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  sectorId String @db.Uuid
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sector Sector @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  @@unique([userId, sectorId])
+  @@index([userId, active])
+}
+
+model TicketAccessCode {
+  id String @id @default(uuid()) @db.Uuid
+  ticketId String @db.Uuid
+  codeHash String @unique
+  scanId String @unique @db.Uuid
+  entryVersion Int
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  @@index([expiresAt])
+}

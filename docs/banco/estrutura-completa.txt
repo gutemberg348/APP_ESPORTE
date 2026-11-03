@@ -1,0 +1,2254 @@
+NACIONAL / SÓCIO CANÁRIO — DICIONÁRIO COMPLETO DO BANCO DE DADOS
+Revisão: 03/11/2026 | Fuso de apresentação da revisão: America/Cayenne
+Banco: nacional; PostgreSQL 17.10; schema public.
+27 tabelas de aplicação + _prisma_migrations = 28 tabelas físicas.
+216 colunas; 35 FKs; 21 CHECKs; 79 índices (incluindo PK/UNIQUE); 8 enums.
+7 migrations aplicadas e não revertidas.
+Fontes: schema Prisma, migrations e catálogos de metadados do PostgreSQL.
+Nenhum cadastro, senha, segredo, token ou transação de usuário foi exportado. Apenas estrutura.
+Retrato desta revisão; futuras mudanças no schema exigem atualizar este documento.
+
+====================================================================================================
+1. CONVENÇÕES
+====================================================================================================
+PK: chave primária. FK: chave estrangeira. UNIQUE: unicidade. CHECK: restrição de expressão.
+NOT NULL: obrigatório no banco. NULL: ausência de valor permitida.
+1:N: pai com vários filhos. 0..1: associação opcional de no máximo um registro.
+Nomes são sensíveis a maiúsculas: em SQL use aspas, por exemplo FROM "User".
+String @db.Uuid corresponde a UUID. uuid() é gerado pelo Prisma, sem DEFAULT SQL nas migrations atuais.
+@updatedAt é mantido pelo Prisma, não por trigger. Atualizações SQL diretas não o atualizam automaticamente.
+DateTime usa timestamp(3) without time zone. A API trabalha com instantes/ISO; o campo não armazena o fuso.
+Regras de dia e exibição de jogos usam America/Fortaleza (Patos) na aplicação.
+Json corresponde a JSONB. Relações de objeto/lista do Prisma são virtuais, não colunas.
+Dinheiro é inteiro em centavos de BRL. Taxas Bps: 10.000 = 100%; 1.000 = 10%; 200 = 2%.
+UNIQUE nullable permite vários NULLs no PostgreSQL utilizado.
+CASCADE apaga filhos com o pai. RESTRICT impede exclusão de pai referenciado. SET NULL limpa o vínculo opcional.
+NO ACTION mantém a conferência de integridade do banco conforme a constraint.
+Permissões HTTP e regras compostas da API não são garantias automáticas de SQL.
+
+====================================================================================================
+2. TABELAS POR MÓDULO
+====================================================================================================
+
+Identidade e acesso:
+  User: Contas de torcedores, administradores e funcionários. Perfil, permissões e saldo de pontos.
+  Session: Sessão autenticada, hash do segredo atual de refresh, validade absoluta e revogação.
+  RefreshToken: Histórico de renovação de sessão, com consumo único e detecção de reutilização.
+
+Associação:
+  Plan: Plano de sócio, preço de mensalidade e desconto em ingresso.
+  Membership: Matrícula de uma conta em um plano, com estado e validade.
+
+Jogos e ingressos:
+  Match: Partida, publicação e janelas de venda e portaria.
+  Sector: Setor de uma partida, preço, capacidade total e habilitação de venda.
+  Ticket: Pedido por conta/partida; um registro representa de uma a quatro pessoas.
+  TicketPayment: Conferência do recebimento externo pelo administrador ou registro da gratuidade.
+
+Portaria:
+  TicketAdmission: Entrada confirmada: quantidade, operador, leitura e chave de idempotência.
+  TicketAccessCode: Hash do código digitável temporário, compartilhando leitura/versão/vencimento com o QR.
+  GateAssignment: Escala que libera uma conta de funcionário para operar um setor de uma partida.
+
+Auditoria:
+  AuditLog: Histórico de ações relevantes com ator, ação, entidade e detalhes JSON.
+
+Relacionamento:
+  Partner: Parceiros e benefícios exibidos ao torcedor; vínculo financeiro com Merchant é opcional.
+  Prediction: Palpite de placar por conta/partida; apuração e premiação ainda pendentes.
+  Referral: Indicação de amigo, negócio ou parceiro; não envia mensagem automaticamente.
+
+Pontos e experiências:
+  PointEntry: Extrato de créditos e débitos de pontos, separado do saldo monetário.
+  Reward: Experiência trocável por pontos, com custo, estoque e habilitação.
+  Redemption: Resgate de uma experiência pela conta, com custo histórico em pontos.
+
+Cashback e split:
+  Tenant: Instituição/marca no módulo financeiro; não implica multi-tenant completo do produto.
+  Merchant: Estabelecimento compartilhável entre instituições, com ofertas e operadores.
+  MerchantOffer: Condições de cashback/comissão entre instituição e estabelecimento.
+  MerchantOperator: Permissão de uma conta para operar o caixa de um estabelecimento. Não é role GATE.
+  CashWallet: Carteira monetária por instituição/conta, com saldo líquido em centavos.
+  PaymentCharge: Venda/cobrança com split, beneficiário, estado e idempotência. Não é TicketPayment.
+  CashEntry: Lançamento de crédito ou compensação de cashback vinculado à venda e carteira.
+  PaymentEvent: Evento normalizado de liquidação/estorno, com ID externo e fingerprint de consistência.
+
+Infraestrutura:
+  _prisma_migrations: Controle técnico de migrations. Não é model de negócio da aplicação.
+
+====================================================================================================
+3. ENUMS PERSISTIDOS
+====================================================================================================
+CashEntryKind: CASHBACK | REVERSAL
+MembershipStatus: PENDING | ACTIVE | EXPIRED
+PaymentChannel: CASHIER_QR | CUSTOMER_QR
+PaymentStatus: PENDING | PAID | REFUNDED | CANCELED
+ReferralKind: FRIEND | BUSINESS | PARTNER
+TicketPaymentMethod: MANUAL | FREE
+TicketStatus: PENDING | ISSUED | USED | CANCELED
+UserRole: USER | ADMIN | GATE
+
+EXPIRED não existe no enum TicketStatus: é calculado pela API quando a reserva vence.
+Referral.status e AuditLog.action são strings. PaymentEvent.type também é string, com CHECK SQL próprio.
+
+====================================================================================================
+4. RELAÇÕES E CARDINALIDADES
+====================================================================================================
+
+N:N explícitas: User <-> Sector via GateAssignment; User <-> Merchant via MerchantOperator;
+Tenant <-> Merchant via MerchantOffer; User <-> Reward via Redemption (um resgate por par).
+Vínculos lógicos: AuditLog.entityId é polimórfico, sem FK; scanId associa emissão/entrada na API sem FK entre TicketAccessCode e TicketAdmission.
+As FKs independentes de Ticket não garantem que o setor pertença à partida; a API garante essa correspondência.
+
+====================================================================================================
+5. TODAS AS TABELAS — CAMPOS, RELAÇÕES, CONSTRAINTS E ÍNDICES
+====================================================================================================
+
+----------------------------------------------------------------------------------------------------
+TABELA 01: User
+Módulo: Identidade e acesso
+Finalidade: Contas de torcedores, administradores e funcionários. Perfil, permissões e saldo de pontos.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  name | SQL: character varying(100) | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Nome descritivo.
+  email | SQL: character varying(254) | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: E-mail de acesso, normalizado na API e único no banco.
+  passwordHash | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Hash de senha com salt; a senha em texto não é persistida.
+  avatar | SQL: text | NULL permitido
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Referência opcional de imagem.
+  points | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: 0
+    Default/automação Prisma: nenhum
+    Uso: Saldo de pontos de gamificação, não monetário.
+  createdAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: CURRENT_TIMESTAMP
+    Default/automação Prisma: nenhum
+    Uso: Momento de criação.
+  updatedAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Atualização mantida pelo cliente Prisma, sem trigger SQL equivalente.
+  city | SQL: character varying(60) | NOT NULL
+    Prisma: String?
+    Default SQL: ''::character varying
+    Default/automação Prisma: nenhum
+    Uso: Cidade do titular.
+  contact | SQL: character varying(80) | NOT NULL
+    Prisma: String?
+    Default SQL: ''::character varying
+    Default/automação Prisma: nenhum
+    Uso: Contato do titular.
+  preferences | SQL: jsonb | NOT NULL
+    Prisma: Json?
+    Default SQL: '{"family": true, "ranking": false, "personalize": true, "notifications": false}'::jsonb
+    Default/automação Prisma: nenhum
+    Uso: Preferências de família, personalização, notificações e participação no ranking.
+  schoolInterested | SQL: boolean | NOT NULL
+    Prisma: Boolean?
+    Default SQL: false
+    Default/automação Prisma: nenhum
+    Uso: Interesse na escolinha, sem matrícula/vaga garantida.
+  active | SQL: boolean | NOT NULL
+    Prisma: Boolean?
+    Default SQL: true
+    Default/automação Prisma: nenhum
+    Uso: Indica se o registro está habilitado.
+  role | SQL: "UserRole" | NOT NULL
+    Prisma: UserRole?
+    Default SQL: 'USER'::"UserRole"
+    Default/automação Prisma: nenhum
+    Uso: Perfil USER, ADMIN ou GATE, definido pelo servidor.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  membership: Membership? | lado inverso; FK na tabela relacionada
+  sessions: Session? | lado inverso; FK na tabela relacionada
+  tickets: Ticket? | lado inverso; FK na tabela relacionada
+  predictions: Prediction? | lado inverso; FK na tabela relacionada
+  referrals: Referral? | lado inverso; FK na tabela relacionada
+  pointEntries: PointEntry? | lado inverso; FK na tabela relacionada
+  redemptions: Redemption? | lado inverso; FK na tabela relacionada
+  cashWallets: CashWallet? | lado inverso; FK na tabela relacionada
+  merchantOperators: MerchantOperator? | lado inverso; FK na tabela relacionada
+  createdCharges: PaymentCharge? | lado inverso; FK na tabela relacionada
+  confirmedTicketPayments: TicketPayment? | lado inverso; FK na tabela relacionada
+  ticketAdmissions: TicketAdmission? | lado inverso; FK na tabela relacionada
+  auditLogs: AuditLog? | lado inverso; FK na tabela relacionada
+  gateAssignments: GateAssignment? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  User_points_nonnegative [CHECK]
+    CHECK (points >= 0)
+  User_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  User_email_key
+    CREATE UNIQUE INDEX "User_email_key" ON public."User" USING btree (email)
+  User_pkey
+    CREATE UNIQUE INDEX "User_pkey" ON public."User" USING btree (id)
+
+OBSERVAÇÕES:
+  - Login único para todos os perfis. Cadastro público cria USER. ADMIN provisiona GATE.
+  - Desativação/reset de senha revoga sessões. Históricos com RESTRICT podem impedir exclusão física.
+
+----------------------------------------------------------------------------------------------------
+TABELA 02: Session
+Módulo: Identidade e acesso
+Finalidade: Sessão autenticada, hash do segredo atual de refresh, validade absoluta e revogação.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  tokenHash | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Hash SHA-256 de segredo de refresh, nunca o JWT de acesso em texto.
+  userId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Conta vinculada.
+  expiresAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Prazo de validade.
+  createdAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: CURRENT_TIMESTAMP
+    Default/automação Prisma: nenhum
+    Uso: Momento de criação.
+  revokedAt | SQL: timestamp(3) without time zone | NULL permitido
+    Prisma: DateTime?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Momento de revogação; null enquanto não revogado.
+  lastUsedAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: CURRENT_TIMESTAMP
+    Default/automação Prisma: nenhum
+    Uso: Última renovação/uso registrado da sessão.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  user: User? | lado inverso; FK na tabela relacionada
+  refreshTokens: RefreshToken? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  Session_userId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE CASCADE
+    ON DELETE CASCADE; ON UPDATE CASCADE
+  Session_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  Session_expiresAt_idx
+    CREATE INDEX "Session_expiresAt_idx" ON public."Session" USING btree ("expiresAt")
+  Session_pkey
+    CREATE UNIQUE INDEX "Session_pkey" ON public."Session" USING btree (id)
+  Session_tokenHash_key
+    CREATE UNIQUE INDEX "Session_tokenHash_key" ON public."Session" USING btree ("tokenHash")
+  Session_userId_idx
+    CREATE INDEX "Session_userId_idx" ON public."Session" USING btree ("userId")
+  Session_userId_revokedAt_idx
+    CREATE INDEX "Session_userId_revokedAt_idx" ON public."Session" USING btree ("userId", "revokedAt")
+
+OBSERVAÇÕES:
+  - Access JWT referencia a sessão; API confere sessão/usuário atuais. Refresh padrão tem validade absoluta de sete dias.
+
+----------------------------------------------------------------------------------------------------
+TABELA 03: RefreshToken
+Módulo: Identidade e acesso
+Finalidade: Histórico de renovação de sessão, com consumo único e detecção de reutilização.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  tokenHash | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Hash SHA-256 de segredo de refresh, nunca o JWT de acesso em texto.
+  sessionId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Sessão vinculada ao refresh token.
+  expiresAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Prazo de validade.
+  usedAt | SQL: timestamp(3) without time zone | NULL permitido
+    Prisma: DateTime?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Consumo do refresh token; null enquanto não consumido.
+  createdAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: CURRENT_TIMESTAMP
+    Default/automação Prisma: nenhum
+    Uso: Momento de criação.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  session: Session? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  RefreshToken_sessionId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("sessionId") REFERENCES "Session"(id) ON UPDATE CASCADE ON DELETE CASCADE
+    ON DELETE CASCADE; ON UPDATE CASCADE
+  RefreshToken_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  RefreshToken_expiresAt_idx
+    CREATE INDEX "RefreshToken_expiresAt_idx" ON public."RefreshToken" USING btree ("expiresAt")
+  RefreshToken_pkey
+    CREATE UNIQUE INDEX "RefreshToken_pkey" ON public."RefreshToken" USING btree (id)
+  RefreshToken_sessionId_idx
+    CREATE INDEX "RefreshToken_sessionId_idx" ON public."RefreshToken" USING btree ("sessionId")
+  RefreshToken_tokenHash_key
+    CREATE UNIQUE INDEX "RefreshToken_tokenHash_key" ON public."RefreshToken" USING btree ("tokenHash")
+
+----------------------------------------------------------------------------------------------------
+TABELA 04: Plan
+Módulo: Associação
+Finalidade: Plano de sócio, preço de mensalidade e desconto em ingresso.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  name | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Nome descritivo.
+  priceCents | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Mensalidade em centavos; sem cobrança recorrente automática implementada.
+  discountPercent | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: 0
+    Default/automação Prisma: nenhum
+    Uso: Percentual inteiro de desconto, de 0 a 100.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  memberships: Membership? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  Plan_discount_range [CHECK]
+    CHECK ("discountPercent" >= 0 AND "discountPercent" <= 100)
+  Plan_price_nonnegative [CHECK]
+    CHECK ("priceCents" >= 0)
+  Plan_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  Plan_name_key
+    CREATE UNIQUE INDEX "Plan_name_key" ON public."Plan" USING btree (name)
+  Plan_pkey
+    CREATE UNIQUE INDEX "Plan_pkey" ON public."Plan" USING btree (id)
+
+----------------------------------------------------------------------------------------------------
+TABELA 05: Membership
+Módulo: Associação
+Finalidade: Matrícula de uma conta em um plano, com estado e validade.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  userId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Conta vinculada.
+  planId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Plano da associação.
+  memberId | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Matrícula única de sócio.
+  status | SQL: "MembershipStatus" | NOT NULL
+    Prisma: MembershipStatus?
+    Default SQL: 'PENDING'::"MembershipStatus"
+    Default/automação Prisma: nenhum
+    Uso: Estado do registro conforme enum ou regra específica.
+  validUntil | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Vencimento da associação.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  user: User? | lado inverso; FK na tabela relacionada
+  plan: Plan? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  Membership_planId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("planId") REFERENCES "Plan"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  Membership_userId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE CASCADE
+    ON DELETE CASCADE; ON UPDATE CASCADE
+  Membership_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  Membership_memberId_key
+    CREATE UNIQUE INDEX "Membership_memberId_key" ON public."Membership" USING btree ("memberId")
+  Membership_pkey
+    CREATE UNIQUE INDEX "Membership_pkey" ON public."Membership" USING btree (id)
+  Membership_userId_key
+    CREATE UNIQUE INDEX "Membership_userId_key" ON public."Membership" USING btree ("userId")
+
+OBSERVAÇÕES:
+  - userId único permite apenas uma associação por conta. Plano pode atender várias contas.
+
+----------------------------------------------------------------------------------------------------
+TABELA 06: Match
+Módulo: Jogos e ingressos
+Finalidade: Partida, publicação e janelas de venda e portaria.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  slug | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador textual único.
+  homeTeam | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Equipe mandante.
+  awayTeam | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Equipe visitante.
+  startsAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Início da partida.
+  stadium | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Estádio/local.
+  competition | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Competição.
+  isHome | SQL: boolean | NOT NULL
+    Prisma: Boolean?
+    Default SQL: true
+    Default/automação Prisma: nenhum
+    Uso: Indica se o Nacional é mandante.
+  published | SQL: boolean | NOT NULL
+    Prisma: Boolean?
+    Default SQL: false
+    Default/automação Prisma: nenhum
+    Uso: Publicação no catálogo.
+  salesCloseAt | SQL: timestamp(3) without time zone | NULL permitido
+    Prisma: DateTime?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Fechamento opcional das vendas.
+  salesEnabled | SQL: boolean | NOT NULL
+    Prisma: Boolean?
+    Default SQL: true
+    Default/automação Prisma: nenhum
+    Uso: Habilitação/pausa das vendas.
+  salesOpenAt | SQL: timestamp(3) without time zone | NULL permitido
+    Prisma: DateTime?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Abertura opcional das vendas.
+  entryEnabled | SQL: boolean | NOT NULL
+    Prisma: Boolean?
+    Default SQL: false
+    Default/automação Prisma: nenhum
+    Uso: Habilitação independente da portaria.
+  gateOpenAt | SQL: timestamp(3) without time zone | NULL permitido
+    Prisma: DateTime?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Abertura da portaria; null usa início menos duas horas na API.
+  gateCloseAt | SQL: timestamp(3) without time zone | NULL permitido
+    Prisma: DateTime?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Fechamento da portaria; null usa início mais quatro horas na API.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  sectors: Sector? | lado inverso; FK na tabela relacionada
+  tickets: Ticket? | lado inverso; FK na tabela relacionada
+  predictions: Prediction? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  Match_gate_window_valid [CHECK]
+    CHECK ("gateOpenAt" IS NULL OR "gateCloseAt" IS NULL OR "gateOpenAt" < "gateCloseAt")
+  Match_sales_window_valid [CHECK]
+    CHECK (("salesOpenAt" IS NULL OR "salesCloseAt" IS NULL OR "salesOpenAt" < "salesCloseAt") AND ("salesOpenAt" IS NULL OR "salesOpenAt" < "startsAt") AND ("salesCloseAt" IS NULL OR "salesCloseAt" <= "startsAt"))
+  Match_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  Match_pkey
+    CREATE UNIQUE INDEX "Match_pkey" ON public."Match" USING btree (id)
+  Match_slug_key
+    CREATE UNIQUE INDEX "Match_slug_key" ON public."Match" USING btree (slug)
+  Match_startsAt_idx
+    CREATE INDEX "Match_startsAt_idx" ON public."Match" USING btree ("startsAt")
+
+OBSERVAÇÕES:
+  - Não tem tenantId: partidas ainda pertencem à base Nacional, sem multi-tenant completo de clubes.
+
+----------------------------------------------------------------------------------------------------
+TABELA 07: Sector
+Módulo: Jogos e ingressos
+Finalidade: Setor de uma partida, preço, capacidade total e habilitação de venda.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  matchId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Partida vinculada.
+  name | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Nome descritivo.
+  priceCents | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Preço base por pessoa antes do desconto de associação.
+  capacity | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: 500
+    Default/automação Prisma: nenhum
+    Uso: Capacidade total do setor. A disponibilidade é calculada.
+  salesEnabled | SQL: boolean | NOT NULL
+    Prisma: Boolean?
+    Default SQL: true
+    Default/automação Prisma: nenhum
+    Uso: Habilitação/pausa das vendas.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  match: Match? | lado inverso; FK na tabela relacionada
+  tickets: Ticket? | lado inverso; FK na tabela relacionada
+  gateAssignments: GateAssignment? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  Sector_capacity_nonnegative [CHECK]
+    CHECK (capacity >= 0)
+  Sector_price_nonnegative [CHECK]
+    CHECK ("priceCents" >= 0)
+  Sector_matchId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("matchId") REFERENCES "Match"(id) ON UPDATE CASCADE ON DELETE CASCADE
+    ON DELETE CASCADE; ON UPDATE CASCADE
+  Sector_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  Sector_matchId_name_key
+    CREATE UNIQUE INDEX "Sector_matchId_name_key" ON public."Sector" USING btree ("matchId", name)
+  Sector_pkey
+    CREATE UNIQUE INDEX "Sector_pkey" ON public."Sector" USING btree (id)
+
+OBSERVAÇÕES:
+  - Disponível = capacidade menos quantidade de emitidos/usados e reservas válidas. Não existe coluna available.
+
+----------------------------------------------------------------------------------------------------
+TABELA 08: Ticket
+Módulo: Jogos e ingressos
+Finalidade: Pedido por conta/partida; um registro representa de uma a quatro pessoas.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  userId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Conta vinculada.
+  matchId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Partida vinculada.
+  sectorId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Setor vinculado.
+  status | SQL: "TicketStatus" | NOT NULL
+    Prisma: TicketStatus?
+    Default SQL: 'PENDING'::"TicketStatus"
+    Default/automação Prisma: nenhum
+    Uso: PENDING/ISSUED/USED/CANCELED persistidos. EXPIRED é calculado pela API, não existe neste enum SQL.
+  priceCents | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Total do pedido com quantidade e desconto; não é o valor unitário.
+  createdAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: CURRENT_TIMESTAMP
+    Default/automação Prisma: nenhum
+    Uso: Momento de criação.
+  quantity | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: 1
+    Default/automação Prisma: nenhum
+    Uso: Quantidade de pessoas/entradas.
+  expiresAt | SQL: timestamp(3) without time zone | NULL permitido
+    Prisma: DateTime?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Vencimento da reserva PENDING; emissão atual usa null.
+  entryToken | SQL: text | NULL permitido
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Campo legado nullable e único, mantido null pelo fluxo atual. QR estático foi desativado e limpo pela migration.
+  usedQuantity | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: 0
+    Default/automação Prisma: nenhum
+    Uso: Entradas já consumidas do pedido.
+  entryVersion | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: 0
+    Default/automação Prisma: nenhum
+    Uso: Versão de acesso; incrementada a cada entrada para invalidar credenciais anteriores.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  user: User? | lado inverso; FK na tabela relacionada
+  match: Match? | lado inverso; FK na tabela relacionada
+  sector: Sector? | lado inverso; FK na tabela relacionada
+  payment: TicketPayment? | lado inverso; FK na tabela relacionada
+  admissions: TicketAdmission? | lado inverso; FK na tabela relacionada
+  accessCodes: TicketAccessCode? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  Ticket_entryVersion_valid [CHECK]
+    CHECK ("entryVersion" >= 0)
+  Ticket_price_nonnegative [CHECK]
+    CHECK ("priceCents" >= 0)
+  Ticket_quantity_range [CHECK]
+    CHECK (quantity >= 1 AND quantity <= 4)
+  Ticket_used_quantity_valid [CHECK]
+    CHECK ("usedQuantity" >= 0 AND "usedQuantity" <= quantity)
+  Ticket_matchId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("matchId") REFERENCES "Match"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  Ticket_sectorId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("sectorId") REFERENCES "Sector"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  Ticket_userId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  Ticket_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  Ticket_entryToken_key
+    CREATE UNIQUE INDEX "Ticket_entryToken_key" ON public."Ticket" USING btree ("entryToken")
+  Ticket_pkey
+    CREATE UNIQUE INDEX "Ticket_pkey" ON public."Ticket" USING btree (id)
+  Ticket_sectorId_status_expiresAt_idx
+    CREATE INDEX "Ticket_sectorId_status_expiresAt_idx" ON public."Ticket" USING btree ("sectorId", status, "expiresAt")
+  Ticket_userId_matchId_key
+    CREATE UNIQUE INDEX "Ticket_userId_matchId_key" ON public."Ticket" USING btree ("userId", "matchId")
+
+OBSERVAÇÕES:
+  - UNIQUE(userId, matchId) inclui cancelados/expirados: API reutiliza o registro para nova reserva não paga. Não há tabela de histórico independente de tentativas.
+  - As FKs não garantem que setor e pedido sejam da mesma partida; essa conferência é feita pela API.
+  - Não há assento numerado: o controle é por setor/quantidade.
+
+----------------------------------------------------------------------------------------------------
+TABELA 09: Partner
+Módulo: Relacionamento
+Finalidade: Parceiros e benefícios exibidos ao torcedor; vínculo financeiro com Merchant é opcional.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  slug | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador textual único.
+  name | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Nome descritivo.
+  discount | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Descrição textual de benefício, não o percentual numérico do plano.
+  category | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Categoria de classificação.
+  active | SQL: boolean | NOT NULL
+    Prisma: Boolean?
+    Default SQL: true
+    Default/automação Prisma: nenhum
+    Uso: Indica se o registro está habilitado.
+  icon | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: 'gift'::text
+    Default/automação Prisma: nenhum
+    Uso: Nome lógico de ícone.
+  description | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: ''::text
+    Default/automação Prisma: nenhum
+    Uso: Descrição detalhada.
+  conditions | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: ''::text
+    Default/automação Prisma: nenhum
+    Uso: Condições de uso do benefício.
+  location | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: ''::text
+    Default/automação Prisma: nenhum
+    Uso: Localização informativa.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  merchant: Merchant? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  Partner_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  Partner_active_category_idx
+    CREATE INDEX "Partner_active_category_idx" ON public."Partner" USING btree (active, category)
+  Partner_pkey
+    CREATE UNIQUE INDEX "Partner_pkey" ON public."Partner" USING btree (id)
+  Partner_slug_key
+    CREATE UNIQUE INDEX "Partner_slug_key" ON public."Partner" USING btree (slug)
+
+----------------------------------------------------------------------------------------------------
+TABELA 10: Prediction
+Módulo: Relacionamento
+Finalidade: Palpite de placar por conta/partida; apuração e premiação ainda pendentes.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  userId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Conta vinculada.
+  matchId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Partida vinculada.
+  homeScore | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Placar previsto do mandante.
+  awayScore | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Placar previsto do visitante.
+  createdAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: CURRENT_TIMESTAMP
+    Default/automação Prisma: nenhum
+    Uso: Momento de criação.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  user: User? | lado inverso; FK na tabela relacionada
+  match: Match? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  Prediction_matchId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("matchId") REFERENCES "Match"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  Prediction_userId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  Prediction_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  Prediction_pkey
+    CREATE UNIQUE INDEX "Prediction_pkey" ON public."Prediction" USING btree (id)
+  Prediction_userId_matchId_key
+    CREATE UNIQUE INDEX "Prediction_userId_matchId_key" ON public."Prediction" USING btree ("userId", "matchId")
+
+----------------------------------------------------------------------------------------------------
+TABELA 11: Referral
+Módulo: Relacionamento
+Finalidade: Indicação de amigo, negócio ou parceiro; não envia mensagem automaticamente.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  userId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Conta vinculada.
+  kind | SQL: "ReferralKind" | NOT NULL
+    Prisma: ReferralKind?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Tipo do registro.
+  name | SQL: character varying(100) | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Nome descritivo.
+  contact | SQL: character varying(254) | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Contato do titular.
+  createdAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: CURRENT_TIMESTAMP
+    Default/automação Prisma: nenhum
+    Uso: Momento de criação.
+  category | SQL: character varying(60) | NOT NULL
+    Prisma: String?
+    Default SQL: 'Outro'::character varying
+    Default/automação Prisma: nenhum
+    Uso: Categoria de classificação.
+  status | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: 'RECEIVED'::text
+    Default/automação Prisma: nenhum
+    Uso: String livre com padrão RECEIVED; não é enum nem comprova envio de mensagem.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  user: User? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  Referral_userId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  Referral_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  Referral_pkey
+    CREATE UNIQUE INDEX "Referral_pkey" ON public."Referral" USING btree (id)
+  Referral_userId_idx
+    CREATE INDEX "Referral_userId_idx" ON public."Referral" USING btree ("userId")
+
+----------------------------------------------------------------------------------------------------
+TABELA 12: PointEntry
+Módulo: Pontos e experiências
+Finalidade: Extrato de créditos e débitos de pontos, separado do saldo monetário.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  userId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Conta vinculada.
+  sourceKey | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Origem lógica, como checkin:AAAA-MM-DD ou reward:<id>, usada para unicidade.
+  amount | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Pontos: crédito positivo e débito negativo.
+  reason | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Motivo do lançamento.
+  createdAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: CURRENT_TIMESTAMP
+    Default/automação Prisma: nenhum
+    Uso: Momento de criação.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  user: User? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  PointEntry_userId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE CASCADE
+    ON DELETE CASCADE; ON UPDATE CASCADE
+  PointEntry_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  PointEntry_pkey
+    CREATE UNIQUE INDEX "PointEntry_pkey" ON public."PointEntry" USING btree (id)
+  PointEntry_userId_createdAt_idx
+    CREATE INDEX "PointEntry_userId_createdAt_idx" ON public."PointEntry" USING btree ("userId", "createdAt")
+  PointEntry_userId_sourceKey_key
+    CREATE UNIQUE INDEX "PointEntry_userId_sourceKey_key" ON public."PointEntry" USING btree ("userId", "sourceKey")
+
+OBSERVAÇÕES:
+  - Saldo e extrato são atualizados na mesma transação pela API; não há trigger que faça isso para SQL arbitrário.
+
+----------------------------------------------------------------------------------------------------
+TABELA 13: Reward
+Módulo: Pontos e experiências
+Finalidade: Experiência trocável por pontos, com custo, estoque e habilitação.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  slug | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador textual único.
+  title | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Título da experiência.
+  description | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Descrição detalhada.
+  cost | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Custo em pontos.
+  stock | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Quantidade disponível para resgate.
+  icon | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: 'gift'::text
+    Default/automação Prisma: nenhum
+    Uso: Nome lógico de ícone.
+  active | SQL: boolean | NOT NULL
+    Prisma: Boolean?
+    Default SQL: true
+    Default/automação Prisma: nenhum
+    Uso: Indica se o registro está habilitado.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  redemptions: Redemption? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  Reward_cost_positive [CHECK]
+    CHECK (cost > 0)
+  Reward_stock_nonnegative [CHECK]
+    CHECK (stock >= 0)
+  Reward_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  Reward_pkey
+    CREATE UNIQUE INDEX "Reward_pkey" ON public."Reward" USING btree (id)
+  Reward_slug_key
+    CREATE UNIQUE INDEX "Reward_slug_key" ON public."Reward" USING btree (slug)
+
+----------------------------------------------------------------------------------------------------
+TABELA 14: Redemption
+Módulo: Pontos e experiências
+Finalidade: Resgate de uma experiência pela conta, com custo histórico em pontos.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  userId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Conta vinculada.
+  rewardId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Experiência vinculada.
+  cost | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Custo histórico efetivo do resgate; não muda quando Reward.cost é alterado.
+  createdAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: CURRENT_TIMESTAMP
+    Default/automação Prisma: nenhum
+    Uso: Momento de criação.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  user: User? | lado inverso; FK na tabela relacionada
+  reward: Reward? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  Redemption_cost_positive [CHECK]
+    CHECK (cost > 0)
+  Redemption_rewardId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("rewardId") REFERENCES "Reward"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  Redemption_userId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  Redemption_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  Redemption_pkey
+    CREATE UNIQUE INDEX "Redemption_pkey" ON public."Redemption" USING btree (id)
+  Redemption_userId_rewardId_key
+    CREATE UNIQUE INDEX "Redemption_userId_rewardId_key" ON public."Redemption" USING btree ("userId", "rewardId")
+
+----------------------------------------------------------------------------------------------------
+TABELA 15: Tenant
+Módulo: Cashback e split
+Finalidade: Instituição/marca no módulo financeiro; não implica multi-tenant completo do produto.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  slug | SQL: character varying(60) | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador textual único.
+  name | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Nome descritivo.
+  active | SQL: boolean | NOT NULL
+    Prisma: Boolean?
+    Default SQL: true
+    Default/automação Prisma: nenhum
+    Uso: Indica se o registro está habilitado.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  offers: MerchantOffer? | lado inverso; FK na tabela relacionada
+  wallets: CashWallet? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  Tenant_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  Tenant_pkey
+    CREATE UNIQUE INDEX "Tenant_pkey" ON public."Tenant" USING btree (id)
+  Tenant_slug_key
+    CREATE UNIQUE INDEX "Tenant_slug_key" ON public."Tenant" USING btree (slug)
+
+----------------------------------------------------------------------------------------------------
+TABELA 16: Merchant
+Módulo: Cashback e split
+Finalidade: Estabelecimento compartilhável entre instituições, com ofertas e operadores.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  slug | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador textual único.
+  name | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Nome descritivo.
+  publicCode | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: UUID público do estabelecimento usado no QR fixo; não concede permissão de administração.
+  active | SQL: boolean | NOT NULL
+    Prisma: Boolean?
+    Default SQL: true
+    Default/automação Prisma: nenhum
+    Uso: Indica se o registro está habilitado.
+  partnerId | SQL: uuid | NULL permitido
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Parceiro de benefícios opcional.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  partner: Partner? | lado inverso; FK na tabela relacionada
+  offers: MerchantOffer? | lado inverso; FK na tabela relacionada
+  operators: MerchantOperator? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  Merchant_partnerId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("partnerId") REFERENCES "Partner"(id) ON UPDATE CASCADE ON DELETE SET NULL
+    ON DELETE SET NULL; ON UPDATE CASCADE
+  Merchant_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  Merchant_partnerId_key
+    CREATE UNIQUE INDEX "Merchant_partnerId_key" ON public."Merchant" USING btree ("partnerId")
+  Merchant_pkey
+    CREATE UNIQUE INDEX "Merchant_pkey" ON public."Merchant" USING btree (id)
+  Merchant_publicCode_key
+    CREATE UNIQUE INDEX "Merchant_publicCode_key" ON public."Merchant" USING btree ("publicCode")
+  Merchant_slug_key
+    CREATE UNIQUE INDEX "Merchant_slug_key" ON public."Merchant" USING btree (slug)
+
+OBSERVAÇÕES:
+  - partnerId opcional e único forma uma relação opcional 1:1 com Partner.
+
+----------------------------------------------------------------------------------------------------
+TABELA 17: MerchantOffer
+Módulo: Cashback e split
+Finalidade: Condições de cashback/comissão entre instituição e estabelecimento.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  tenantId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Instituição vinculada.
+  merchantId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Estabelecimento vinculado.
+  cashbackBps | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Taxa de cashback em basis points: 1.000 equivale a 10%.
+  commissionBps | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Comissão em basis points: 200 equivale a 2%.
+  active | SQL: boolean | NOT NULL
+    Prisma: Boolean?
+    Default SQL: true
+    Default/automação Prisma: nenhum
+    Uso: Indica se o registro está habilitado.
+  customerQrEnabled | SQL: boolean | NOT NULL
+    Prisma: Boolean?
+    Default SQL: false
+    Default/automação Prisma: nenhum
+    Uso: Habilitação do modelo A de QR fixo nesta oferta.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  tenant: Tenant? | lado inverso; FK na tabela relacionada
+  merchant: Merchant? | lado inverso; FK na tabela relacionada
+  charges: PaymentCharge? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  MerchantOffer_rates_valid [CHECK]
+    CHECK ("cashbackBps" >= 0 AND "cashbackBps" <= 10000 AND "commissionBps" >= 0 AND "commissionBps" <= 10000 AND ("cashbackBps" + "commissionBps") <= 10000)
+  MerchantOffer_merchantId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("merchantId") REFERENCES "Merchant"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  MerchantOffer_tenantId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("tenantId") REFERENCES "Tenant"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  MerchantOffer_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  MerchantOffer_pkey
+    CREATE UNIQUE INDEX "MerchantOffer_pkey" ON public."MerchantOffer" USING btree (id)
+  MerchantOffer_tenantId_merchantId_key
+    CREATE UNIQUE INDEX "MerchantOffer_tenantId_merchantId_key" ON public."MerchantOffer" USING btree ("tenantId", "merchantId")
+
+----------------------------------------------------------------------------------------------------
+TABELA 18: MerchantOperator
+Módulo: Cashback e split
+Finalidade: Permissão de uma conta para operar o caixa de um estabelecimento. Não é role GATE.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  userId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Conta vinculada.
+  merchantId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Estabelecimento vinculado.
+  active | SQL: boolean | NOT NULL
+    Prisma: Boolean?
+    Default SQL: true
+    Default/automação Prisma: nenhum
+    Uso: Indica se o registro está habilitado.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  user: User? | lado inverso; FK na tabela relacionada
+  merchant: Merchant? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  MerchantOperator_merchantId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("merchantId") REFERENCES "Merchant"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  MerchantOperator_userId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE CASCADE
+    ON DELETE CASCADE; ON UPDATE CASCADE
+  MerchantOperator_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  MerchantOperator_pkey
+    CREATE UNIQUE INDEX "MerchantOperator_pkey" ON public."MerchantOperator" USING btree (id)
+  MerchantOperator_userId_merchantId_key
+    CREATE UNIQUE INDEX "MerchantOperator_userId_merchantId_key" ON public."MerchantOperator" USING btree ("userId", "merchantId")
+
+OBSERVAÇÕES:
+  - Escopo de caixa não transforma usuário em ADMIN ou GATE.
+
+----------------------------------------------------------------------------------------------------
+TABELA 19: CashWallet
+Módulo: Cashback e split
+Finalidade: Carteira monetária por instituição/conta, com saldo líquido em centavos.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  tenantId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Instituição vinculada.
+  userId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Conta vinculada.
+  customerCode | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador único de carteira para vinculação no caixa; não é autorização de pagamento.
+  balanceCents | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: 0
+    Default/automação Prisma: nenhum
+    Uso: Saldo líquido em centavos, podendo ficar negativo após compensações. A API separa disponível e dívida.
+  createdAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: CURRENT_TIMESTAMP
+    Default/automação Prisma: nenhum
+    Uso: Momento de criação.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  tenant: Tenant? | lado inverso; FK na tabela relacionada
+  user: User? | lado inverso; FK na tabela relacionada
+  entries: CashEntry? | lado inverso; FK na tabela relacionada
+  charges: PaymentCharge? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  CashWallet_tenantId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("tenantId") REFERENCES "Tenant"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  CashWallet_userId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  CashWallet_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  CashWallet_customerCode_key
+    CREATE UNIQUE INDEX "CashWallet_customerCode_key" ON public."CashWallet" USING btree ("customerCode")
+  CashWallet_pkey
+    CREATE UNIQUE INDEX "CashWallet_pkey" ON public."CashWallet" USING btree (id)
+  CashWallet_tenantId_userId_key
+    CREATE UNIQUE INDEX "CashWallet_tenantId_userId_key" ON public."CashWallet" USING btree ("tenantId", "userId")
+
+OBSERVAÇÕES:
+  - Uma carteira por tenant/usuário. Não há endpoint implementado para gasto do saldo.
+
+----------------------------------------------------------------------------------------------------
+TABELA 20: PaymentCharge
+Módulo: Cashback e split
+Finalidade: Venda/cobrança com split, beneficiário, estado e idempotência. Não é TicketPayment.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  offerId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Oferta de cashback usada na venda.
+  creatorId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Conta que criou a venda.
+  walletId | SQL: uuid | NULL permitido
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Carteira beneficiária, opcional enquanto a venda não foi vinculada.
+  channel | SQL: "PaymentChannel" | NOT NULL
+    Prisma: PaymentChannel?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: CASHIER_QR: venda no caixa; CUSTOMER_QR: consumidor usa QR fixo.
+  status | SQL: "PaymentStatus" | NOT NULL
+    Prisma: PaymentStatus?
+    Default SQL: 'PENDING'::"PaymentStatus"
+    Default/automação Prisma: nenhum
+    Uso: Estado do registro conforme enum ou regra específica.
+  requestKey | SQL: character varying(80) | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Chave de idempotência para repetir a operação sem duplicar efeitos.
+  claimCode | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Código único de localização/vinculação da venda; não é Pix pagável.
+  grossCents | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Total bruto da venda em centavos.
+  merchantCents | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Repasse ao estabelecimento em centavos.
+  cashbackCents | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Cashback em centavos.
+  commissionCents | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Comissão em centavos.
+  gatewayFeeCents | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: 0
+    Default/automação Prisma: nenhum
+    Uso: Tarifa do gateway em centavos, incluída na conservação do split.
+  provider | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificação do provedor; o adaptador financeiro atual é demonstrativo.
+  providerReference | SQL: text | NULL permitido
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Referência externa opcional e única do provedor.
+  pixPayload | SQL: text | NULL permitido
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Payload Pix opcional; o adaptador demo retorna null.
+  expiresAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Prazo de validade.
+  paidAt | SQL: timestamp(3) without time zone | NULL permitido
+    Prisma: DateTime?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Liquidação reconhecida.
+  refundedAt | SQL: timestamp(3) without time zone | NULL permitido
+    Prisma: DateTime?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Estorno reconhecido.
+  createdAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: CURRENT_TIMESTAMP
+    Default/automação Prisma: nenhum
+    Uso: Momento de criação.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  offer: MerchantOffer? | lado inverso; FK na tabela relacionada
+  creator: User? | lado inverso; FK na tabela relacionada
+  wallet: CashWallet? | lado inverso; FK na tabela relacionada
+  entries: CashEntry? | lado inverso; FK na tabela relacionada
+  events: PaymentEvent? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  PaymentCharge_split_valid [CHECK]
+    CHECK ("grossCents" >= 1 AND "grossCents" <= 100000000 AND "merchantCents" >= 0 AND "cashbackCents" >= 0 AND "commissionCents" >= 0 AND "gatewayFeeCents" >= 0 AND "grossCents" = ("merchantCents" + "cashbackCents" + "commissionCents" + "gatewayFeeCents"))
+  PaymentCharge_creatorId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("creatorId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  PaymentCharge_offerId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("offerId") REFERENCES "MerchantOffer"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  PaymentCharge_walletId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("walletId") REFERENCES "CashWallet"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  PaymentCharge_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  PaymentCharge_claimCode_key
+    CREATE UNIQUE INDEX "PaymentCharge_claimCode_key" ON public."PaymentCharge" USING btree ("claimCode")
+  PaymentCharge_creatorId_requestKey_key
+    CREATE UNIQUE INDEX "PaymentCharge_creatorId_requestKey_key" ON public."PaymentCharge" USING btree ("creatorId", "requestKey")
+  PaymentCharge_offerId_createdAt_idx
+    CREATE INDEX "PaymentCharge_offerId_createdAt_idx" ON public."PaymentCharge" USING btree ("offerId", "createdAt")
+  PaymentCharge_pkey
+    CREATE UNIQUE INDEX "PaymentCharge_pkey" ON public."PaymentCharge" USING btree (id)
+  PaymentCharge_providerReference_key
+    CREATE UNIQUE INDEX "PaymentCharge_providerReference_key" ON public."PaymentCharge" USING btree ("providerReference")
+  PaymentCharge_walletId_createdAt_idx
+    CREATE INDEX "PaymentCharge_walletId_createdAt_idx" ON public."PaymentCharge" USING btree ("walletId", "createdAt")
+
+OBSERVAÇÕES:
+  - Valores do split são a fotografia da venda. Alterar taxas da oferta não recalcula cobranças anteriores.
+  - walletId nulo permite venda ainda sem beneficiário. API controla a vinculação.
+
+----------------------------------------------------------------------------------------------------
+TABELA 21: CashEntry
+Módulo: Cashback e split
+Finalidade: Lançamento de crédito ou compensação de cashback vinculado à venda e carteira.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  walletId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Carteira beneficiária, opcional enquanto a venda não foi vinculada.
+  chargeId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Venda/cobrança vinculada.
+  kind | SQL: "CashEntryKind" | NOT NULL
+    Prisma: CashEntryKind?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: CASHBACK para crédito positivo e REVERSAL para compensação negativa.
+  amountCents | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Valor do registro em centavos.
+  balanceAfterCents | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Saldo líquido após o lançamento.
+  createdAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: CURRENT_TIMESTAMP
+    Default/automação Prisma: nenhum
+    Uso: Momento de criação.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  wallet: CashWallet? | lado inverso; FK na tabela relacionada
+  charge: PaymentCharge? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  CashEntry_direction_valid [CHECK]
+    CHECK (kind = 'CASHBACK'::"CashEntryKind" AND "amountCents" > 0 OR kind = 'REVERSAL'::"CashEntryKind" AND "amountCents" < 0)
+  CashEntry_chargeId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("chargeId") REFERENCES "PaymentCharge"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  CashEntry_walletId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("walletId") REFERENCES "CashWallet"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  CashEntry_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  CashEntry_chargeId_kind_key
+    CREATE UNIQUE INDEX "CashEntry_chargeId_kind_key" ON public."CashEntry" USING btree ("chargeId", kind)
+  CashEntry_pkey
+    CREATE UNIQUE INDEX "CashEntry_pkey" ON public."CashEntry" USING btree (id)
+  CashEntry_walletId_createdAt_idx
+    CREATE INDEX "CashEntry_walletId_createdAt_idx" ON public."CashEntry" USING btree ("walletId", "createdAt")
+
+OBSERVAÇÕES:
+  - API usa lançamentos compensatórios; não existe trigger SQL de imutabilidade bloqueando UPDATE/DELETE por acesso direto.
+
+----------------------------------------------------------------------------------------------------
+TABELA 22: PaymentEvent
+Módulo: Cashback e split
+Finalidade: Evento normalizado de liquidação/estorno, com ID externo e fingerprint de consistência.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  chargeId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Venda/cobrança vinculada.
+  provider | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificação do provedor; o adaptador financeiro atual é demonstrativo.
+  externalId | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: ID externo de evento, único em conjunto com provider.
+  fingerprint | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Impressão dos dados do evento para detectar repetição inconsistente.
+  type | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Tipo textual de evento: CHECK restringe SETTLED ou REFUNDED.
+  occurredAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Momento do evento informado pelo provedor.
+  createdAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: CURRENT_TIMESTAMP
+    Default/automação Prisma: nenhum
+    Uso: Momento de criação.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  charge: PaymentCharge? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  PaymentEvent_type_valid [CHECK]
+    CHECK (type = ANY (ARRAY['SETTLED'::text, 'REFUNDED'::text]))
+  PaymentEvent_chargeId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("chargeId") REFERENCES "PaymentCharge"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  PaymentEvent_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  PaymentEvent_pkey
+    CREATE UNIQUE INDEX "PaymentEvent_pkey" ON public."PaymentEvent" USING btree (id)
+  PaymentEvent_provider_externalId_key
+    CREATE UNIQUE INDEX "PaymentEvent_provider_externalId_key" ON public."PaymentEvent" USING btree (provider, "externalId")
+
+OBSERVAÇÕES:
+  - Fingerprint, valores e split são conferidos pela API; a unicidade externa por si só não faz conciliação.
+
+----------------------------------------------------------------------------------------------------
+TABELA 23: TicketPayment
+Módulo: Jogos e ingressos
+Finalidade: Conferência do recebimento externo pelo administrador ou registro da gratuidade.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  ticketId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Pedido de ingresso vinculado.
+  method | SQL: "TicketPaymentMethod" | NOT NULL
+    Prisma: TicketPaymentMethod?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Recebimento do ingresso: MANUAL ou FREE.
+  amountCents | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Valor do registro em centavos.
+  reference | SQL: character varying(100) | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Referência única de recibo/transação/gratuidade.
+  confirmedById | SQL: uuid | NULL permitido
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Administrador que conferiu; opcional no schema, exigido pela API no ingresso pago.
+  confirmedAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: CURRENT_TIMESTAMP
+    Default/automação Prisma: nenhum
+    Uso: Confirmação de recebimento/gratuidade.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  ticket: Ticket? | lado inverso; FK na tabela relacionada
+  confirmedBy: User? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  TicketPayment_amount_valid [CHECK]
+    CHECK ("amountCents" >= 0)
+  TicketPayment_confirmedById_fkey [FOREIGN KEY]
+    FOREIGN KEY ("confirmedById") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  TicketPayment_ticketId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("ticketId") REFERENCES "Ticket"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  TicketPayment_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  TicketPayment_pkey
+    CREATE UNIQUE INDEX "TicketPayment_pkey" ON public."TicketPayment" USING btree (id)
+  TicketPayment_reference_key
+    CREATE UNIQUE INDEX "TicketPayment_reference_key" ON public."TicketPayment" USING btree (reference)
+  TicketPayment_ticketId_key
+    CREATE UNIQUE INDEX "TicketPayment_ticketId_key" ON public."TicketPayment" USING btree ("ticketId")
+
+OBSERVAÇÕES:
+  - Conferência de recebimento não significa integração bancária automática. Diferente de PaymentCharge do cashback.
+
+----------------------------------------------------------------------------------------------------
+TABELA 24: TicketAdmission
+Módulo: Portaria
+Finalidade: Entrada confirmada: quantidade, operador, leitura e chave de idempotência.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  ticketId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Pedido de ingresso vinculado.
+  actorId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Conta responsável pela operação.
+  quantity | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Entradas consumidas nesta operação: de 1 a 4, limitadas ao saldo pela API.
+  requestKey | SQL: character varying(80) | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Chave de idempotência para repetir a operação sem duplicar efeitos.
+  createdAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: CURRENT_TIMESTAMP
+    Default/automação Prisma: nenhum
+    Uso: Momento de criação.
+  scanId | SQL: uuid | NULL permitido
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: UUID único da leitura; nullable para entradas históricas anteriores à migração de QR seguro.
+  qrVersion | SQL: integer | NULL permitido
+    Prisma: Int?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Versão de acesso usada; nullable por compatibilidade histórica.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  ticket: Ticket? | lado inverso; FK na tabela relacionada
+  actor: User? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  TicketAdmission_quantity_valid [CHECK]
+    CHECK (quantity >= 1 AND quantity <= 4)
+  TicketAdmission_actorId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("actorId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  TicketAdmission_ticketId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("ticketId") REFERENCES "Ticket"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  TicketAdmission_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  TicketAdmission_pkey
+    CREATE UNIQUE INDEX "TicketAdmission_pkey" ON public."TicketAdmission" USING btree (id)
+  TicketAdmission_scanId_key
+    CREATE UNIQUE INDEX "TicketAdmission_scanId_key" ON public."TicketAdmission" USING btree ("scanId")
+  TicketAdmission_ticketId_requestKey_key
+    CREATE UNIQUE INDEX "TicketAdmission_ticketId_requestKey_key" ON public."TicketAdmission" USING btree ("ticketId", "requestKey")
+
+OBSERVAÇÕES:
+  - Chave de operação e leitura evitam duplicidade; ator, versão e quantidade também são conferidos na API.
+
+----------------------------------------------------------------------------------------------------
+TABELA 25: AuditLog
+Módulo: Auditoria
+Finalidade: Histórico de ações relevantes com ator, ação, entidade e detalhes JSON.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  actorId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Conta responsável pela operação.
+  action | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Nome textual da ação auditada.
+  entityId | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: ID textual de entidade, com vínculo lógico polimórfico e sem FK.
+  details | SQL: jsonb | NOT NULL
+    Prisma: Json?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Detalhes JSON da ação; o fluxo de entrada não grava QR/código completos.
+  createdAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: CURRENT_TIMESTAMP
+    Default/automação Prisma: nenhum
+    Uso: Momento de criação.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  actor: User? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  AuditLog_actorId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("actorId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+    ON DELETE RESTRICT; ON UPDATE CASCADE
+  AuditLog_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  AuditLog_createdAt_idx
+    CREATE INDEX "AuditLog_createdAt_idx" ON public."AuditLog" USING btree ("createdAt")
+  AuditLog_pkey
+    CREATE UNIQUE INDEX "AuditLog_pkey" ON public."AuditLog" USING btree (id)
+
+OBSERVAÇÕES:
+  - entityId não tem FK e action não é enum. details não tem schema JSON imposto por CHECK SQL.
+
+----------------------------------------------------------------------------------------------------
+TABELA 26: GateAssignment
+Módulo: Portaria
+Finalidade: Escala que libera uma conta de funcionário para operar um setor de uma partida.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  userId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Conta vinculada.
+  sectorId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Setor vinculado.
+  active | SQL: boolean | NOT NULL
+    Prisma: Boolean?
+    Default SQL: true
+    Default/automação Prisma: nenhum
+    Uso: Indica se o registro está habilitado.
+  createdAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: CURRENT_TIMESTAMP
+    Default/automação Prisma: nenhum
+    Uso: Momento de criação.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  user: User? | lado inverso; FK na tabela relacionada
+  sector: Sector? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  GateAssignment_sectorId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("sectorId") REFERENCES "Sector"(id) ON UPDATE CASCADE ON DELETE CASCADE
+    ON DELETE CASCADE; ON UPDATE CASCADE
+  GateAssignment_userId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE CASCADE
+    ON DELETE CASCADE; ON UPDATE CASCADE
+  GateAssignment_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  GateAssignment_pkey
+    CREATE UNIQUE INDEX "GateAssignment_pkey" ON public."GateAssignment" USING btree (id)
+  GateAssignment_userId_active_idx
+    CREATE INDEX "GateAssignment_userId_active_idx" ON public."GateAssignment" USING btree ("userId", active)
+  GateAssignment_userId_sectorId_key
+    CREATE UNIQUE INDEX "GateAssignment_userId_sectorId_key" ON public."GateAssignment" USING btree ("userId", "sectorId")
+
+OBSERVAÇÕES:
+  - Banco não impõe role GATE no userId; a API restringe o cadastro/escala.
+  - Partida é obtida por Sector.matchId. Escala é revalidada dentro da transação de entrada.
+
+----------------------------------------------------------------------------------------------------
+TABELA 27: TicketAccessCode
+Módulo: Portaria
+Finalidade: Hash do código digitável temporário, compartilhando leitura/versão/vencimento com o QR.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Identificador do registro.
+  ticketId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Pedido de ingresso vinculado.
+  codeHash | SQL: text | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: SHA-256 do código digitável de dez caracteres; texto do código não é armazenado.
+  scanId | SQL: uuid | NOT NULL
+    Prisma: String?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: UUID da emissão, igual ao jti do QR. Sem FK para TicketAdmission: vínculo lógico conferido pela API.
+  entryVersion | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Versão de acesso; incrementada a cada entrada para invalidar credenciais anteriores.
+  expiresAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Mesmo vencimento do QR correspondente: até 45s, limitado ao fechamento da portaria.
+  createdAt | SQL: timestamp(3) without time zone | NOT NULL
+    Prisma: DateTime?
+    Default SQL: CURRENT_TIMESTAMP
+    Default/automação Prisma: nenhum
+    Uso: Momento de criação.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  ticket: Ticket? | lado inverso; FK na tabela relacionada
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  TicketAccessCode_version_valid [CHECK]
+    CHECK ("entryVersion" >= 0)
+  TicketAccessCode_ticketId_fkey [FOREIGN KEY]
+    FOREIGN KEY ("ticketId") REFERENCES "Ticket"(id) ON UPDATE CASCADE ON DELETE CASCADE
+    ON DELETE CASCADE; ON UPDATE CASCADE
+  TicketAccessCode_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  TicketAccessCode_codeHash_key
+    CREATE UNIQUE INDEX "TicketAccessCode_codeHash_key" ON public."TicketAccessCode" USING btree ("codeHash")
+  TicketAccessCode_expiresAt_idx
+    CREATE INDEX "TicketAccessCode_expiresAt_idx" ON public."TicketAccessCode" USING btree ("expiresAt")
+  TicketAccessCode_pkey
+    CREATE UNIQUE INDEX "TicketAccessCode_pkey" ON public."TicketAccessCode" USING btree (id)
+  TicketAccessCode_scanId_key
+    CREATE UNIQUE INDEX "TicketAccessCode_scanId_key" ON public."TicketAccessCode" USING btree ("scanId")
+
+OBSERVAÇÕES:
+  - QR assinado não é armazenado integralmente. Códigos vencidos podem ser removidos por cleanup-auth.
+
+----------------------------------------------------------------------------------------------------
+TABELA 28: _prisma_migrations
+Módulo: Infraestrutura
+Finalidade: Controle técnico de migrations. Não é model de negócio da aplicação.
+----------------------------------------------------------------------------------------------------
+COLUNAS FÍSICAS:
+  id | SQL: character varying(36) | NOT NULL
+    Prisma: tabela técnica fora dos models
+    Default SQL: nenhum
+    Default/automação Prisma: não aplicável
+    Uso: ID técnico VARCHAR(36); não é campo UUID gerado pelo model da aplicação.
+  checksum | SQL: character varying(64) | NOT NULL
+    Prisma: tabela técnica fora dos models
+    Default SQL: nenhum
+    Default/automação Prisma: não aplicável
+    Uso: Checksum técnico da migration.
+  finished_at | SQL: timestamp with time zone | NULL permitido
+    Prisma: tabela técnica fora dos models
+    Default SQL: nenhum
+    Default/automação Prisma: não aplicável
+    Uso: Conclusão com sucesso.
+  migration_name | SQL: character varying(255) | NOT NULL
+    Prisma: tabela técnica fora dos models
+    Default SQL: nenhum
+    Default/automação Prisma: não aplicável
+    Uso: Nome da migration/pasta.
+  logs | SQL: text | NULL permitido
+    Prisma: tabela técnica fora dos models
+    Default SQL: nenhum
+    Default/automação Prisma: não aplicável
+    Uso: Diagnóstico técnico; valores dos registros não são exportados aqui.
+  rolled_back_at | SQL: timestamp with time zone | NULL permitido
+    Prisma: tabela técnica fora dos models
+    Default SQL: nenhum
+    Default/automação Prisma: não aplicável
+    Uso: Momento em que a migration foi marcada como revertida.
+  started_at | SQL: timestamp with time zone | NOT NULL
+    Prisma: tabela técnica fora dos models
+    Default SQL: now()
+    Default/automação Prisma: não aplicável
+    Uso: Início da migration.
+  applied_steps_count | SQL: integer | NOT NULL
+    Prisma: tabela técnica fora dos models
+    Default SQL: 0
+    Default/automação Prisma: não aplicável
+    Uso: Contador técnico de passos.
+
+RELAÇÕES PRISMA (virtuais, não colunas):
+  Nenhuma.
+
+CONSTRAINTS REAIS NO POSTGRESQL:
+  _prisma_migrations_pkey [PRIMARY KEY]
+    PRIMARY KEY (id)
+
+ÍNDICES (incluem PK e UNIQUE):
+  _prisma_migrations_pkey
+    CREATE UNIQUE INDEX _prisma_migrations_pkey ON public._prisma_migrations USING btree (id)
+
+====================================================================================================
+6. LISTA CENTRAL DE FKs E AÇÕES REFERENCIAIS
+====================================================================================================
+AuditLog.AuditLog_actorId_fkey
+  FOREIGN KEY ("actorId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+CashEntry.CashEntry_chargeId_fkey
+  FOREIGN KEY ("chargeId") REFERENCES "PaymentCharge"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+CashEntry.CashEntry_walletId_fkey
+  FOREIGN KEY ("walletId") REFERENCES "CashWallet"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+CashWallet.CashWallet_tenantId_fkey
+  FOREIGN KEY ("tenantId") REFERENCES "Tenant"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+CashWallet.CashWallet_userId_fkey
+  FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+GateAssignment.GateAssignment_sectorId_fkey
+  FOREIGN KEY ("sectorId") REFERENCES "Sector"(id) ON UPDATE CASCADE ON DELETE CASCADE
+  ON DELETE CASCADE; ON UPDATE CASCADE
+GateAssignment.GateAssignment_userId_fkey
+  FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE CASCADE
+  ON DELETE CASCADE; ON UPDATE CASCADE
+Membership.Membership_planId_fkey
+  FOREIGN KEY ("planId") REFERENCES "Plan"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+Membership.Membership_userId_fkey
+  FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE CASCADE
+  ON DELETE CASCADE; ON UPDATE CASCADE
+Merchant.Merchant_partnerId_fkey
+  FOREIGN KEY ("partnerId") REFERENCES "Partner"(id) ON UPDATE CASCADE ON DELETE SET NULL
+  ON DELETE SET NULL; ON UPDATE CASCADE
+MerchantOffer.MerchantOffer_merchantId_fkey
+  FOREIGN KEY ("merchantId") REFERENCES "Merchant"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+MerchantOffer.MerchantOffer_tenantId_fkey
+  FOREIGN KEY ("tenantId") REFERENCES "Tenant"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+MerchantOperator.MerchantOperator_merchantId_fkey
+  FOREIGN KEY ("merchantId") REFERENCES "Merchant"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+MerchantOperator.MerchantOperator_userId_fkey
+  FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE CASCADE
+  ON DELETE CASCADE; ON UPDATE CASCADE
+PaymentCharge.PaymentCharge_creatorId_fkey
+  FOREIGN KEY ("creatorId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+PaymentCharge.PaymentCharge_offerId_fkey
+  FOREIGN KEY ("offerId") REFERENCES "MerchantOffer"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+PaymentCharge.PaymentCharge_walletId_fkey
+  FOREIGN KEY ("walletId") REFERENCES "CashWallet"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+PaymentEvent.PaymentEvent_chargeId_fkey
+  FOREIGN KEY ("chargeId") REFERENCES "PaymentCharge"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+PointEntry.PointEntry_userId_fkey
+  FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE CASCADE
+  ON DELETE CASCADE; ON UPDATE CASCADE
+Prediction.Prediction_matchId_fkey
+  FOREIGN KEY ("matchId") REFERENCES "Match"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+Prediction.Prediction_userId_fkey
+  FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+Redemption.Redemption_rewardId_fkey
+  FOREIGN KEY ("rewardId") REFERENCES "Reward"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+Redemption.Redemption_userId_fkey
+  FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+Referral.Referral_userId_fkey
+  FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+RefreshToken.RefreshToken_sessionId_fkey
+  FOREIGN KEY ("sessionId") REFERENCES "Session"(id) ON UPDATE CASCADE ON DELETE CASCADE
+  ON DELETE CASCADE; ON UPDATE CASCADE
+Sector.Sector_matchId_fkey
+  FOREIGN KEY ("matchId") REFERENCES "Match"(id) ON UPDATE CASCADE ON DELETE CASCADE
+  ON DELETE CASCADE; ON UPDATE CASCADE
+Session.Session_userId_fkey
+  FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE CASCADE
+  ON DELETE CASCADE; ON UPDATE CASCADE
+Ticket.Ticket_matchId_fkey
+  FOREIGN KEY ("matchId") REFERENCES "Match"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+Ticket.Ticket_sectorId_fkey
+  FOREIGN KEY ("sectorId") REFERENCES "Sector"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+Ticket.Ticket_userId_fkey
+  FOREIGN KEY ("userId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+TicketAccessCode.TicketAccessCode_ticketId_fkey
+  FOREIGN KEY ("ticketId") REFERENCES "Ticket"(id) ON UPDATE CASCADE ON DELETE CASCADE
+  ON DELETE CASCADE; ON UPDATE CASCADE
+TicketAdmission.TicketAdmission_actorId_fkey
+  FOREIGN KEY ("actorId") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+TicketAdmission.TicketAdmission_ticketId_fkey
+  FOREIGN KEY ("ticketId") REFERENCES "Ticket"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+TicketPayment.TicketPayment_confirmedById_fkey
+  FOREIGN KEY ("confirmedById") REFERENCES "User"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+TicketPayment.TicketPayment_ticketId_fkey
+  FOREIGN KEY ("ticketId") REFERENCES "Ticket"(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  ON DELETE RESTRICT; ON UPDATE CASCADE
+
+====================================================================================================
+7. CHECKs SQL — COMPLEMENTO ÀS DECLARAÇÕES DO PRISMA
+====================================================================================================
+CashEntry.CashEntry_direction_valid
+  CHECK (kind = 'CASHBACK'::"CashEntryKind" AND "amountCents" > 0 OR kind = 'REVERSAL'::"CashEntryKind" AND "amountCents" < 0)
+Match.Match_gate_window_valid
+  CHECK ("gateOpenAt" IS NULL OR "gateCloseAt" IS NULL OR "gateOpenAt" < "gateCloseAt")
+Match.Match_sales_window_valid
+  CHECK (("salesOpenAt" IS NULL OR "salesCloseAt" IS NULL OR "salesOpenAt" < "salesCloseAt") AND ("salesOpenAt" IS NULL OR "salesOpenAt" < "startsAt") AND ("salesCloseAt" IS NULL OR "salesCloseAt" <= "startsAt"))
+MerchantOffer.MerchantOffer_rates_valid
+  CHECK ("cashbackBps" >= 0 AND "cashbackBps" <= 10000 AND "commissionBps" >= 0 AND "commissionBps" <= 10000 AND ("cashbackBps" + "commissionBps") <= 10000)
+PaymentCharge.PaymentCharge_split_valid
+  CHECK ("grossCents" >= 1 AND "grossCents" <= 100000000 AND "merchantCents" >= 0 AND "cashbackCents" >= 0 AND "commissionCents" >= 0 AND "gatewayFeeCents" >= 0 AND "grossCents" = ("merchantCents" + "cashbackCents" + "commissionCents" + "gatewayFeeCents"))
+PaymentEvent.PaymentEvent_type_valid
+  CHECK (type = ANY (ARRAY['SETTLED'::text, 'REFUNDED'::text]))
+Plan.Plan_discount_range
+  CHECK ("discountPercent" >= 0 AND "discountPercent" <= 100)
+Plan.Plan_price_nonnegative
+  CHECK ("priceCents" >= 0)
+Redemption.Redemption_cost_positive
+  CHECK (cost > 0)
+Reward.Reward_cost_positive
+  CHECK (cost > 0)
+Reward.Reward_stock_nonnegative
+  CHECK (stock >= 0)
+Sector.Sector_capacity_nonnegative
+  CHECK (capacity >= 0)
+Sector.Sector_price_nonnegative
+  CHECK ("priceCents" >= 0)
+Ticket.Ticket_entryVersion_valid
+  CHECK ("entryVersion" >= 0)
+Ticket.Ticket_price_nonnegative
+  CHECK ("priceCents" >= 0)
+Ticket.Ticket_quantity_range
+  CHECK (quantity >= 1 AND quantity <= 4)
+Ticket.Ticket_used_quantity_valid
+  CHECK ("usedQuantity" >= 0 AND "usedQuantity" <= quantity)
+TicketAccessCode.TicketAccessCode_version_valid
+  CHECK ("entryVersion" >= 0)
+TicketAdmission.TicketAdmission_quantity_valid
+  CHECK (quantity >= 1 AND quantity <= 4)
+TicketPayment.TicketPayment_amount_valid
+  CHECK ("amountCents" >= 0)
+User.User_points_nonnegative
+  CHECK (points >= 0)
+
+====================================================================================================
+8. REGRAS DA API E LIMITES DO MODELO
+====================================================================================================
+AUTENTICAÇÃO: login único; cadastro público USER; ADMIN cadastra GATE. JWT de acesso padrão de 15min; refresh rotativo com validade absoluta padrão de sete dias. Role/active/sessão são conferidos na API.
+ASSOCIAÇÃO: desconto só com ACTIVE e validade futura. A API pode apresentar associação vencida como EXPIRED sem atualizar fisicamente o enum.
+COMPRA: revisão de até 60s sem reserva de estoque. Não há tabela de quote. Reserva paga dura até 15min, limitada à janela de vendas/início da partida. Gratuitos são emitidos com TicketPayment FREE.
+PREÇO: unitário com desconto é arredondado por pessoa e multiplicado pela quantidade. expectedTotalCents compara o preço revisado; não é coluna nem fonte de preço.
+ESTOQUE: soma ingressos ISSUED/USED e reservas PENDING válidas. Setor e partida precisam corresponder. Não existe escolha de assento numerado.
+CONCORRÊNCIA: operações críticas usam transação Serializable com até três tentativas para conflito P2034. Constraints isoladas não substituem a transação.
+PAGAMENTO DE INGRESSO: recebimento manual exige reserva válida, valor exato e referência única. Não há cobrança bancária automática ou reembolso de ingresso pago implementados.
+PORTARIA: emissão/pagamento corretos, titular ativo, janela/partida/setor, quantidade restante e escala são conferidos no servidor. QR e código compartilham leitura/versão e vencimento de até 45s.
+CONSUMO: entrada incrementa entryVersion, grava quantidade, protocolo e auditoria na mesma transação. Repetição válida retorna ALREADY_RECORDED; consulta não autoriza nem consome. Não há liberação offline.
+ESCALA: GateAssignment.userId não é restringido a GATE por SQL. Cadastro e autorização são regras da API, revalidadas dentro da transação de entrada.
+PONTOS: check-in rende 30 por dia em America/Fortaleza, identificado por sourceKey. Resgate debita pontos/estoque e grava extrato na mesma transação. Não há trigger de reconciliação automática para SQL arbitrário.
+PALPITES: envio antes do jogo; apuração e premiação ainda pendentes. Indicações são persistidas sem envio automático de mensagens.
+CASHBACK: carteiras por tenant/conta, separadas dos pontos. Modelo B cria venda no caixa; modelo A usa QR fixo condicionado à oferta. Não há gateway real configurado, gasto de saldo ou devolução parcial implementados.
+SPLIT: valores da venda são históricos. Evento confirmado precisa corresponder a valor/split/moeda/validade. Duplicidade é controlada por ID externo/fingerprint e lançamentos únicos.
+ESTORNO: crédito/compensação registrados uma vez; pagamento tardio não recria saldo após estorno. Extrato usa adição na API, sem trigger SQL de imutabilidade.
+WHITE-LABEL: Tenant isola o cashback. Identidade, planos, jogos e portaria ainda não têm isolamento completo por clube.
+SEM TABELAS ESPECÍFICAS: assentos numerados, push, pedidos da boutique, recuperação de senha, MFA, matrícula da escolinha e checkout de quote não são módulos persistidos implementados.
+SEM TRIGGERS/PROCEDURES DE NEGÓCIO declaradas pelas migrations; regras compostas ficam nos services/models.
+CAMPOS CALCULADOS/DE RESPOSTA: available, remainingQuantity, entryQr, availableCents, debtCents e serverTime não são colunas destas tabelas.
+
+====================================================================================================
+9. MIGRATIONS APLICADAS E COMPATIBILIDADE
+====================================================================================================
+20261013160352_init | APLICADA | conclusão: 2026-10-13T16:03:52.826Z
+20261014010000_engagement_and_reservations | APLICADA | conclusão: 2026-11-03T13:09:05.111Z
+20261014020000_cashback_payments | APLICADA | conclusão: 2026-11-03T13:09:05.266Z
+20261014030000_admin_ticketing | APLICADA | conclusão: 2026-11-03T13:09:05.351Z
+20261030010000_jwt_sessions | APLICADA | conclusão: 2026-11-03T13:09:05.384Z
+20261030020000_secure_ticket_entry | APLICADA | conclusão: 2026-11-03T13:09:05.408Z
+20261030030000_gate_staff_codes | APLICADA | conclusão: 2026-11-03T13:09:05.450Z
+
+Compatibilidade: reservas pendentes antigas receberam vencimento finito; catálogo anterior foi publicado na migração administrativa. Novos jogos começam em rascunho.
+Migração JWT revoga sessões antigas e exige novo login, preservando contas/senhas. Migração de QR limpa entryToken e começa com portarias desabilitadas.
+Migração GATE adiciona papel de funcionário, escala por setor e hash de códigos curtos.
+
+====================================================================================================
+10. ARQUIVOS E MANUTENÇÃO
+====================================================================================================
+Schema: apps/api/prisma/schema.prisma
+Migrations: apps/api/prisma/migrations/
+Configuração Prisma: apps/api/prisma.config.ts
+Conexão: apps/api/src/config/database.js
+Ambiente: apps/api/src/config/env.js e .env locais (segredos não incluídos neste documento)
+Bootstrap: apps/api/prisma/bootstrap.js | seed opcional: apps/api/prisma/seed.js
+Consultas/transações: apps/api/src/models/ | serviços: apps/api/src/services/ | regras: apps/api/src/lib/
+Contratos de resposta: packages/shared/types.ts | Docker PostgreSQL: docker-compose.yml
+
+Comandos executados somente quando o responsável os invoca:
+  npm run db:prepare -> generate, migrate deploy e bootstrap administrativo.
+  npm run db:migrate -> desenvolver migrations; npm run db:deploy -> aplicar migrations existentes.
+  npm run db:studio -> abrir ferramenta interativa de dados.
+  npm run auth:cleanup --workspace @nacional/api -> limpar sessões vencidas e códigos expirados.
+
+Ao mudar schema/migrations, atualizar este TXT. Nenhum registro de usuário ou credencial foi exportado.
+FIM DO DOCUMENTO.

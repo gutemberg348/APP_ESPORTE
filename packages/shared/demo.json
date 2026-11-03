@@ -1,0 +1,218 @@
+{
+  "member": {
+    "id": "demo-rafael",
+    "name": "Alex Rangel Vieira",
+    "email": "rafael@demo.nacional.local",
+    "avatar": null,
+    "points": 1280,
+    "membership": {
+      "memberId": "001961",
+      "status": "ACTIVE",
+      "validUntil": "2026-12-31T23:59:59-03:00",
+      "plan": {
+        "name": "Sócio Canário",
+        "discountPercent": 0,
+        "priceCents": 3990
+      }
+    },
+    "city": "Patos",
+    "contact": "",
+    "preferences": {
+      "family": true,
+      "personalize": true,
+      "notifications": false,
+      "ranking": true
+    },
+    "schoolInterested": false,
+    "role": "USER",
+    "active": true
+  },
+  "match": {
+    "id": "demo-nacional-treze",
+    "homeTeam": "NACIONAL",
+    "awayTeam": "TREZE-PB",
+    "startsAt": "2026-10-24T16:00:00-03:00",
+    "stadium": "Est. José Cavalcanti",
+    "competition": "Campeonato Paraibano",
+    "isHome": true,
+    "sectors": [
+      {
+        "id": "cativas",
+        "name": "Cadeiras Cativas",
+        "priceCents": 8000
+      },
+      {
+        "id": "sol",
+        "name": "Arquibancada Sol",
+        "priceCents": 4000
+      },
+      {
+        "id": "sombra",
+        "name": "Arquibancada Sombra",
+        "priceCents": 6000
+      }
+    ]
+  },
+  "partners": [
+    {
+      "id": "cafe",
+      "name": "Café do Sertão",
+      "category": "Alimentação",
+      "discount": "15% de desconto",
+      "icon": "coffee",
+      "description": "Seu café com um gosto de vantagem.",
+      "conditions": "15% no consumo de cafeteria. Teto de desconto: R$ 30 por compra.",
+      "location": "Centro · parceiro fictício"
+    },
+    {
+      "id": "mercado",
+      "name": "Mercado da Família",
+      "category": "Mercado",
+      "discount": "5% de cashback",
+      "icon": "basket",
+      "description": "Sua compra da semana volta pra você.",
+      "conditions": "5% de cashback sobre compras elegíveis. Teto: R$ 20 por compra. Liberação após confirmação.",
+      "location": "Belo Horizonte · parceiro fictício"
+    },
+    {
+      "id": "farmacia",
+      "name": "Farmácia Bem-Estar",
+      "category": "Farmácia",
+      "discount": "12% de desconto",
+      "icon": "heart",
+      "description": "Um cuidado a mais no seu dia.",
+      "conditions": "12% em higiene e perfumaria. Não inclui medicamentos. Teto de desconto: R$ 30.",
+      "location": "Brasília · parceiro fictício"
+    },
+    {
+      "id": "posto",
+      "name": "Posto Rota do Sol",
+      "category": "Mobilidade",
+      "discount": "3% de cashback",
+      "icon": "fuel",
+      "description": "Na estrada ou a caminho do jogo.",
+      "conditions": "3% de cashback no abastecimento. Teto: R$ 15 por compra. Liberação após confirmação.",
+      "location": "Jatobá · parceiro fictício"
+    },
+    {
+      "id": "pizza",
+      "name": "Pizza da Torcida",
+      "category": "Alimentação",
+      "discount": "20% de desconto",
+      "icon": "pizza",
+      "description": "O pós-jogo da família tem desconto.",
+      "conditions": "20% em pizzas grandes, de segunda a quinta. Teto: R$ 30. Sem acumular promoções.",
+      "location": "Santo Antônio · parceiro fictício"
+    },
+    {
+      "id": "fit",
+      "name": "Movimento Academia",
+      "category": "Bem-estar",
+      "discount": "10% de desconto",
+      "icon": "activity",
+      "description": "Movimente a paixão pelo Naça.",
+      "conditions": "10% na mensalidade avulsa. Teto: R$ 30. Sujeito à disponibilidade da unidade.",
+      "location": "Centro · parceiro fictício"
+    }
+  ],
+  "engagement": {
+    "checkedIn": false,
+    "day": "",
+    "ledger": [],
+    "rewards": [
+      {
+        "id": "treino",
+        "title": "Por dentro do Ninho",
+        "description": "Visita guiada a um treino · 1 pessoa",
+        "cost": 800,
+        "stock": 8,
+        "icon": "flag"
+      },
+      {
+        "id": "campo",
+        "title": "O gramado é seu",
+        "description": "Foto à beira do campo · 1 pessoa",
+        "cost": 1500,
+        "stock": 4,
+        "icon": "camera"
+      },
+      {
+        "id": "camisa",
+        "title": "Uma camisa, muitas histórias",
+        "description": "Camisa autografada · tamanho a combinar",
+        "cost": 3000,
+        "stock": 2,
+        "icon": "shirt"
+      }
+    ],
+    "redemptions": [],
+    "ranking": [
+      {
+        "name": "Marina S.",
+        "points": 1880,
+        "you": false
+      },
+      {
+        "name": "João P.",
+        "points": 1630,
+        "you": false
+      },
+      {
+        "name": "Bia N.",
+        "points": 1410,
+        "you": false
+      },
+      {
+        "name": "Alex · você",
+        "points": 1280,
+        "you": true
+      },
+      {
+        "name": "Carlos A.",
+        "points": 1050,
+        "you": false
+      }
+    ]
+  },
+  "products": [
+    {
+      "id": "jersey",
+      "name": "Camisa Alviverde",
+      "desc": "Design conceitual · coleção Naça",
+      "color": "#166240",
+      "type": "shirt",
+      "sizes": [
+        "P",
+        "M",
+        "G",
+        "GG"
+      ],
+      "priceCents": 14990
+    },
+    {
+      "id": "white",
+      "name": "Camisa do Sertão",
+      "desc": "Design conceitual · edição branca",
+      "color": "#f1ead4",
+      "type": "shirt",
+      "sizes": [
+        "P",
+        "M",
+        "G",
+        "GG"
+      ],
+      "priceCents": 14990
+    },
+    {
+      "id": "cap",
+      "name": "Boné Naça",
+      "desc": "Design conceitual · verde floresta",
+      "color": "#184d36",
+      "type": "cap",
+      "sizes": [
+        "Único"
+      ],
+      "priceCents": 5990
+    }
+  ]
+}

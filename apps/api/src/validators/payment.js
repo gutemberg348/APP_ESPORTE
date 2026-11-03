@@ -1,0 +1,11 @@
+import { z } from 'zod';
+import { MAX_PAYMENT_CENTS } from '../lib/payment-rules.js';
+const amount = z.number().int().min(1).max(MAX_PAYMENT_CENTS);
+const requestKey = z.string().min(16).max(80).regex(/^[A-Za-z0-9_-]+$/);
+const code = z.string().min(20).max(100).regex(/^[A-Za-z0-9_-]+$/);
+export const tenantQuery = z.object({ tenant: z.string().regex(/^[a-z0-9-]{2,60}$/).optional() }).strict();
+export const merchantChargeSchema = z.object({ offerId: z.uuid(), amountCents: amount, requestKey, customerCode: z.string().max(80).optional() }).strict();
+export const customerChargeSchema = z.object({ merchantCode: z.uuid(), amountCents: amount, requestKey }).strict();
+export const saleCodeSchema = z.object({ code }).strict();
+export const chargeIdQuery = z.object({ id: z.uuid() }).strict();
+export const simulateSchema = z.object({ chargeId: z.uuid(), type: z.enum(['SETTLED', 'REFUNDED']), eventId: requestKey }).strict();
