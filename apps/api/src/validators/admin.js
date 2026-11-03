@@ -32,4 +32,4 @@ const oneCredential = (value) => Boolean(value.token) !== Boolean(value.code);
 export const ticketCodeSchema = z.object(entryFields).strict().refine(oneCredential, 'Informe somente o QR ou o código digitável.');
 export const admissionSchema = z.object({ ...entryFields, quantity: z.number().int().min(1).max(4), requestKey: z.string().regex(/^[A-Za-z0-9_-]{16,80}$/) }).strict().refine(oneCredential, 'Informe somente o QR ou o código digitável.');
 export const admissionReceiptSchema = z.object({ ticketId: z.uuid(), matchId: z.uuid(), sectorId: z.uuid(), requestKey: z.string().regex(/^[A-Za-z0-9_-]{16,80}$/) }).strict();
-export const adminQuerySchema = paginationSchema.extend({ search: z.string().trim().max(100).optional(), matchId: z.uuid().optional(), status: z.enum(['PENDING', 'ISSUED', 'USED', 'CANCELED', 'EXPIRED']).optional() }).strict();
+export const adminQuerySchema = paginationSchema.extend({ search: z.string().trim().max(100).optional(), matchId: z.uuid().optional(), status: z.enum(['PENDING', 'ISSUED', 'USED', 'CANCELED', 'EXPIRED']).optional(), deleted: z.enum(['exclude', 'only', 'all']).default('exclude') }).strict();

@@ -7,13 +7,14 @@ import { saleQuoteSchema, saleUpdateSchema, saleDeleteSchema } from '../src/vali
 import { createApp } from '../src/http/app.js';
 import { inject } from './helpers/inject.js';
 import { AppError } from '../src/lib/errors.js';
+import { assertTicketPaid, assertAdmission, occupiedQuantity } from '../src/lib/ticket-rules.js';
 
 const start = new Date('2026-11-03T18:00:00Z');
 function fixture() {
   const ticketId = randomUUID(), matchId = randomUUID(), sectorId = randomUUID(), otherId = randomUUID(), userId = randomUUID();
   let clock = start, tail = Promise.resolve(), failAudit = false, afterAggregate = () => {};
   let state = {
-    ticket: { id: ticketId, userId, matchId, sectorId, quantity: 2, priceCents: 5000, status: 'PENDING', usedQuantity: 0, entryVersion: 0, entryToken: null, createdAt: start, expiresAt: new Date(start.getTime() + 900000), payment: null },
+    ticket: { id: ticketId, userId, matchId, sectorId, quantity: 2, priceCents: 5000, status: 'PENDING', usedQuantity: 0, entryVersion: 0, entryToken: null, createdAt: start, expiresAt: new Date(start.getTime() + 900000), payment: null, deletedAt: null, voidedQuantity: 0 },
     user: { id: userId, name: 'Titular', email: 'test@example.local', passwordHash: 'never expose', active: true, role: 'USER', membership: null },
     match: { id: matchId, published: true, salesEnabled: true, startsAt: new Date(start.getTime() + 7200000), salesOpenAt: null, salesCloseAt: null, sectors: [
       { id: sectorId, matchId, name: 'Sol', priceCents: 2500, capacity: 4, salesEnabled: true },
@@ -33,7 +34,7 @@ function fixture() {
       update: async ({ data }) => { for (const [key, value] of Object.entries(data)) state.ticket[key] = value?.increment !== undefined ? state.ticket[key] + value.increment : value; },
       delete: async () => { assert.equal(state.ticket.payment, null); assert.equal(state.admissions, 0); state.ticket = null; state.codes = []; },
     },
-    ticketAdmission: { count: async () => state.admissions },
+    ticketAdmission: { aggregate: async () => ({ _sum: { quantity: state.admissions } }) },
     ticketAccessCode: { deleteMany: async () => { state.codes = []; } },
     ticketPayment: { create: async ({ data }) => { state.ticket.payment = { ...data, id: randomUUID(), confirmedAt: clock }; } },
     auditLog: { create: async ({ data }) => { if (failAudit) throw new Error('audit unavailable'); state.audits.push(structuredClone(data)); } },
@@ -95,26 +96,47 @@ test('sales edit validates same match, live holder and open sales', async () => 
   await assert.rejects(f.store.quote(f.input()), { code: 'SALES_CLOSED' });
 });
 
-test('paid, issued, used, partially admitted and inconsistent sales cannot be changed or deleted', async () => {
-  for (const change of [
-    { status: 'ISSUED' }, { status: 'USED' }, { usedQuantity: 1 },
-    { payment: { id: randomUUID(), method: 'MANUAL', amountCents: 5000 } },
-    { payment: { id: randomUUID(), method: 'FREE', amountCents: 0 } },
-  ]) {
-    const f = fixture(); Object.assign(f.state().ticket, change);
-    await assert.rejects(f.store.remove('admin', { ...f.input(), reason: 'Pedido protegido' }), { code: 'PAID_TICKET_PROTECTED' });
-    await assert.rejects(f.store.quote(f.input()), { code: 'PAID_TICKET_PROTECTED' });
-    assert.ok(f.state().ticket); assert.equal(f.state().audits.length, 0);
-  }
-  const f = fixture(); f.state().admissions = 1;
-  await assert.rejects(f.store.remove('admin', { ...f.input(), reason: 'Entrada existente' }), { code: 'PAID_TICKET_PROTECTED' });
+function markPaid(f, used = 0) {
+  Object.assign(f.state().ticket, { status: used === 2 ? 'USED' : 'ISSUED', usedQuantity: used, expiresAt: null, payment: { id: randomUUID(), method: 'MANUAL', amountCents: 5000, confirmedById: 'admin', reference: 'original receipt', confirmedAt: start } });
+  f.state().admissions = used;
+}
+
+test('paid sales can change sector and quantity while keeping the original receipt and total', async () => {
+  const f = fixture(); markPaid(f); const receipt = structuredClone(f.state().ticket.payment);
+  f.state().match.salesEnabled = false; f.state().user.active = false;
+  const input = { ...f.input(), sectorId: f.otherId, quantity: 3 };
+  const quote = await f.store.quote(input);
+  assert.equal(quote.priceLocked, true); assert.equal(quote.totalCents, 5000); assert.equal(quote.unitPriceCents, null);
+  const edited = await f.store.update('admin', { ...input, expectedTotalCents: 5000, reason: 'Correção administrativa' });
+  assert.equal(edited.quantity, 3); assert.equal(edited.sector.id, f.otherId); assert.equal(edited.status, 'ISSUED');
+  assert.deepEqual(f.state().ticket.payment, receipt); assert.equal(edited.priceCents, 5000); assert.equal(edited.expiresAt, null);
+  assert.equal(f.state().ticket.entryVersion, 1); assert.deepEqual(f.state().codes, []);
+  await assert.rejects(f.store.update('admin', { ...f.input(), expectedTotalCents: 1, reason: 'Não altera recibo' }), { code: 'TICKET_PRICE_CHANGED' });
 });
 
-test('free edits issue a payment and ticket atomically and protect it from deletion', async () => {
+test('paid edits preserve consumed entrances and never transfer an already used sector', async () => {
+  const f = fixture(); markPaid(f, 2);
+  await assert.rejects(f.store.quote({ ...f.input(), quantity: 1 }), { code: 'QUANTITY_BELOW_USED' });
+  await assert.rejects(f.store.quote({ ...f.input(), sectorId: f.otherId }), { code: 'USED_SECTOR_PROTECTED' });
+  const edited = await f.store.update('admin', { ...f.input(), quantity: 3, expectedTotalCents: 5000, reason: 'Entrada adicional autorizada' });
+  assert.equal(edited.usedQuantity, 2); assert.equal(edited.status, 'ISSUED'); assert.equal(edited.remainingQuantity, 1);
+  assert.equal(f.state().admissions, 2);
+});
+
+test('inconsistent payments or entry counters reject edits without losing history', async () => {
+  const f = fixture(); markPaid(f); f.state().ticket.payment.amountCents = 100;
+  await assert.rejects(f.store.quote(f.input()), { code: 'SALE_PAYMENT_INCONSISTENT' });
+  const g = fixture(); g.state().admissions = 1;
+  await assert.rejects(g.store.remove('admin', { ...g.input(), reason: 'Conferir registros' }), { code: 'SALE_ENTRY_INCONSISTENT' });
+  assert.equal(g.state().ticket.deletedAt, null);
+});
+
+test('free edits issue a receipt atomically and allow logical deletion without removing that receipt', async () => {
   const f = fixture(); f.state().match.sectors[0].priceCents = 0;
   const result = await f.store.update('admin', { ...f.input(), expectedTotalCents: 0, reason: 'Troca para cortesia' });
   assert.equal(result.status, 'ISSUED'); assert.equal(result.expiresAt, null); assert.equal(result.payment.method, 'FREE');
-  await assert.rejects(f.store.remove('admin', { ...f.input(), reason: 'Cortesia emitida' }), { code: 'PAID_TICKET_PROTECTED' });
+  await f.store.remove('admin', { ...f.input(), reason: 'Excluir cortesia' });
+  assert.equal(f.state().ticket.payment.method, 'FREE'); assert.ok(f.state().ticket.deletedAt);
 });
 
 test('unpaid active, expired and cancelled sales delete while their audit is preserved', async () => {
@@ -123,9 +145,26 @@ test('unpaid active, expired and cancelled sales delete while their audit is pre
     if (status === 'CANCELED') f.state().ticket.status = status;
     if (status === 'EXPIRED') f.advance(900001);
     const result = await f.store.remove('admin', { ...f.input(), reason: 'Reserva duplicada' });
-    assert.deepEqual(result, { ticketId: f.ticketId, deleted: true }); assert.equal(f.state().ticket, null);
+    assert.equal(result.ticketId, f.ticketId); assert.equal(result.deleted, true); assert.ok(f.state().ticket.deletedAt);
+    assert.equal(f.state().ticket.status, 'CANCELED'); assert.equal(f.state().ticket.voidedQuantity, 2);
     assert.equal(f.state().audits[0].action, 'TICKET_SALE_DELETED'); assert.equal(f.state().audits[0].details.totalCents, 5000);
     assert.deepEqual(f.state().codes, []);
+  }
+});
+
+test('paid deletion preserves receipt and admissions, holds used places and invalidates access', async () => {
+  for (const used of [0, 1, 2]) {
+    const f = fixture(); markPaid(f, used); const receipt = structuredClone(f.state().ticket.payment);
+    await f.store.remove('admin', { ...f.input(), reason: 'Excluir venda paga' });
+    const ticket = f.state().ticket;
+    assert.deepEqual(ticket.payment, receipt); assert.equal(f.state().admissions, used);
+    assert.equal(ticket.quantity, 2); assert.equal(ticket.usedQuantity, used); assert.equal(ticket.voidedQuantity, 2 - used);
+    assert.equal(occupiedQuantity({ quantity: ticket.quantity, voidedQuantity: ticket.voidedQuantity }), used);
+    assert.equal(ticket.entryVersion, 1); assert.deepEqual(f.state().codes, []);
+    assert.throws(() => assertTicketPaid(ticket), { code: 'SALE_DELETED' });
+    assert.throws(() => assertAdmission(ticket, 1), { code: 'SALE_DELETED' });
+    await assert.rejects(f.store.quote(f.input()), { code: 'SALE_DELETED' });
+    await assert.rejects(f.store.remove('admin', { ...f.input(), reason: 'Repetição da exclusão' }), { code: 'SALE_DELETED' });
   }
 });
 
@@ -174,5 +213,5 @@ test('DELETE and PATCH sales use authenticated admin access, JSON validation and
   const edited = await inject(app, '/sales', { method: 'PATCH', body: JSON.stringify({ ...f.input(), sectorId: f.otherId, expectedTotalCents: 8000, reason: 'Trocar setor' }), headers });
   assert.equal(edited.status, 200);
   const deleted = await inject(app, '/sales', { method: 'DELETE', body: JSON.stringify({ ...input, revision: f.input().revision }), headers });
-  assert.equal(deleted.status, 200); assert.equal((await deleted.json()).data.deleted, true); assert.equal(f.state().ticket, null);
+  assert.equal(deleted.status, 200); assert.equal((await deleted.json()).data.deleted, true); assert.ok(f.state().ticket.deletedAt);
 });

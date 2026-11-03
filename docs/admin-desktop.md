@@ -8,7 +8,7 @@ O menu lateral tem rolagem independente, identificação do administrador, saíd
 
 - **Visão geral:** contadores reais da API, próximas partidas, reservas pendentes da lista consultada e últimas atividades.
 - **Jogos:** grade de partidas com setores, preços, disponibilidade e ações de edição, publicação, vendas e portaria.
-- **Vendas:** tabela com comprador, partida/setor, total e situação; permite conferir pagamento, editar reservas não pagas, cancelar e excluir. Edição e exclusão pedem motivo e registram auditoria. Busca e filtros operam sobre os pedidos carregados. [Regras e contrato das alterações](admin-sales.md).
+- **Vendas:** tabela com comprador, partida/setor, total e situação; permite conferir pagamento, editar e excluir inclusive vendas pagas. Edição e exclusão pedem motivo e registram auditoria. O filtro **Excluídas** consulta o histórico preservado. Busca e filtros operam sobre os pedidos carregados. [Regras e contrato das alterações](admin-sales.md).
 - **Torcedores:** busca de contas pela API, tabela com perfil, associação e acesso; ações de associação e ativação continuam disponíveis.
 - **Planos:** grade com preço, desconto e edição.
 - **Funcionários:** grade de equipe com cadastro, escala, redefinição de senha e ativação.

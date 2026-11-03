@@ -7,7 +7,7 @@ export function toTicket(ticket, now = new Date()) {
     status: ticket.status === 'PENDING' && ticket.expiresAt && ticket.expiresAt <= now ? 'EXPIRED' : ticket.status,
     serverTime: now.toISOString(),
     usedQuantity: ticket.usedQuantity,
-    remainingQuantity: Math.max(0, ticket.quantity - ticket.usedQuantity),
+    remainingQuantity: Math.max(0, ticket.quantity - ticket.usedQuantity - (ticket.voidedQuantity || 0)),
     entryQr: null,
     payment: payment ? { method: payment.method, amountCents: payment.amountCents, confirmedAt: payment.confirmedAt } : null,
   };

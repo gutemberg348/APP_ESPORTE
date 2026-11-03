@@ -17,6 +17,7 @@ function fixture() {
     match: { findUnique: async ({ where }) => where.id === matchId ? structuredClone(state.match) : null },
     user: { findUnique: async () => structuredClone(state.user) },
     ticket: {
+      findFirst: async ({ where }) => { assert.equal(where.deletedAt, null); return state.order?.deletedAt ? null : view(); },
       findUnique: async () => view(),
       aggregate: async () => { const quantity = state.occupied; afterAggregate(); return { _sum: { quantity } }; },
       create: async ({ data }) => { state.order = { ...data, id: randomUUID(), createdAt: clock, payment: null }; return view(); },

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { db } from '../config/database.js';
 import { serializable } from '../lib/business-rules.js';
 import { AppError } from '../lib/errors.js';
-import { inventoryWhere, assertMatchSchedule } from '../lib/ticket-rules.js';
+import { inventoryWhere, occupiedQuantity, assertMatchSchedule } from '../lib/ticket-rules.js';
 import { ticketInclude, toAdminTicket } from '../lib/ticket-serializers.js';
 import { toMember } from '../lib/serializers.js';
 import { withAvailability, writeAudit } from './ticket.model.js';
@@ -10,7 +10,7 @@ import { withAvailability, writeAudit } from './ticket.model.js';
 export const adminModel = {
   async overview() {
     const [users, matches, issued, pending] = await Promise.all([
-      db.user.count(), db.match.count(), db.ticket.aggregate({ where: { status: { in: ['ISSUED', 'USED'] } }, _sum: { quantity: true } }),
+      db.user.count(), db.match.count(), db.ticket.aggregate({ where: { deletedAt: null, status: { in: ['ISSUED', 'USED'] } }, _sum: { quantity: true } }),
       db.ticket.count({ where: { status: 'PENDING', expiresAt: { gt: new Date() } } }),
     ]);
     return { users, matches, issuedTickets: issued._sum.quantity || 0, pendingReservations: pending };
@@ -54,17 +54,17 @@ export const adminModel = {
       const sector = await tx.sector.findUnique({ where: { id } });
       if (!sector) throw new AppError(404, 'SECTOR_NOT_FOUND', 'Setor não encontrado.');
       if (data.capacity !== undefined) {
-        const reserved = await tx.ticket.aggregate({ where: { sectorId: id, ...inventoryWhere() }, _sum: { quantity: true } });
-        if (data.capacity < (reserved._sum.quantity || 0)) throw new AppError(409, 'CAPACITY_BELOW_OCCUPIED', 'A capacidade não pode ser menor que os ingressos e reservas válidos.');
+        const reserved = await tx.ticket.aggregate({ where: { sectorId: id, ...inventoryWhere() }, _sum: { quantity: true, voidedQuantity: true } });
+        if (data.capacity < occupiedQuantity(reserved._sum)) throw new AppError(409, 'CAPACITY_BELOW_OCCUPIED', 'A capacidade não pode ser menor que os ingressos e reservas válidos.');
       }
       const updated = await tx.sector.update({ where: { id }, data });
       await writeAudit(tx, actorId, 'SECTOR_UPDATED', id, { fields: Object.keys(data) });
       return updated;
     });
   },
-  async tickets({ limit, offset, matchId, status }) {
+  async tickets({ limit, offset, matchId, status, deleted = 'exclude' }) {
     const now = new Date();
-    const where = { ...(matchId ? { matchId } : {}), ...(status === 'EXPIRED' ? { status: 'PENDING', expiresAt: { lte: now } } : status === 'PENDING' ? { status, expiresAt: { gt: now } } : status ? { status } : {}) };
+    const where = { ...(deleted === 'all' ? {} : { deletedAt: deleted === 'only' ? { not: null } : null }), ...(matchId ? { matchId } : {}), ...(status === 'EXPIRED' ? { status: 'PENDING', expiresAt: { lte: now } } : status === 'PENDING' ? { status, expiresAt: { gt: now } } : status ? { status } : {}) };
     return (await db.ticket.findMany({ where, include: { ...ticketInclude, user: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: 'desc' }, take: limit, skip: offset })).map((ticket) => toAdminTicket(ticket));
   },
   async users({ limit, offset, search }) {

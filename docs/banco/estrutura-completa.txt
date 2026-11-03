@@ -2,8 +2,8 @@ NACIONAL / SÓCIO CANÁRIO — DICIONÁRIO COMPLETO DO BANCO DE DADOS
 Revisão: 03/11/2026 | Fuso de apresentação da revisão: America/Cayenne
 Banco: nacional; PostgreSQL 17.10; schema public.
 27 tabelas de aplicação + _prisma_migrations = 28 tabelas físicas.
-216 colunas; 35 FKs; 21 CHECKs; 79 índices (incluindo PK/UNIQUE); 8 enums.
-7 migrations aplicadas e não revertidas.
+218 colunas; 35 FKs; 23 CHECKs; 80 índices (incluindo PK/UNIQUE); 8 enums.
+8 migrations aplicadas e não revertidas.
 Fontes: schema Prisma, migrations e catálogos de metadados do PostgreSQL.
 Nenhum cadastro, senha, segredo, token ou transação de usuário foi exportado. Apenas estrutura.
 Retrato desta revisão; futuras mudanças no schema exigem atualizar este documento.
@@ -610,7 +610,7 @@ CONSTRAINTS REAIS NO POSTGRESQL:
     CREATE UNIQUE INDEX "Sector_pkey" ON public."Sector" USING btree (id)
 
 OBSERVAÇÕES:
-  - Disponível = capacidade menos quantidade de emitidos/usados e reservas válidas. Não existe coluna available.
+  - Disponível = capacidade menos (quantity - voidedQuantity) de emitidos/usados, reservas válidas e excluídos com entradas já realizadas. Não existe coluna available.
 
 ----------------------------------------------------------------------------------------------------
 TABELA 08: Ticket
@@ -678,6 +678,16 @@ COLUNAS FÍSICAS:
     Default SQL: 0
     Default/automação Prisma: nenhum
     Uso: Versão de acesso; incrementada a cada entrada para invalidar credenciais anteriores.
+  deletedAt | SQL: timestamp(3) without time zone | NULL permitido
+    Prisma: DateTime?
+    Default SQL: nenhum
+    Default/automação Prisma: nenhum
+    Uso: Instante da exclusão lógica administrativa. Pagamento e entradas são preservados; excluídas saem da lista ativa e da carteira.
+  voidedQuantity | SQL: integer | NOT NULL
+    Prisma: Int?
+    Default SQL: 0
+    Default/automação Prisma: nenhum
+    Uso: Entradas canceladas sem uso. Na exclusão equivale a quantity - usedQuantity; lugares já utilizados continuam ocupados.
 
 RELAÇÕES PRISMA (virtuais, não colunas):
   user: User? | lado inverso; FK na tabela relacionada
@@ -688,6 +698,8 @@ RELAÇÕES PRISMA (virtuais, não colunas):
   accessCodes: TicketAccessCode? | lado inverso; FK na tabela relacionada
 
 CONSTRAINTS REAIS NO POSTGRESQL:
+  Ticket_deleted_state_valid [CHECK]
+    CHECK ("deletedAt" IS NULL OR status = 'CANCELED'::"TicketStatus" AND "voidedQuantity" = (quantity - "usedQuantity"))
   Ticket_entryVersion_valid [CHECK]
     CHECK ("entryVersion" >= 0)
   Ticket_price_nonnegative [CHECK]
@@ -696,6 +708,8 @@ CONSTRAINTS REAIS NO POSTGRESQL:
     CHECK (quantity >= 1 AND quantity <= 4)
   Ticket_used_quantity_valid [CHECK]
     CHECK ("usedQuantity" >= 0 AND "usedQuantity" <= quantity)
+  Ticket_voided_quantity_valid [CHECK]
+    CHECK ("voidedQuantity" >= 0 AND "voidedQuantity" <= (quantity - "usedQuantity"))
   Ticket_matchId_fkey [FOREIGN KEY]
     FOREIGN KEY ("matchId") REFERENCES "Match"(id) ON UPDATE CASCADE ON DELETE RESTRICT
     ON DELETE RESTRICT; ON UPDATE CASCADE
@@ -715,11 +729,14 @@ CONSTRAINTS REAIS NO POSTGRESQL:
     CREATE UNIQUE INDEX "Ticket_pkey" ON public."Ticket" USING btree (id)
   Ticket_sectorId_status_expiresAt_idx
     CREATE INDEX "Ticket_sectorId_status_expiresAt_idx" ON public."Ticket" USING btree ("sectorId", status, "expiresAt")
-  Ticket_userId_matchId_key
-    CREATE UNIQUE INDEX "Ticket_userId_matchId_key" ON public."Ticket" USING btree ("userId", "matchId")
+  Ticket_userId_matchId_active_key
+    CREATE UNIQUE INDEX "Ticket_userId_matchId_active_key" ON public."Ticket" USING btree ("userId", "matchId") WHERE ("deletedAt" IS NULL)
+  Ticket_userId_matchId_idx
+    CREATE INDEX "Ticket_userId_matchId_idx" ON public."Ticket" USING btree ("userId", "matchId")
 
 OBSERVAÇÕES:
-  - UNIQUE(userId, matchId) inclui cancelados/expirados: API reutiliza o registro para nova reserva não paga. Não há tabela de histórico independente de tentativas.
+  - O índice UNIQUE parcial Ticket_userId_matchId_active_key garante uma venda ativa por conta/partida somente quando deletedAt IS NULL. Excluídas podem coexistir com uma nova compra. O índice parcial é mantido pelo SQL da migration, fora do @@index não único do Prisma.
+  - Exclusão lógica invalida acesso e mantém pagamentos e entradas. Somente quantidade não utilizada é liberada no estoque. Edição paga preserva o valor recebido; após entrada o setor não pode mudar nem a quantidade diminuir abaixo do uso.
   - As FKs não garantem que setor e pedido sejam da mesma partida; essa conferência é feita pela API.
   - Não há assento numerado: o controle é por setor/quantidade.
 
@@ -2177,6 +2194,8 @@ Sector.Sector_capacity_nonnegative
   CHECK (capacity >= 0)
 Sector.Sector_price_nonnegative
   CHECK ("priceCents" >= 0)
+Ticket.Ticket_deleted_state_valid
+  CHECK ("deletedAt" IS NULL OR status = 'CANCELED'::"TicketStatus" AND "voidedQuantity" = (quantity - "usedQuantity"))
 Ticket.Ticket_entryVersion_valid
   CHECK ("entryVersion" >= 0)
 Ticket.Ticket_price_nonnegative
@@ -2185,6 +2204,8 @@ Ticket.Ticket_quantity_range
   CHECK (quantity >= 1 AND quantity <= 4)
 Ticket.Ticket_used_quantity_valid
   CHECK ("usedQuantity" >= 0 AND "usedQuantity" <= quantity)
+Ticket.Ticket_voided_quantity_valid
+  CHECK ("voidedQuantity" >= 0 AND "voidedQuantity" <= (quantity - "usedQuantity"))
 TicketAccessCode.TicketAccessCode_version_valid
   CHECK ("entryVersion" >= 0)
 TicketAdmission.TicketAdmission_quantity_valid
@@ -2227,6 +2248,7 @@ CAMPOS CALCULADOS/DE RESPOSTA: available, remainingQuantity, entryQr, availableC
 20261030010000_jwt_sessions | APLICADA | conclusão: 2026-11-03T13:09:05.384Z
 20261030020000_secure_ticket_entry | APLICADA | conclusão: 2026-11-03T13:09:05.408Z
 20261030030000_gate_staff_codes | APLICADA | conclusão: 2026-11-03T13:09:05.450Z
+20261103010000_paid_sale_management | APLICADA | conclusão: 2026-11-03T18:26:56.384Z
 
 Compatibilidade: reservas pendentes antigas receberam vencimento finito; catálogo anterior foi publicado na migração administrativa. Novos jogos começam em rascunho.
 Migração JWT revoga sessões antigas e exige novo login, preservando contas/senhas. Migração de QR limpa entryToken e começa com portarias desabilitadas.

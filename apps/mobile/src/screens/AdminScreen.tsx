@@ -57,7 +57,7 @@ function AdminWorkspace({ onBack }: { onBack: () => void }) {
     const current = ++revision.current;
     setLoading(true); setError('');
     try {
-      const fresh = await Promise.all([adminApi.overview(token), adminApi.matches(token), adminApi.tickets(token), adminApi.users(token, search), adminApi.plans(token), adminApi.audit(token)]);
+      const fresh = await Promise.all([adminApi.overview(token), adminApi.matches(token), adminApi.tickets(token, { deleted: 'all' }), adminApi.users(token, search), adminApi.plans(token), adminApi.audit(token)]);
       if (current !== revision.current) return;
       setOverview(fresh[0]); setMatches(fresh[1]); setTickets(fresh[2]); setUsers(fresh[3]); setPlans(fresh[4]); setAudit(fresh[5]);
     } catch (err) { if (current === revision.current) setError(messageOf(err)); }

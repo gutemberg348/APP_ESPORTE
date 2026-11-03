@@ -14,6 +14,7 @@ export function assertManualConfirmation(ticket, amountCents, now = new Date()) 
   if (ticket.priceCents !== amountCents) throw new AppError(422, 'PAYMENT_AMOUNT_MISMATCH', 'O valor recebido deve corresponder ao total da reserva.');
 }
 export function assertAdmission(ticket, quantity) {
+  if (ticket.deletedAt) throw new AppError(409, 'SALE_DELETED', 'Este ingresso foi excluído pela administração.');
   if (ticket.status !== 'ISSUED') throw new AppError(409, 'INVALID_TICKET', 'Ingresso não emitido, cancelado ou já utilizado.');
   if (!Number.isInteger(quantity) || quantity < 1 || ticket.usedQuantity + quantity > ticket.quantity) throw new AppError(409, 'TICKET_ALREADY_USED', 'A quantidade de entradas excede os acessos restantes.');
 }
@@ -28,6 +29,7 @@ export function assertGateOpen(match, now = new Date()) {
   return window;
 }
 export function assertTicketPaid(ticket) {
+  if (ticket.deletedAt) throw new AppError(409, 'SALE_DELETED', 'Este ingresso foi excluído pela administração.');
   const payment = ticket.payment;
   if (!payment || !['MANUAL', 'FREE'].includes(payment.method) || payment.amountCents !== ticket.priceCents || (ticket.priceCents > 0 && (payment.method !== 'MANUAL' || !payment.confirmedById)) || (payment.method === 'FREE' && ticket.priceCents !== 0)) throw new AppError(409, 'TICKET_PAYMENT_NOT_CONFIRMED', 'O recebimento deste ingresso não foi confirmado corretamente.');
   if (!ticket.user?.active) throw new AppError(409, 'HOLDER_DISABLED', 'A conta do titular está desativada.');
@@ -49,4 +51,5 @@ export function assertMatchSchedule(match) {
   const gate = gateWindow(match);
   if (gate.opensAt >= gate.closesAt) throw new AppError(422, 'INVALID_GATE_WINDOW', 'O fechamento da portaria deve ocorrer depois da abertura.');
 }
-export const inventoryWhere = (now = new Date()) => ({ OR: [{ status: { in: ['ISSUED', 'USED'] } }, { status: 'PENDING', OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }] });
+export const inventoryWhere = (now = new Date()) => ({ OR: [{ status: { in: ['ISSUED', 'USED'] } }, { status: 'PENDING', OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }, { deletedAt: { not: null }, usedQuantity: { gt: 0 } }] });
+export const occupiedQuantity = (sum) => (sum.quantity || 0) - (sum.voidedQuantity || 0);

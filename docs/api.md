@@ -46,9 +46,9 @@ Contas começam como `USER` ativa, sem associação. O retorno de login/perfil i
 | GET/POST/PATCH | `/admin/matches` | Listar, criar rascunho e editar/publicar jogos |
 | POST/PATCH | `/admin/sectors` | Criar/editar preço, capacidade e habilitação do setor |
 | GET | `/admin/tickets?matchId=<UUID>&status=PENDING&limit=100` | Consultar compras/reservas |
-| POST | `/admin/tickets/quote` | Revisar preço e vagas para editar uma reserva não paga |
-| PATCH | `/admin/tickets` | Editar setor/quantidade de reserva válida, com motivo, versão e total esperado |
-| DELETE | `/admin/tickets` | Excluir reserva não paga com motivo e versão no corpo JSON; preservar auditoria |
+| POST | `/admin/tickets/quote` | Revisar edição de setor/quantidade; total recebido fica preservado em vendas pagas |
+| PATCH | `/admin/tickets` | Editar reserva válida ou venda paga, com motivo, versão e total esperado |
+| DELETE | `/admin/tickets` | Excluir logicamente venda, inclusive paga/utilizada; manter pagamento, entradas e auditoria |
 | POST | `/admin/tickets/confirm-payment` | Conferir recebimento externo e emitir ingresso |
 | POST | `/admin/tickets/cancel` | Cancelar reserva não paga |
 | POST | `/admin/tickets/inspect` | Consultar QR de ingresso na portaria |

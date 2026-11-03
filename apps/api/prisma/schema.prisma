@@ -165,6 +165,8 @@ model Ticket {
   entryToken String?      @unique
   expiresAt  DateTime?
   createdAt  DateTime     @default(now())
+  deletedAt  DateTime?
+  voidedQuantity Int     @default(0)
   user       User         @relation(fields: [userId], references: [id])
   match      Match        @relation(fields: [matchId], references: [id])
   sector     Sector       @relation(fields: [sectorId], references: [id])
@@ -172,7 +174,8 @@ model Ticket {
   admissions TicketAdmission[]
   accessCodes TicketAccessCode[]
 
-  @@unique([userId, matchId])
+  // Active-only uniqueness is enforced by a partial index in the migration.
+  @@index([userId, matchId])
   @@index([sectorId, status, expiresAt])
 }
 

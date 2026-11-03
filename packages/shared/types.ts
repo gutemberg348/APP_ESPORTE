@@ -54,6 +54,8 @@ export interface Ticket {
   expiresAt: string | null;
   createdAt: string;
   usedQuantity?: number;
+  deletedAt?: string | null;
+  voidedQuantity?: number;
   remainingQuantity?: number;
   entryQr?: string | null;
   payment?: { method: 'MANUAL' | 'FREE'; amountCents: number; confirmedAt: string } | null;
@@ -81,7 +83,7 @@ export interface AdminOverview { users: number; matches: number; issuedTickets: 
 export interface AdminTicket extends Ticket { revision: string; user: { id: string; name: string; email: string } }
 export interface AdminSaleQuote {
   revision: string; sector: Sector; quantity: number; available: number; discountPercent: number;
-  totalCents: number; unitPriceCents: number; serverTime: string; expiresAt: string;
+  totalCents: number; unitPriceCents: number | null; priceLocked: boolean; serverTime: string; expiresAt: string;
 }
 export interface ClubPlan { id: string; name: string; priceCents: number; discountPercent: number }
 export interface AuditEvent { id: string; action: string; entityId: string; createdAt: string; actor: { name: string }; details: Record<string, unknown> }

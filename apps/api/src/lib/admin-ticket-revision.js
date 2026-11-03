@@ -5,6 +5,6 @@ export function adminTicketRevision(ticket) {
   return createHash('sha256').update(JSON.stringify([
     ticket.id, ticket.createdAt, ticket.status, ticket.sectorId, ticket.quantity,
     ticket.priceCents, ticket.expiresAt, ticket.entryVersion, ticket.usedQuantity,
-    ticket.payment?.id ?? null,
+    ticket.payment?.id ?? null, ticket.deletedAt ?? null, ticket.voidedQuantity || 0,
   ])).digest('hex');
 }

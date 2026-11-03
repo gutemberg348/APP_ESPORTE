@@ -64,7 +64,7 @@ A portaria agora exige partida e setor selecionados e QR assinado de até 45 seg
 
 Administrador: login → **Jogos** → criar rascunho → cadastrar setores/preços/capacidade → publicar. Também pode pausar vendas, conferir recebimentos em **Vendas**, gerenciar contas/associações/planos e registrar acessos em **Portaria**. As ações administrativas têm auditoria.
 
-Em **Vendas**, pode editar setor/quantidade de reservas válidas e não pagas, revisar o novo total pela API e excluir reservas não pagas com motivo e confirmação. Vendas emitidas, pagas ou com entrada registrada ficam protegidas. [Regras de edição e exclusão](docs/admin-sales.md).
+Em **Vendas**, pode editar setor/quantidade e excluir vendas, inclusive pagas e utilizadas, com motivo e auditoria. Nas pagas, o valor recebido é preservado; depois de uma entrada, o setor é mantido e a quantidade não pode ficar abaixo do uso. A exclusão invalida o ingresso e preserva pagamento e portaria no filtro **Excluídas**, sem estorno automático. [Regras de edição e exclusão](docs/admin-sales.md).
 
 Torcedor: cadastro/login → **Perfil → Meus ingressos** → escolher jogo/setor/quantidade → reservar → seguir as instruções do clube. A compra permanece pendente até o administrador confirmar o recebimento externo. Após confirmação, o QR de ingresso aparece para o titular. A portaria consome as entradas informadas e bloqueia reutilização acima da quantidade comprada.
 
