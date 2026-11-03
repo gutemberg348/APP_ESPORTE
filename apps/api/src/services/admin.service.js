@@ -2,6 +2,9 @@ import { adminModel } from '../models/admin.model.js';
 import { ticketModel } from '../models/ticket.model.js';
 import { assertAdmin } from '../lib/ticket-rules.js';
 import { ticketEntryService } from './ticket-entry.service.js';
+import { db } from '../config/database.js';
+import { createAdminTicketStore } from '../models/admin-ticket.store.js';
+const sales = createAdminTicketStore(db);
 const guard = (work) => (user, input) => { assertAdmin(user); return work(user.id, input); };
 export const adminService = {
   overview: guard(() => adminModel.overview()),
@@ -9,6 +12,9 @@ export const adminService = {
   createMatch: guard(adminModel.createMatch), updateMatch: guard(adminModel.updateMatch),
   createSector: guard(adminModel.createSector), updateSector: guard(adminModel.updateSector),
   tickets: guard((_, query) => adminModel.tickets(query)),
+  quoteSale: guard((_, input) => sales.quote(input)),
+  updateSale: guard((actorId, input) => sales.update(actorId, input)),
+  deleteSale: guard((actorId, input) => sales.remove(actorId, input)),
   users: guard((_, query) => adminModel.users(query)),
   plans: guard(() => adminModel.plans()), plan: guard(adminModel.plan),
   membership: guard(adminModel.membership), account: guard(adminModel.account),

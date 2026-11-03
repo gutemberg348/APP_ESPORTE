@@ -37,6 +37,12 @@ npm run dev:mobile
 
 Ou use `npm run web` para o app/painel no navegador. A API usa `http://localhost:3333`, e o PostgreSQL usa `localhost:55432`. `GET /health` verifica a API; `GET /ready` também verifica o banco.
 
+O login ADMIN abre o painel na versão web. Se o Expo já estiver usando 8081, a versão web pode abrir em 8082; as duas origens locais estão previstas no `CORS_ORIGINS`. Ao usar outro IP/porta, inclua a origem exata na configuração da API e recarregue-a.
+
+No navegador, `/` e `/admin` abrem o novo login administrativo; `/app` abre o acesso do torcedor e da portaria. A sessão web é preservada ao atualizar a página e restaurada pela API. [Login administrativo e persistência da sessão](docs/admin-login.md).
+
+O admin tem identidade própria com fonte Inter, paleta neutra, detalhes na cor do clube (vermelho no Esporte) e temas claro/escuro independentes. No PC, a partir de 1024 px, ocupa a largura da janela e usa menu lateral recolhível, visão geral e tabelas. No celular, o menu abre pela lateral e as consultas usam cartões. Os formulários se adaptam à largura disponível. [Organização do painel administrativo](docs/admin-desktop.md).
+
 Em `apps/mobile/.env`:
 
 ```dotenv
@@ -57,6 +63,8 @@ A portaria agora exige partida e setor selecionados e QR assinado de até 45 seg
 **Compra no app:** **Central de ingressos → Comprar** reúne catálogo com busca e filtro de vendas abertas, setores/vagas, quantidade e revisão de preço/desconto pela API. **Meus ingressos** acompanha reserva, confirmação, prazo, cancelamento não pago e QR/código na portaria. O checkout compara o total revisado antes de reservar; pagamento continua por conferência externa do clube enquanto o gateway não é escolhido. [Fluxo de compra e contrato da revisão](docs/ticket-purchase-app.md).
 
 Administrador: login → **Jogos** → criar rascunho → cadastrar setores/preços/capacidade → publicar. Também pode pausar vendas, conferir recebimentos em **Vendas**, gerenciar contas/associações/planos e registrar acessos em **Portaria**. As ações administrativas têm auditoria.
+
+Em **Vendas**, pode editar setor/quantidade de reservas válidas e não pagas, revisar o novo total pela API e excluir reservas não pagas com motivo e confirmação. Vendas emitidas, pagas ou com entrada registrada ficam protegidas. [Regras de edição e exclusão](docs/admin-sales.md).
 
 Torcedor: cadastro/login → **Perfil → Meus ingressos** → escolher jogo/setor/quantidade → reservar → seguir as instruções do clube. A compra permanece pendente até o administrador confirmar o recebimento externo. Após confirmação, o QR de ingresso aparece para o titular. A portaria consome as entradas informadas e bloqueia reutilização acima da quantidade comprada.
 

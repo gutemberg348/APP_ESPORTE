@@ -27,7 +27,7 @@ export function createApiTransport(apiUrl: string, fetcher: typeof fetch = fetch
     } catch (error) {
       if (error instanceof ApiError) throw error;
       const host = new URL(apiUrl).origin;
-      throw new ApiError(0, controller.signal.aborted ? `A API em ${host} demorou para responder. Confira o servidor e tente novamente.` : `Não foi possível conectar à API em ${host}. Confira se o celular e o computador estão na mesma rede Wi-Fi e se a API está iniciada.`, controller.signal.aborted ? 'API_TIMEOUT' : 'API_UNREACHABLE');
+      throw new ApiError(0, controller.signal.aborted ? `A API em ${host} demorou para responder. Confira o servidor e tente novamente.` : `Não foi possível conectar à API em ${host}. Confira se a API está iniciada e se o endereço e o acesso pela rede estão corretos.`, controller.signal.aborted ? 'API_TIMEOUT' : 'API_UNREACHABLE');
     } finally { clearTimeout(timeout); }
   };
 }

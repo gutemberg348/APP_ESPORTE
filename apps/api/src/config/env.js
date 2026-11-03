@@ -8,7 +8,7 @@ const schema = z.object({
   HOST: z.string().default('0.0.0.0'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3333),
   DATABASE_URL: z.string().startsWith('postgresql://'),
-  CORS_ORIGINS: z.string().default('http://localhost:8081'),
+  CORS_ORIGINS: z.string().default('http://localhost:8081,http://localhost:8082'),
   CARD_TOKEN_SECRET: z.string().min(32),
   JWT_SECRET: z.string().min(64).max(512),
   JWT_ISSUER: z.string().min(3).max(200).default('nacional-api'),

@@ -1,3 +1,4 @@
+import { adminTicketRevision } from './admin-ticket-revision.js';
 export const ticketInclude = { match: { include: { sectors: true } }, sector: true, payment: true };
 export function toTicket(ticket, now = new Date()) {
   const { entryToken, entryVersion, userId, user, admissions, payment, ...safe } = ticket;
@@ -11,8 +12,8 @@ export function toTicket(ticket, now = new Date()) {
     payment: payment ? { method: payment.method, amountCents: payment.amountCents, confirmedAt: payment.confirmedAt } : null,
   };
 }
-export function toAdminTicket(ticket) {
+export function toAdminTicket(ticket, now = new Date()) {
   const { user, ...rest } = ticket;
-  const safe = toTicket(rest);
-  return { ...safe, entryQr: null, user: user ? { id: user.id, name: user.name, email: user.email } : undefined };
+  const safe = toTicket(rest, now);
+  return { ...safe, revision: adminTicketRevision(ticket), entryQr: null, user: user ? { id: user.id, name: user.name, email: user.email } : undefined };
 }

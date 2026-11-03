@@ -6,7 +6,7 @@ import { request, ApiError } from '../services/api';
 import { authClient } from '../services/auth-client';
 interface Session {
   member: Member | null; token: string | null; loading: boolean; bootError: string | null; demoMode: boolean;
-  signIn: (email: string, password: string, name?: string) => Promise<void>;
+  signIn: (email: string, password: string, name?: string, portal?: 'APP' | 'ADMIN') => Promise<void>;
   signOut: () => Promise<void>; logoutAll: () => Promise<void>; clearSession: () => Promise<void>;
   retry: () => Promise<void>; updateMember: (member: Member) => void; resumeDemo: () => void;
 }
@@ -21,7 +21,13 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
     setLoading(true); setBootError(null);
     try {
       const saved = authClient.current() || await authClient.restore();
-      if (saved) { const result = await authClient.refresh(); setMember(result.member); setToken(result.accessToken); }
+      if (saved) {
+        // Use a still-valid access token on reload. request() renews it only
+        // when needed, avoiding needless consumption of rotating refresh tokens.
+        const profile = await request<Member>('/me', { token: saved.accessToken });
+        if (!authClient.current() || !authClient.owns(saved.accessToken)) return;
+        setMember(profile); setToken(authClient.current()?.accessToken || null);
+      }
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) await clearSession();
       else setBootError(error instanceof Error ? error.message : 'Erro ao restaurar sessão.');
@@ -32,8 +38,8 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
     if (!config.demo) void retry();
     return unsubscribe;
   }, []);
-  async function signIn(email: string, password: string, name?: string) {
-    const result = await request<AuthResponse>(name ? '/auth/register' : '/auth/login', { method: 'POST', body: { email, password, ...(name ? { name } : {}) } });
+  async function signIn(email: string, password: string, name?: string, portal: 'APP' | 'ADMIN' = 'APP') {
+    const result = await request<AuthResponse>(name ? '/auth/register' : '/auth/login', { method: 'POST', body: { email, password, ...(name ? { name } : portal === 'ADMIN' ? { portal } : {}) } });
     await authClient.accept(result); setToken(result.accessToken); setMember(result.member);
   }
   const signOut = useCallback(async () => {

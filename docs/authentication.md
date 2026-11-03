@@ -9,7 +9,7 @@ Base: `/v1`. Rotas privadas recebem `Authorization: Bearer <accessToken>`. Token
 | Método | Endpoint | Entrada | Resultado |
 | --- | --- | --- | --- |
 | POST | `/auth/register` | `name`, `email`, `password` | Conta USER ativa + sessão, 201 |
-| POST | `/auth/login` | `email`, `password` | Sessão, 200 |
+| POST | `/auth/login` | `email`, `password`, `portal` opcional | Sessão, 200; `portal: "ADMIN"` exige administrador |
 | POST | `/auth/refresh` | `refreshToken` | Novo par de tokens, 200 |
 | POST | `/auth/logout` | Bearer, sem corpo | Revoga sessão atual, 204 |
 | POST | `/auth/logout-all` | Bearer, sem corpo | Revoga todas as sessões da conta, 204 |
@@ -41,7 +41,7 @@ Cadastro, login e refresh retornam:
 }
 ```
 
-`member` tem os demais campos normais de perfil/associação. Não contém senha, hash ou sessões. O antigo campo `token` foi substituído por `accessToken`; consumidores externos precisam atualizar o nome. A confirmação de senha é feita no formulário do app, e o backend valida a senha recebida.
+`member` tem os demais campos normais de perfil/associação. Não contém senha, hash ou sessões. O antigo campo `token` foi substituído por `accessToken`; consumidores externos precisam atualizar o nome. O cadastro pede a senha uma única vez; o backend valida a senha recebida.
 
 ## Tokens e renovação
 
@@ -67,7 +67,7 @@ O HTTP limita corpo JSON a 16 KiB, aceita apenas origens configuradas, rejeita h
 
 Principais erros: `ACCESS_TOKEN_EXPIRED`, `ACCESS_TOKEN_INVALID`, `SESSION_REVOKED`, `REFRESH_TOKEN_INVALID`, `REFRESH_TOKEN_REUSED`, `INVALID_CREDENTIALS` e `INVALID_CURRENT_PASSWORD` (401); `ADMIN_REQUIRED`, `GATE_REQUIRED`, `GATE_SCOPE_DENIED` e `GATE_ONLY_ACCOUNT` (403); `VALIDATION_ERROR` (422); limites (429). Uma senha atual incorreta não encerra a sessão existente.
 
-Funcionários são criados por ADMIN com role GATE, sem cadastro público. O app usa um único formulário de login e envia somente e-mail e senha, sem seletor Torcedor/Portaria. O perfil retornado pela API define a área: USER abre o app do torcedor, GATE abre a portaria e ADMIN abre a administração. O campo opcional legado `portal` continua aceito pela API por compatibilidade, mas não é enviado pelo app e não concede permissões. Contas GATE só acessam rotas de portaria e segurança própria. Desativar funcionário ou redefinir sua senha no admin revoga suas sessões. [Funcionários e escalas](gate-staff.md).
+Funcionários são criados por ADMIN com role GATE, sem cadastro público. O app nativo e a área web `/app` usam um único formulário de login para torcedor e portaria. O perfil retornado define a área: USER abre o app, GATE abre a portaria e ADMIN abre a administração. No navegador, `/` e `/admin` oferecem um login próprio de administração que envia `portal: "ADMIN"`: o servidor exige ADMIN ativo antes de criar a sessão. O campo `portal` restringe o destino, sem conceder permissões. Contas GATE só acessam rotas de portaria e segurança própria. Desativar funcionário ou redefinir sua senha no admin revoga suas sessões. [Funcionários e escalas](gate-staff.md).
 
 Verificação de e-mail, recuperação de senha por mensagem e MFA não estão implementados. Não há envio de mensagens ou códigos fictícios. Eles dependem de etapa própria e do serviço de comunicação escolhido.
 
@@ -79,7 +79,9 @@ Renovações simultâneas compartilham uma promise. As gravações são serializ
 
 Requisições de uma conta anterior também não são reenviadas usando o JWT de outro login. O cliente aceita referências de access tokens recentes apenas da própria sessão; troca de conta durante uma operação retorna `SESSION_CHANGED` para que ela seja refeita conscientemente.
 
-No Android/iOS, o par é armazenado no SecureStore. No web, fica somente em memória; recarregar a página exige login. Não foi introduzido refresh persistente em localStorage nem fluxo de cookies. Clientes web independentes que precisem de sessão persistente devem ter projeto específico de cookies HttpOnly/CSRF.
+No Android/iOS, o par é armazenado no SecureStore. No web, fica no `sessionStorage` da aba, em uma chave vinculada à URL da API; atualizar a página preserva o acesso. Senha e perfil não são armazenados. Ao restaurar, `/me` consulta o usuário atual; um JWT ainda válido é aproveitado, e o refresh é consumido somente quando necessário. Logout e rejeição real de sessão limpam memória e armazenamento. Falhas de rede e indisponibilidade da API permitem nova tentativa sem apagar as credenciais.
+
+Essa persistência acompanha a sessão da aba e respeita o prazo absoluto do servidor; não é um recurso de lembrar o login indefinidamente ou entre navegadores. Se o navegador bloquear o armazenamento, o login continua funcionando em memória. Não há uso de localStorage para credenciais ou cookies de autenticação neste fluxo. [Tela administrativa e verificação da restauração](admin-login.md).
 
 **Perfil → Segurança** permite alterar a senha, consultar sessões e sair de todos os dispositivos. A mudança de senha tem aviso de encerramento das sessões antes de confirmar.
 

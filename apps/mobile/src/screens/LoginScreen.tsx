@@ -8,7 +8,7 @@ import { useSession } from '../providers/SessionProvider';
 import { useTheme } from '../theme/ThemeProvider';
 import { messageOf } from '../utils/format';
 import { club } from '../config/club';
-export function LoginScreen() {
+export function LoginScreen({ onAdminLogin }: { onAdminLogin?: () => void }) {
   const { colors } = useTheme();
   const { signIn } = useSession();
   const [register, setRegister] = useState(false);
@@ -39,5 +39,6 @@ export function LoginScreen() {
     {error ? <Text style={{ color: colors.danger }} accessibilityRole="alert">{error}</Text> : null}
     <Button label={register ? 'Criar conta' : 'Entrar'} loading={busy} onPress={() => void submit()} />
     <Pressable disabled={busy} onPress={() => { setRegister((value) => !value); setPassword(''); setShowPassword(false); setError(''); }} style={{ padding: 16, alignItems: 'center' }} accessibilityRole="button"><Text style={{ color: colors.primary }}>{register ? 'Já tenho uma conta' : 'Quero me cadastrar'}</Text></Pressable>
+    {onAdminLogin && <Pressable disabled={busy} onPress={onAdminLogin} style={{ padding: 12, alignItems: 'center' }} accessibilityRole="link"><Text style={{ color: colors.muted, fontSize: 12 }}>Acessar painel administrativo</Text></Pressable>}
   </ScrollView></KeyboardAvoidingView>;
 }

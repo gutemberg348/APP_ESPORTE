@@ -78,7 +78,11 @@ export interface Engagement { checkedIn: boolean; day: string; ledger: PointEntr
 export interface Prediction { matchId: string; homeScore: number; awayScore: number }
 export interface Dashboard { member: Member; nextMatch: Match | null; matches: Match[]; partners: Partner[]; tickets: Ticket[]; engagement: Engagement; predictions: Prediction[] }
 export interface AdminOverview { users: number; matches: number; issuedTickets: number; pendingReservations: number }
-export interface AdminTicket extends Ticket { user: { id: string; name: string; email: string } }
+export interface AdminTicket extends Ticket { revision: string; user: { id: string; name: string; email: string } }
+export interface AdminSaleQuote {
+  revision: string; sector: Sector; quantity: number; available: number; discountPercent: number;
+  totalCents: number; unitPriceCents: number; serverTime: string; expiresAt: string;
+}
 export interface ClubPlan { id: string; name: string; priceCents: number; discountPercent: number }
 export interface AuditEvent { id: string; action: string; entityId: string; createdAt: string; actor: { name: string }; details: Record<string, unknown> }
 export interface CashCharge {

@@ -22,7 +22,7 @@ export function createApiRouter(routes, access) {
       next();
     });
     for (const route of entries) {
-      const parseBody = ['POST', 'PATCH', 'PUT'].includes(route.method) && route.body !== false;
+      const parseBody = ['POST', 'PATCH', 'PUT', 'DELETE'].includes(route.method) && route.body !== false;
       endpoint[route.method.toLowerCase()](access.route(route), ...(parseBody ? jsonBody : []), async (req, res) => {
         const result = await route.handler({ req, url: res.locals.url, body: parseBody ? req.body : undefined, ...res.locals.auth });
         const status = result.status ?? 200;

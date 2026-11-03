@@ -27,7 +27,7 @@ Rotas privadas também consultam a sessão e o usuário atuais. Logout revoga a 
 
 Perfil público da própria conta exclui senha e sessões. Alteração do perfil aceita nome, cidade e contato: o cliente não pode alterar saldo, associação ou desconto. QR da carteira só é gerado para associação ativa e não vencida, com payload assinado por HMAC-SHA256 e expiração na próxima janela de 30 segundos. O endpoint de validação do leitor do estádio ainda precisa ser implementado; este QR não está integrado a catracas.
 
-O app renova o QR, oculta tokens vencidos e pede um novo ao voltar do segundo plano. A sessão nativa fica no SecureStore. Na prévia web, o token permanece apenas em memória e se perde ao recarregar a página.
+O app renova o QR, oculta tokens vencidos e pede um novo ao voltar do segundo plano. A sessão nativa fica no SecureStore. No navegador, os tokens ficam no sessionStorage da aba, separados pela URL da API, e sobrevivem à atualização da página. O perfil e as permissões são restaurados pela API. A área web tem login administrativo próprio em `/admin` e acesso do torcedor em `/app`.
 
 ## Ingressos e palpites
 

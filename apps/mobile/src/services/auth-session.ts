@@ -38,6 +38,7 @@ export function createSessionManager({ storage, exchange, unauthorized, isReject
       current = next; remember(next.accessToken, true); notify();
     },
     async restore() {
+      if (current) return current;
       const start = generation;
       await storageQueue.catch(() => {});
       const saved = await storage.get();
