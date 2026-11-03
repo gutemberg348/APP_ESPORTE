@@ -28,6 +28,7 @@ export async function createAuthService({ users, sessions, accessTokens, ttlDays
       const valid = await verifyPassword(password, user?.passwordHash ?? dummyHash);
       if (!user || !valid || !user.active) throw invalidLogin();
       if (portal === 'GATE' && !['GATE', 'ADMIN'].includes(user.role)) throw invalidLogin();
+      if (portal === 'ADMIN' && user.role !== 'ADMIN') throw invalidLogin();
       const fresh = newSession();
       const result = await sessions.start(user.id, user.passwordHash, fresh.session);
       if (!result) throw invalidLogin();

@@ -19,6 +19,10 @@ export const membershipSchema = z.object({ userId: z.uuid(), planId: z.uuid(), s
 export const accountStatusSchema = z.object({ userId: z.uuid(), active: z.boolean() }).strict();
 export const manualPaymentSchema = z.object({ ticketId: z.uuid(), receivedCents: money, reference: z.string().trim().min(5).max(100), paymentVerified: z.literal(true) }).strict();
 export const idSchema = z.object({ ticketId: z.uuid() }).strict();
+const saleIdentity = { ticketId: z.uuid(), revision: z.string().regex(/^[a-f0-9]{64}$/) };
+export const saleQuoteSchema = z.object({ ...saleIdentity, sectorId: z.uuid(), quantity: z.number().int().min(1).max(4) }).strict();
+export const saleUpdateSchema = saleQuoteSchema.extend({ expectedTotalCents: money, reason: z.string().trim().min(5).max(500) }).strict();
+export const saleDeleteSchema = z.object({ ...saleIdentity, reason: z.string().trim().min(5).max(500) }).strict();
 const entryFields = {
   token: z.string().min(40).max(2048).regex(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/).optional(),
   code: z.string().min(10).max(20).transform((value) => value.replace(/[\s-]/g, '').toUpperCase()).pipe(z.string().regex(/^[2-9A-HJ-NP-Z]{10}$/)).optional(),

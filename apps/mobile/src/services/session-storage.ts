@@ -1,11 +1,13 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import type { AuthTokens } from '@nacional/shared/types';
+import { config } from '../config/env';
+import { createWebSessionStorage } from './web-session-storage';
 const key = 'nacional.auth.v2';
-let webSession: AuthTokens | null = null;
+const web = createWebSessionStorage(`${key}:${encodeURIComponent(config.apiUrl)}`, () => typeof window === 'undefined' ? null : window.sessionStorage);
 export const sessionStorage = {
   async get(): Promise<AuthTokens | null> {
-    if (Platform.OS === 'web') return webSession;
+    if (Platform.OS === 'web') return web.get();
     const saved = await SecureStore.getItemAsync(key);
     if (!saved) return null;
     try {
@@ -15,11 +17,11 @@ export const sessionStorage = {
     } catch { await SecureStore.deleteItemAsync(key); return null; }
   },
   async set(tokens: AuthTokens) {
-    if (Platform.OS === 'web') webSession = tokens;
+    if (Platform.OS === 'web') await web.set(tokens);
     else await SecureStore.setItemAsync(key, JSON.stringify(tokens));
   },
   async clear() {
-    webSession = null;
+    await web.clear();
     if (Platform.OS !== 'web') {
       await SecureStore.deleteItemAsync(key);
       await SecureStore.deleteItemAsync('nacional.session');

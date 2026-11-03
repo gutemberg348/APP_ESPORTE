@@ -10,7 +10,7 @@ import { useSession } from '../providers/SessionProvider';
 import { employeeApi } from '../services/gate';
 import { matchDate, messageOf } from '../utils/format';
 
-export function EmployeePanel({ matches }: { matches: Match[] }) {
+export function EmployeePanel({ matches, desktop = false }: { matches: Match[]; desktop?: boolean }) {
   const { token } = useSession();
   const { colors } = useTheme();
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -54,11 +54,10 @@ export function EmployeePanel({ matches }: { matches: Match[] }) {
   const passwordField = { color: colors.text, backgroundColor: colors.soft, borderWidth: 1, borderColor: colors.border, padding: 14, borderRadius: 12 };
   return <View style={{ gap: 16 }}>
     <Text style={{ color: colors.muted }}>Contas exclusivas para conferir ingressos. O funcionário usa o mesmo login do app e é direcionado à portaria, operando somente nos setores liberados na escala.</Text>
-    <Button label="Cadastrar funcionário de portaria" disabled={busy} onPress={() => open('create')} />
-    <Button secondary label="Atualizar funcionários" loading={loading} disabled={busy} onPress={() => void refresh()} />
+    <View style={{ flexDirection: desktop ? 'row' : 'column', gap: 12, alignItems: desktop ? 'flex-start' : undefined }}><Button label="Cadastrar funcionário de portaria" disabled={busy} onPress={() => open('create')} /><Button secondary label="Atualizar funcionários" loading={loading} disabled={busy} onPress={() => void refresh()} /></View>
     {!!notice && <Text accessibilityRole="alert" style={{ color: colors.primary }}>{notice}</Text>}
     {!!error && !form && <Text accessibilityRole="alert" style={{ color: colors.danger }}>{error}</Text>}
-    {employees.map((employee) => <Panel key={employee.id} style={{ gap: 12 }}>
+    <View style={{ flexDirection: desktop ? 'row' : 'column', flexWrap: 'wrap', gap: 18 }}>{employees.map((employee) => <Panel key={employee.id} style={{ gap: 12, flexBasis: desktop ? 310 : undefined, flexGrow: desktop ? 1 : undefined, minWidth: 0, borderRadius: 10 }}>
       <Text heading style={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>{employee.name}</Text>
       <Text style={{ color: colors.muted }}>{employee.email}</Text>
       <Text style={{ color: employee.active ? colors.primary : colors.danger }}>{employee.active ? 'Portaria · conta ativa' : 'Conta desativada'}</Text>
@@ -66,7 +65,7 @@ export function EmployeePanel({ matches }: { matches: Match[] }) {
       <Button secondary label="Definir escala de jogos e setores" disabled={busy} onPress={() => open('assignments', employee)} />
       <Button secondary label="Redefinir senha" disabled={busy} onPress={() => open('password', employee)} />
       <Button secondary label={employee.active ? 'Desativar e encerrar sessões' : 'Reativar funcionário'} disabled={busy} onPress={() => void perform(() => employeeApi.update(token!, employee.id, !employee.active), employee.active ? 'Acesso desativado e sessões encerradas.' : 'Funcionário reativado.')} />
-    </Panel>)}
+    </Panel>)}</View>
     {!loading && !employees.length && <Text style={{ color: colors.muted }}>Cadastre a equipe antes de abrir a portaria.</Text>}
     {form && <Sheet visible title={form === 'create' ? 'Novo funcionário' : form === 'password' ? `Senha · ${selected?.name}` : `Escala · ${selected?.name}`} onClose={close}>
       {form === 'create' && <><AdminField label="Nome completo" value={name} onChange={setName} /><AdminField label="E-mail de acesso" value={email} onChange={setEmail} /></>}

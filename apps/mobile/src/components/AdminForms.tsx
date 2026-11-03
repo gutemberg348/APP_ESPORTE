@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { View, Switch } from 'react-native';
+import { View, Switch, useWindowDimensions } from 'react-native';
 import type { Match, Sector, ClubPlan } from '@nacional/shared/types';
 import { Text, TextInput } from './Typography';
 import { Sheet } from './Sheet';
@@ -14,11 +14,15 @@ import { club } from '../config/club';
 
 export function AdminField({ label, value, onChange, numeric = false }: { label: string; value: string; onChange: (value: string) => void; numeric?: boolean }) {
   const { colors, tone } = useTheme();
-  return <View style={{ gap: 7 }}><Text style={{ color: colors.muted, fontSize: 14 }}>{label}</Text><TextInput value={value} onChangeText={onChange} accessibilityLabel={label} keyboardType={numeric ? 'decimal-pad' : 'default'} style={{ color: colors.text, backgroundColor: colors.soft, borderWidth: 1, borderColor: colors.border, padding: 14, borderRadius: 12 }} /></View>;
+  return <View style={{ gap: 7 }}><Text style={{ color: colors.muted, fontSize: 12, lineHeight: 20, fontWeight: '500' }}>{label}</Text><TextInput value={value} onChangeText={onChange} accessibilityLabel={label} keyboardType={numeric ? 'decimal-pad' : 'default'} style={{ color: colors.text, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, minHeight: 44, padding: 11, borderRadius: 8 }} /></View>;
+}
+function AdminFormGrid({ children }: React.PropsWithChildren) {
+  const { width } = useWindowDimensions();
+  return <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>{React.Children.toArray(children).map((child, index) => <View key={index} style={{ width: width >= 768 ? '48%' : '100%' }}>{child}</View>)}</View>;
 }
 export function AdminToggle({ label, value, onChange }: { label: string; value: boolean; onChange: (value: boolean) => void }) {
-  const { colors, tone } = useTheme();
-  return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}><Text style={{ flex: 1, color: colors.text }}>{label}</Text><Switch accessibilityLabel={label} value={value} onValueChange={onChange} trackColor={{ false: tone('#647467'), true: tone('#238b59') }} thumbColor="#fff" /></View>;
+  const { colors } = useTheme();
+  return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}><Text style={{ flex: 1, color: colors.text }}>{label}</Text><Switch accessibilityLabel={label} value={value} onValueChange={onChange} trackColor={{ false: colors.subtle, true: colors.primaryStrong }} thumbColor="#fff" /></View>;
 }
 function useFormAction(onSaved: () => Promise<void>) {
   const [busy, setBusy] = useState(false);
@@ -50,9 +54,9 @@ export function MatchForm({ match, onClose, onSaved }: { match: Match | null; on
     });
   }
   return <Sheet visible title={match ? 'Editar jogo' : 'Cadastrar jogo'} onClose={busy ? () => {} : onClose}>
-    <AdminField label="Time mandante" value={home} onChange={setHome} /><AdminField label="Adversário" value={away} onChange={setAway} />
-    <AdminField label="Jogo · AAAA-MM-DD HH:mm (Patos)" value={starts} onChange={setStarts} /><AdminField label="Estádio" value={stadium} onChange={setStadium} /><AdminField label="Competição" value={competition} onChange={setCompetition} />
-    <AdminField label="Abrir vendas · opcional · AAAA-MM-DD HH:mm" value={salesOpen} onChange={setSalesOpen} /><AdminField label="Encerrar vendas · opcional · AAAA-MM-DD HH:mm" value={salesClose} onChange={setSalesClose} />
+    <AdminFormGrid><AdminField label="Time mandante" value={home} onChange={setHome} /><AdminField label="Adversário" value={away} onChange={setAway} /></AdminFormGrid>
+    <AdminFormGrid><AdminField label="Jogo · AAAA-MM-DD HH:mm (Patos)" value={starts} onChange={setStarts} /><AdminField label="Estádio" value={stadium} onChange={setStadium} /></AdminFormGrid><AdminField label="Competição" value={competition} onChange={setCompetition} />
+    <AdminFormGrid><AdminField label="Abrir vendas · opcional · AAAA-MM-DD HH:mm" value={salesOpen} onChange={setSalesOpen} /><AdminField label="Encerrar vendas · opcional · AAAA-MM-DD HH:mm" value={salesClose} onChange={setSalesClose} /></AdminFormGrid>
     <AdminToggle label="Vendas habilitadas" value={salesEnabled} onChange={setSalesEnabled} />{match && <AdminToggle label="Publicado no app" value={published} onChange={setPublished} />}
     <Text heading style={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>Portaria</Text><AdminToggle label="Habilitar entrada nesta partida" value={entryEnabled} onChange={setEntryEnabled} /><AdminField label="Portaria abre · opcional · AAAA-MM-DD HH:mm" value={gateOpen} onChange={setGateOpen} /><AdminField label="Portaria fecha · opcional · AAAA-MM-DD HH:mm" value={gateClose} onChange={setGateClose} /><Text style={{ color: colors.muted, fontSize: 14 }}>Sem horários específicos, a entrada abre 2 horas antes do jogo e encerra 4 horas após o início. A portaria começa desativada.</Text>
     {!match && <Text style={{ color: colors.muted, fontSize: 14 }}>O jogo começa como rascunho. Cadastre os setores e publique quando estiver pronto.</Text>}

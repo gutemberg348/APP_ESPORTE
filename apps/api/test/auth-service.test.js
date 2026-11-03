@@ -76,6 +76,21 @@ test('unknown user, incorrect password and deactivated account share the same lo
   [...people.values()][0].active = false;
   await assert.rejects(service.login(input), { code: 'INVALID_CREDENTIALS' });
 });
+
+test('admin portal requires a live ADMIN and never starts sessions for fan or gate credentials', async () => {
+  const { service, input, people, sessions } = await fixture();
+  await service.register(input);
+  const person = [...people.values()][0], before = sessions.size;
+  for (const role of ['USER', 'GATE']) {
+    person.role = role;
+    await assert.rejects(service.login({ ...input, portal: 'ADMIN' }), { code: 'INVALID_CREDENTIALS' });
+    assert.equal(sessions.size, before);
+  }
+  person.role = 'ADMIN';
+  assert.equal((await service.login({ ...input, portal: 'ADMIN' })).member.role, 'ADMIN');
+  person.active = false;
+  await assert.rejects(service.login({ ...input, portal: 'ADMIN' }), { code: 'INVALID_CREDENTIALS' });
+});
 test('refresh rotates the secret; replay revokes the whole session including the latest access JWT', async () => {
   const { service, input } = await fixture();
   const original = await service.register(input);

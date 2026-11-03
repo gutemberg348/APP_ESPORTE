@@ -65,7 +65,7 @@ export const adminModel = {
   async tickets({ limit, offset, matchId, status }) {
     const now = new Date();
     const where = { ...(matchId ? { matchId } : {}), ...(status === 'EXPIRED' ? { status: 'PENDING', expiresAt: { lte: now } } : status === 'PENDING' ? { status, expiresAt: { gt: now } } : status ? { status } : {}) };
-    return (await db.ticket.findMany({ where, include: { ...ticketInclude, user: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: 'desc' }, take: limit, skip: offset })).map(toAdminTicket);
+    return (await db.ticket.findMany({ where, include: { ...ticketInclude, user: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: 'desc' }, take: limit, skip: offset })).map((ticket) => toAdminTicket(ticket));
   },
   async users({ limit, offset, search }) {
     const where = search ? { OR: [{ name: { contains: search, mode: 'insensitive' } }, { email: { contains: search, mode: 'insensitive' } }] } : {};
