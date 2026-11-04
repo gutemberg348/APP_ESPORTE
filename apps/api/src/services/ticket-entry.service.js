@@ -9,14 +9,14 @@ import { hashToken } from '../lib/crypto.js';
 import { AppError } from '../lib/errors.js';
 const store = createTicketEntryStore(db, { authorize: authorizeGate });
 const qr = createTicketQr({ secret: env.TICKET_QR_SECRET, issuer: env.JWT_ISSUER });
-async function validate(user, input, work) {
+async function validate(user, input, stage, work) {
   assertGateUser(user);
   try {
     await authorizeGate(db, user.id, input);
     return await work(input.token ? await qr.verify(input.token) : await ticketCodeModel.resolve(input.code));
   }
   catch (error) {
-    if (error instanceof AppError) await store.deny(user.id, input.matchId, error.code, hashToken(input.token || input.code));
+    if (error instanceof AppError) await store.deny(user.id, input.matchId, error.code, hashToken(input.token || input.code), input.sectorId, stage);
     throw error;
   }
 }
@@ -29,7 +29,7 @@ export const ticketEntryService = {
     const { scanId, ...response } = issued;
     return { ...response, serverTime: new Date().toISOString(), code, remainingQuantity: ticket.quantity - ticket.usedQuantity };
   },
-  inspect: (user, input) => validate(user, input, (claims) => store.inspect(claims, input)),
-  admit: (user, input) => validate(user, input, (claims) => store.admit(user.id, claims, input)),
+  inspect: (user, input) => validate(user, input, 'INSPECT', (claims) => store.inspect(claims, input)),
+  admit: (user, input) => validate(user, input, 'ADMIT', (claims) => store.admit(user.id, claims, input)),
   receipt(user, input) { assertGateUser(user); return store.receipt(user.id, input); },
 };

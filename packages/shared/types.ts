@@ -81,6 +81,23 @@ export interface Prediction { matchId: string; homeScore: number; awayScore: num
 export interface Dashboard { member: Member; nextMatch: Match | null; matches: Match[]; partners: Partner[]; tickets: Ticket[]; engagement: Engagement; predictions: Prediction[] }
 export interface AdminOverview { users: number; matches: number; issuedTickets: number; pendingReservations: number }
 export interface AdminTicket extends Ticket { revision: string; user: { id: string; name: string; email: string } }
+export interface ReportPagination { total: number; limit: number; offset: number; hasMore: boolean }
+export interface SalesReport {
+  items: AdminTicket[]; pagination: ReportPagination; serverTime: string;
+  summary: { orders: number; soldQuantity: number; reservedQuantity: number; freeQuantity: number; confirmedRevenueCents: number; archivedRevenueCents: number };
+  inventory: { capacity: number; occupied: number; available: number; sectors: (Sector & { occupied: number; soldQuantity: number; reservedQuantity: number; usedQuantity: number })[] };
+}
+export interface GateOperator { id: string; name: string; email: string; active: boolean }
+export interface AdminAdmission {
+  protocol: string; quantity: number; createdAt: string; actor: { id: string; name: string; email: string };
+  ticket: { id: string; deletedAt: string | null; status: Ticket['status']; quantity: number; usedQuantity: number; user: { id: string; name: string; email: string }; match: Pick<Match, 'id' | 'homeTeam' | 'awayTeam' | 'startsAt' | 'stadium'>; sector: Pick<Sector, 'id' | 'name'> };
+}
+export interface GateDenial {
+  protocol: string; createdAt: string; actor: { id: string; name: string; email: string }; reason: string; stage: 'INSPECT' | 'ADMIT' | null;
+  match: Pick<Match, 'id' | 'homeTeam' | 'awayTeam' | 'startsAt'> | null; sector: Pick<Sector, 'id' | 'name'> | null;
+}
+export interface AdmissionHistory { items: AdminAdmission[]; pagination: ReportPagination; summary: { operations: number; admittedQuantity: number } }
+export interface DenialHistory { items: GateDenial[]; pagination: ReportPagination }
 export interface AdminSaleQuote {
   revision: string; sector: Sector; quantity: number; available: number; discountPercent: number;
   totalCents: number; unitPriceCents: number | null; priceLocked: boolean; serverTime: string; expiresAt: string;

@@ -126,6 +126,8 @@ O perfil Docker completo usa `docker compose --profile full up --build -d`. A AP
 
 Documentação: [API](docs/api.md), [arquitetura](docs/architecture.md), [validação](docs/validation.md) e [etapas restantes](docs/roadmap.md).
 
+Administração: [gestão de vendas por partida, receita, disponibilidade e histórico de portaria com protocolos](docs/admin-reports.md).
+
 Banco de dados: [TXT completo de tabelas, campos, relações, chaves e índices](docs/banco/estrutura-completa.txt), conferido com o schema Prisma e os metadados do PostgreSQL.
 
 Camada HTTP migrada para Express 5.3.0, mantendo os endpoints e o contrato do app: [estrutura e verificação](docs/express-migration.md). `createApp` monta a aplicação sem abrir porta; `createHttpServer` prepara o servidor e seus timeouts, e somente `src/server.js` inicia a escuta quando executado.

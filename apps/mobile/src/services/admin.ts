@@ -1,10 +1,16 @@
 import type { Match, Sector, Member, AdminOverview, AdminTicket, AdminSaleQuote, ClubPlan, AuditEvent, Ticket, TicketReview, AdmissionResult } from '@nacional/shared/types';
 import { request } from './api';
+import type { SalesReport, AdmissionHistory, DenialHistory, AdminAdmission, GateOperator } from '@nacional/shared/types';
 const encodedQuery = (values: Record<string, string>) => Object.entries(values).filter(([, value]) => value).map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`).join('&');
 export interface MatchInput { homeTeam: string; awayTeam: string; startsAt: string; stadium: string; competition: string; isHome: boolean; published: boolean; salesEnabled: boolean; salesOpenAt?: string | null; salesCloseAt?: string | null; entryEnabled?: boolean; gateOpenAt?: string | null; gateCloseAt?: string | null }
 export interface SaleReviewInput { ticketId: string; revision: string; sectorId: string; quantity: number }
 export const adminApi = {
   overview: (token: string) => request<AdminOverview>('/admin/overview', { token }),
+  salesReport: (token: string, filters: Record<string, string>) => request<SalesReport>(`/admin/sales?${encodedQuery(filters)}`, { token }),
+  admissionHistory: (token: string, filters: Record<string, string>) => request<AdmissionHistory>(`/admin/admissions?${encodedQuery(filters)}`, { token }),
+  denialHistory: (token: string, filters: Record<string, string>) => request<DenialHistory>(`/admin/gate-denials?${encodedQuery(filters)}`, { token }),
+  admissionProtocol: (token: string, protocol: string) => request<AdminAdmission>(`/admin/admissions/protocol?${encodedQuery({ protocol })}`, { token }),
+  gateOperators: (token: string) => request<GateOperator[]>('/admin/gate-operators', { token }),
   matches: (token: string) => request<Match[]>('/admin/matches?limit=100', { token }),
   createMatch: (token: string, body: MatchInput) => request<Match>('/admin/matches', { token, method: 'POST', body }),
   updateMatch: (token: string, body: Partial<MatchInput> & { id: string }) => request<Match>('/admin/matches', { token, method: 'PATCH', body }),

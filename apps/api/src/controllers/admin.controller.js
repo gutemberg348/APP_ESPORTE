@@ -6,6 +6,11 @@ import { paginationSchema } from '../validators/index.js';
 const query = (url) => Object.fromEntries(url.searchParams);
 export const adminController = {
   overview: async ({ user }) => ({ data: await adminService.overview(user) }),
+  salesReport: async ({ user, url }) => ({ data: await adminService.salesReport(user, schemas.salesReportSchema.parse(query(url))) }),
+  admissionHistory: async ({ user, url }) => ({ data: await adminService.admissionHistory(user, schemas.admissionHistorySchema.parse(query(url))) }),
+  admissionProtocol: async ({ user, url }) => ({ data: await adminService.admissionProtocol(user, schemas.protocolSchema.parse(query(url))) }),
+  denialHistory: async ({ user, url }) => ({ data: await adminService.denialHistory(user, schemas.denialHistorySchema.parse(query(url))) }),
+  gateOperators: async ({ user }) => ({ data: await adminService.gateOperators(user) }),
   matches: async ({ user, url }) => ({ data: await adminService.matches(user, paginationSchema.parse(query(url))) }),
   createMatch: async ({ user, body }) => ({ status: 201, data: await adminService.createMatch(user, schemas.matchCreateSchema.parse(body)) }),
   updateMatch: async ({ user, body }) => ({ data: await adminService.updateMatch(user, schemas.matchUpdateSchema.parse(body)) }),
