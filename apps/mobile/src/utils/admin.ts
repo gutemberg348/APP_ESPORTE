@@ -9,3 +9,11 @@ export function parseClubDate(value: string) {
   if (!Number.isFinite(date.getTime()) || formDate(date.toISOString()) !== value.trim()) throw new Error('Data ou horário inválido.');
   return date.toISOString();
 }
+export function appliedReportFilters(draft: Record<string, string>): Record<string, string> {
+  const result = Object.fromEntries(Object.entries(draft).map(([key, value]) => [key, value.trim()]));
+  if (result.from) result.from = parseClubDate(result.from);
+  // The minute entered in the inclusive end field includes its last second.
+  if (result.to) result.to = new Date(Date.parse(parseClubDate(result.to)) + 59999).toISOString();
+  if (result.from && result.to && result.from > result.to) throw new Error('O fim do período deve ser posterior ao início.');
+  return { ...result, limit: '25', offset: '0' };
+}

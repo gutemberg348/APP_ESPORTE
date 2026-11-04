@@ -1,16 +1,13 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Pressable } from 'react-native';
-import { CalendarDays, MapPin, Pencil, Plus, Search, Users, Ticket as TicketIcon, History, Trash2 } from 'lucide-react-native';
-import type { Match, Sector, AdminTicket, Member, ClubPlan, AuditEvent } from '@nacional/shared/types';
+import { CalendarDays, MapPin, Pencil, Plus, Search, Users, History } from 'lucide-react-native';
+import type { Match, Sector, Member, ClubPlan, AuditEvent } from '@nacional/shared/types';
 import { Panel } from '../ui';
 import { Text, TextInput } from '../Typography';
 import { AdminAction, AdminBadge, AdminTable, useDesktopAdmin } from './AdminLayout';
 import { useTheme } from '../../theme/ThemeProvider';
 import { money, matchDate } from '../../utils/format';
 
-const statuses = { PENDING: 'Aguardando pagamento', ISSUED: 'Emitido', USED: 'Utilizado', CANCELED: 'Cancelado', EXPIRED: 'Expirado' };
-function statusTone(status: string) { return status === 'PENDING' ? 'warning' as const : ['ISSUED', 'USED'].includes(status) ? 'success' as const : 'neutral' as const; }
-function normalize(value: string) { return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
 export function AdminEmpty({ title, description, icon: Icon = CalendarDays }: { title: string; description: string; icon?: typeof CalendarDays }) {
   const { colors } = useTheme();
   return <Panel style={{ alignItems: 'center', paddingVertical: 48, borderRadius: 10, gap: 10 }}><View style={{ padding: 15, borderRadius: 10, backgroundColor: colors.primarySoft, marginBottom: 5 }}><Icon size={26} color={colors.primary} /></View><Text heading style={{ color: colors.text, fontSize: 19, lineHeight: 27, fontWeight: '700', textAlign: 'center' }}>{title}</Text><Text style={{ color: colors.muted, fontSize: 13, textAlign: 'center', maxWidth: 420 }}>{description}</Text></Panel>;
@@ -28,29 +25,6 @@ export function AdminMatchGrid({ matches, busy, loading, onEdit, onSector, onCre
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}><AdminAction label="Editar partida" icon={Pencil} disabled={busy} onPress={() => onEdit(match)} /><AdminAction label="Adicionar setor" icon={Plus} disabled={busy} onPress={() => onCreateSector(match)} /></View>
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingTop: 14, borderTopWidth: 1, borderColor: colors.border }}><AdminAction primary={!match.published} label={match.published ? 'Retirar publicação' : 'Publicar no app'} disabled={busy} onPress={() => onToggle(match, 'published')} /><AdminAction label={match.salesEnabled ? 'Pausar vendas' : 'Reabrir vendas'} disabled={busy} onPress={() => onToggle(match, 'salesEnabled')} /><AdminAction label={match.entryEnabled ? 'Fechar portaria' : 'Habilitar portaria'} disabled={busy} onPress={() => onToggle(match, 'entryEnabled')} /></View>
   </Panel>)}</View>;
-}
-
-export function AdminSalesPanel({ tickets, busy, loading, onPayment, onCancel, onEdit, onDelete }: { tickets: AdminTicket[]; busy: boolean; loading: boolean; onPayment: (ticket: AdminTicket) => void; onCancel: (ticket: AdminTicket) => void; onEdit: (ticket: AdminTicket) => void; onDelete: (ticket: AdminTicket) => void }) {
-  const { colors } = useTheme();
-  const desktop = useDesktopAdmin();
-  const [query, setQuery] = useState('');
-  const [status, setStatus] = useState('ALL');
-  const filtered = tickets.filter((ticket) => (status === 'DELETED' ? Boolean(ticket.deletedAt) : !ticket.deletedAt && (status === 'ALL' || ticket.status === status)) && normalize(`${ticket.user.name} ${ticket.user.email} ${ticket.match.homeTeam} ${ticket.match.awayTeam} ${ticket.id}`).includes(normalize(query.trim())));
-  const actions = (ticket: AdminTicket) => {
-    if (ticket.deletedAt) return <Text style={{ color: colors.subtle, fontSize: 11 }}>Excluída em {new Date(ticket.deletedAt).toLocaleString('pt-BR')}. Histórico preservado.</Text>;
-    const unpaid = !ticket.payment && !(ticket.usedQuantity || 0) && ['PENDING', 'CANCELED', 'EXPIRED'].includes(ticket.status);
-    return <View style={{ gap: 7, alignItems: 'flex-start' }}>
-      {unpaid && ticket.status === 'PENDING' && <AdminAction primary label="Conferir recebimento" disabled={busy} onPress={() => onPayment(ticket)} />}
-      {['PENDING', 'ISSUED', 'USED'].includes(ticket.status) && <AdminAction label="Editar venda" icon={Pencil} disabled={busy || !ticket.revision} onPress={() => onEdit(ticket)} />}
-      {unpaid && ticket.status === 'PENDING' && <AdminAction label="Cancelar reserva" disabled={busy} onPress={() => onCancel(ticket)} />}
-      <AdminAction label="Excluir venda" icon={Trash2} disabled={busy || !ticket.revision} onPress={() => onDelete(ticket)} />
-    </View>;
-  };
-  return <View style={{ gap: 16 }}>
-    <View style={{ flexDirection: desktop ? 'row' : 'column', alignItems: desktop ? 'center' : undefined, gap: 12 }}><View style={{ flex: desktop ? 1 : undefined, flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 12, minHeight: 42, backgroundColor: colors.surface, borderRadius: 10, borderWidth: 1, borderColor: colors.border }}><Search size={17} color={colors.subtle} /><TextInput accessibilityLabel="Buscar pedido por comprador, jogo ou número" value={query} onChangeText={setQuery} placeholder="Buscar comprador, jogo ou pedido…" placeholderTextColor={colors.subtle} style={{ flex: 1, color: colors.text, paddingVertical: 10, fontSize: 12 }} /></View><View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>{[{ id: 'ALL', label: 'Todos' }, { id: 'PENDING', label: 'Pendentes' }, { id: 'ISSUED', label: 'Emitidos' }, { id: 'DELETED', label: 'Excluídas' }].map((filter) => <Pressable key={filter.id} accessibilityRole="radio" accessibilityState={{ checked: status === filter.id }} onPress={() => setStatus(filter.id)} style={{ minHeight: 36, paddingHorizontal: 12, borderRadius: 9, backgroundColor: status === filter.id ? colors.primarySoft : colors.soft, borderWidth: 1, borderColor: status === filter.id ? colors.brandBorder : colors.border, justifyContent: 'center' }}><Text style={{ color: status === filter.id ? colors.primary : colors.muted, fontSize: 12 }}>{filter.label}</Text></Pressable>)}</View></View>
-    <Text style={{ color: colors.subtle, fontSize: 11 }}>{filtered.length} de {tickets.length} pedidos carregados · valores por pedido, em reais</Text>
-    {desktop ? <AdminTable loading={loading} columns={[{ label: 'Comprador', flex: 1.3 }, { label: 'Partida / setor', flex: 1.3 }, { label: 'Total', width: 90 }, { label: 'Situação', width: 144 }, { label: 'Ações', width: 177 }]} rows={filtered.map((ticket) => ({ id: ticket.id, cells: [<View style={{ gap: 3 }}><Text style={{ color: colors.text, fontSize: 12, fontWeight: '600' }}>{ticket.user.name}</Text><Text numberOfLines={1} style={{ color: colors.muted, fontSize: 10 }}>{ticket.user.email}</Text><Text selectable style={{ color: colors.subtle, fontSize: 9 }}>{ticket.id}</Text></View>, <View style={{ gap: 4 }}><Text style={{ color: colors.text, fontSize: 12 }}>{ticket.match.homeTeam} × {ticket.match.awayTeam}</Text><Text style={{ color: colors.muted, fontSize: 10 }}>{ticket.quantity} × {ticket.sector.name}</Text></View>, <Text style={{ color: colors.text, fontSize: 13, fontWeight: '700' }}>{money(ticket.priceCents)}</Text>, <AdminBadge label={ticket.deletedAt ? 'Excluída' : statuses[ticket.status]} tone={statusTone(ticket.status)} />, actions(ticket)] }))} empty="Nenhum pedido corresponde à busca." /> : <>{filtered.map((ticket) => <Panel key={ticket.id} style={{ padding: 18, gap: 11 }}><Text style={{ color: colors.text, fontWeight: '700' }}>{ticket.user.name}</Text><Text style={{ color: colors.muted, fontSize: 12 }}>{ticket.user.email}</Text><Text style={{ color: colors.text }}>{ticket.match.homeTeam} × {ticket.match.awayTeam}</Text><Text style={{ color: colors.muted, fontSize: 13 }}>{ticket.quantity} × {ticket.sector.name} · {money(ticket.priceCents)}</Text><AdminBadge label={ticket.deletedAt ? 'Excluída' : statuses[ticket.status]} tone={statusTone(ticket.status)} />{actions(ticket)}<Text selectable style={{ color: colors.subtle, fontSize: 10 }}>{ticket.id}</Text></Panel>)}{!filtered.length && !loading && <AdminEmpty icon={TicketIcon} title="Nenhum pedido encontrado" description="As reservas e compras da torcida aparecerão aqui." />}</>}
-  </View>;
 }
 
 export function AdminAccountsPanel({ users, search, onSearchChange, onSearch, loading, busy, currentUserId, onMembership, onAccount }: { users: Member[]; search: string; onSearchChange: (value: string) => void; onSearch: () => void; loading: boolean; busy: boolean; currentUserId: string; onMembership: (user: Member) => void; onAccount: (user: Member) => void }) {

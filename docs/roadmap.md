@@ -1,7 +1,7 @@
 # Próximas etapas
 
 1. Validar as telas em Android e iOS físicos, ajustar detalhes visuais em relação à referência e definir ícone/splash oficiais.
-2. Administração de jogos, setores, planos, associações, contas, recebimentos e portaria implementada. Falta execução integrada no PostgreSQL e ampliar gestão de parceiros/recompensas.
+2. Administração de jogos, setores, planos, associações, contas, recebimentos e portaria implementada. Gestão de vendas com filtros, totais e disponibilidade e histórico de entradas/recusas com protocolos implementados e testados no PostgreSQL; ver [relatórios administrativos](admin-reports.md). Falta ampliar gestão de parceiros/recompensas e validar a operação em aparelhos.
 3. Integrar gateway de pagamento com webhook autenticado, idempotência e transação de emissão do ingresso; definir cancelamento e reembolso.
 4. Leitor e consumo de QR de ingresso implementados. Validar em aparelho e integrar à operação da portaria; o leitor do QR de carteirinha continua pendente.
 5. Implementar resultado do jogo, apuração do palpite e regras de indicação. Extrato, check-in diário e resgates transacionais já estão implementados; falta sua validação em PostgreSQL nesta revisão.

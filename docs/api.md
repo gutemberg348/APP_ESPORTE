@@ -184,6 +184,8 @@ Paginação aceita `limit` entre 1 e 100 (padrão 50), `offset` entre 0 e 10000.
 
 ## Conferir no PowerShell
 
+Relatórios administrativos (ADMIN ativo): `GET /admin/sales`, `/admin/admissions`, `/admin/admissions/protocol`, `/admin/gate-denials` e `/admin/gate-operators`. Filtros, critérios de receita/estoque e paginação estão em [gestão de vendas e histórico de portaria](admin-reports.md). Esses relatórios usam `limit` padrão 25 e permitem paginar além dos 10 mil registros.
+
 ```powershell
 $credentials = @{ email = 'rafael@demo.nacional.local'; password = 'NacionalDemo123!' } | ConvertTo-Json
 $login = Invoke-RestMethod -Uri 'http://localhost:3333/v1/auth/login' -Method Post -ContentType 'application/json' -Body $credentials

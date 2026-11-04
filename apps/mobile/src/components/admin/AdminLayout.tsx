@@ -20,6 +20,7 @@ export const adminSections = [
   { name: 'Planos', icon: BadgeCheck, description: 'Defina os planos e os benefícios dos associados.' },
   { name: 'Funcionários', icon: UserRoundCog, description: 'Gerencie a equipe e as escalas de portaria.' },
   { name: 'Portaria', icon: ScanLine, description: 'Confira ingressos e registre as entradas.' },
+  { name: 'Histórico de portaria', icon: History, description: 'Consulte entradas, recusas e protocolos por partida e funcionário.' },
   { name: 'Auditoria', icon: History, description: 'Consulte o histórico das operações administrativas.' },
 ];
 

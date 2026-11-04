@@ -16,7 +16,9 @@ import { formDate, parseClubDate } from '../utils/admin';
 import { parseAmount } from '../utils/payments';
 import { AdminLayout, AdminAction, useDesktopAdmin } from '../components/admin/AdminLayout';
 import { AdminStats, AdminOverviewPanel } from '../components/admin/AdminOverview';
-import { AdminMatchGrid, AdminSalesPanel, AdminAccountsPanel, AdminPlanGrid, AdminAuditPanel } from '../components/admin/AdminDataPanels';
+import { AdminMatchGrid, AdminAccountsPanel, AdminPlanGrid, AdminAuditPanel } from '../components/admin/AdminDataPanels';
+import { AdminSalesReport } from '../components/admin/AdminSalesReport';
+import { AdminGateHistory } from '../components/admin/AdminGateHistory';
 import { AdminThemeProvider } from '../theme/AdminThemeProvider';
 import { AdminSaleForm } from '../components/admin/AdminSaleForm';
 export function AdminScreen({ onBack }: { onBack: () => void }) {
@@ -50,6 +52,7 @@ function AdminWorkspace({ onBack }: { onBack: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [reportRefresh, setReportRefresh] = useState(0);
   const revision = useRef(0);
   const lock = useRef(false);
   async function refresh() {
@@ -60,6 +63,7 @@ function AdminWorkspace({ onBack }: { onBack: () => void }) {
       const fresh = await Promise.all([adminApi.overview(token), adminApi.matches(token), adminApi.tickets(token, { deleted: 'all' }), adminApi.users(token, search), adminApi.plans(token), adminApi.audit(token)]);
       if (current !== revision.current) return;
       setOverview(fresh[0]); setMatches(fresh[1]); setTickets(fresh[2]); setUsers(fresh[3]); setPlans(fresh[4]); setAudit(fresh[5]);
+      setReportRefresh((value) => value + 1);
     } catch (err) { if (current === revision.current) setError(messageOf(err)); }
     finally { if (current === revision.current) setLoading(false); }
   }
@@ -79,12 +83,13 @@ function AdminWorkspace({ onBack }: { onBack: () => void }) {
     {!!notice && <Text accessibilityRole="alert" style={{ color: colors.primary, fontSize: 13 }}>{notice}</Text>}
     {tab === 'Visão geral' && <><AdminStats overview={overview} /><AdminOverviewPanel matches={matches} tickets={tickets} audit={audit} loading={loading} onSelect={select} onCreate={() => setMatchEdit(null)} /></>}
     {tab === 'Jogos' && <AdminMatchGrid matches={matches} busy={busy} loading={loading} onEdit={setMatchEdit} onSector={(match, sector) => setSectorEdit({ match, sector })} onCreateSector={(match) => setSectorEdit({ match, sector: null })} onToggle={(match, field) => void perform(() => adminApi.updateMatch(token!, { id: match.id, [field]: !match[field] }))} />}
-    {tab === 'Vendas' && <AdminSalesPanel tickets={tickets} busy={busy} loading={loading} onPayment={openPayment} onEdit={(ticket) => setSaleAction({ ticket, mode: 'edit' })} onDelete={(ticket) => setSaleAction({ ticket, mode: 'delete' })} onCancel={(ticket) => setSaleAction({ ticket, mode: 'cancel' })} />}
+    {tab === 'Vendas' && <AdminSalesReport matches={matches} refreshKey={reportRefresh} busy={busy} onPayment={openPayment} onEdit={(ticket) => setSaleAction({ ticket, mode: 'edit' })} onDelete={(ticket) => setSaleAction({ ticket, mode: 'delete' })} onCancel={(ticket) => setSaleAction({ ticket, mode: 'cancel' })} />}
     {tab === 'Torcedores' && <AdminAccountsPanel users={users} search={search} onSearchChange={setSearch} onSearch={() => void refresh()} loading={loading} busy={busy} currentUserId={member.id} onMembership={openMembership} onAccount={(user) => void perform(() => adminApi.account(token!, user.id, !user.active))} />}
     {tab === 'Planos' && <AdminPlanGrid plans={plans} busy={busy} onEdit={setPlanEdit} />}
     {tab === 'Funcionários' && <EmployeePanel matches={matches} desktop={desktop} />}
     {tab === 'Portaria' && <View style={{ flexDirection: desktop ? 'row' : 'column', gap: 22, alignItems: 'flex-start' }}><Panel style={{ flex: 1, minWidth: 0, width: desktop ? undefined : '100%', borderRadius: 16, padding: desktop ? 25 : 16 }}><TicketGatePanel matches={matches} onChanged={refresh} /></Panel>{desktop && <Panel style={{ width: 245, borderRadius: 16, padding: 22, gap: 13 }}><ScanLine size={24} color={colors.primary} /><Text heading style={{ color: colors.text, fontWeight: '700' }}>Operação da portaria</Text><Text style={{ color: colors.muted, fontSize: 12 }}>Selecione a partida e o setor físico antes de ler ou digitar o código.</Text><Text style={{ color: colors.muted, fontSize: 12 }}>Confira o titular e a quantidade. A consulta não libera a entrada.</Text><Text style={{ color: colors.gold, fontSize: 12 }}>Libere somente após a confirmação registrada no servidor.</Text></Panel>}</View>}
     {tab === 'Auditoria' && <AdminAuditPanel audit={audit} loading={loading} />}
+    {tab === 'Histórico de portaria' && <AdminGateHistory matches={matches} refreshKey={reportRefresh} />}
     {matchEdit !== undefined && <MatchForm match={matchEdit} onClose={() => setMatchEdit(undefined)} onSaved={async () => { setMatchEdit(undefined); await refresh(); }} />}
     {sectorEdit && <SectorForm {...sectorEdit} onClose={() => setSectorEdit(null)} onSaved={async () => { setSectorEdit(null); await refresh(); }} />}
     {planEdit !== undefined && <PlanForm plan={planEdit} onClose={() => setPlanEdit(undefined)} onSaved={async () => { setPlanEdit(undefined); await refresh(); }} />}

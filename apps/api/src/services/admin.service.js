@@ -4,10 +4,17 @@ import { assertAdmin } from '../lib/ticket-rules.js';
 import { ticketEntryService } from './ticket-entry.service.js';
 import { db } from '../config/database.js';
 import { createAdminTicketStore } from '../models/admin-ticket.store.js';
+import { createAdminReportsStore } from '../models/admin-reports.store.js';
 const sales = createAdminTicketStore(db);
+const reports = createAdminReportsStore(db);
 const guard = (work) => (user, input) => { assertAdmin(user); return work(user.id, input); };
 export const adminService = {
   overview: guard(() => adminModel.overview()),
+  salesReport: guard((_, query) => reports.sales(query)),
+  admissionHistory: guard((_, query) => reports.admissions(query)),
+  admissionProtocol: guard((_, { protocol }) => reports.admission(protocol)),
+  denialHistory: guard((_, query) => reports.denials(query)),
+  gateOperators: guard(() => reports.operators()),
   matches: guard((_, query) => adminModel.matches(query)),
   createMatch: guard(adminModel.createMatch), updateMatch: guard(adminModel.updateMatch),
   createSector: guard(adminModel.createSector), updateSector: guard(adminModel.updateSector),

@@ -33,3 +33,15 @@ export const ticketCodeSchema = z.object(entryFields).strict().refine(oneCredent
 export const admissionSchema = z.object({ ...entryFields, quantity: z.number().int().min(1).max(4), requestKey: z.string().regex(/^[A-Za-z0-9_-]{16,80}$/) }).strict().refine(oneCredential, 'Informe somente o QR ou o código digitável.');
 export const admissionReceiptSchema = z.object({ ticketId: z.uuid(), matchId: z.uuid(), sectorId: z.uuid(), requestKey: z.string().regex(/^[A-Za-z0-9_-]{16,80}$/) }).strict();
 export const adminQuerySchema = paginationSchema.extend({ search: z.string().trim().max(100).optional(), matchId: z.uuid().optional(), status: z.enum(['PENDING', 'ISSUED', 'USED', 'CANCELED', 'EXPIRED']).optional(), deleted: z.enum(['exclude', 'only', 'all']).default('exclude') }).strict();
+const reportFields = {
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  offset: z.coerce.number().int().min(0).max(1000000000).default(0),
+  matchId: z.uuid().optional(), sectorId: z.uuid().optional(),
+  from: date.optional(), to: date.optional(),
+};
+const validPeriod = (value) => !value.from || !value.to || value.from <= value.to;
+export const salesReportSchema = z.object({ ...reportFields, search: z.string().trim().max(100).optional(), status: z.enum(['PENDING', 'ISSUED', 'USED', 'CANCELED', 'EXPIRED']).optional(), deleted: z.enum(['exclude', 'only', 'all']).default('all'), payment: z.enum(['PAID', 'FREE', 'UNPAID']).optional() }).strict().refine(validPeriod, { message: 'O fim do período deve ser posterior ao início.', path: ['to'] });
+const historyFields = { ...reportFields, actorId: z.uuid().optional(), protocol: z.uuid().optional() };
+export const admissionHistorySchema = z.object({ ...historyFields, search: z.string().trim().max(100).optional() }).strict().refine(validPeriod, { message: 'O fim do período deve ser posterior ao início.', path: ['to'] });
+export const denialHistorySchema = z.object(historyFields).strict().refine(validPeriod, { message: 'O fim do período deve ser posterior ao início.', path: ['to'] });
+export const protocolSchema = z.object({ protocol: z.uuid() }).strict();

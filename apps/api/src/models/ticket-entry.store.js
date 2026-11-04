@@ -65,6 +65,6 @@ export function createTicketEntryStore(client, { now = () => new Date(), authori
       if (!admission || admission.actorId !== actorId || admission.ticket.matchId !== matchId || admission.ticket.sectorId !== sectorId) throw new AppError(404, 'ADMISSION_NOT_FOUND', 'Não foi encontrada uma entrada confirmada para esta operação.');
       return receipt(admission.ticket, admission, true);
     },
-    deny: (actorId, matchId, reason, qrHash) => client.auditLog.create({ data: { actorId, action: 'TICKET_VALIDATION_DENIED', entityId: matchId, details: { reason, qrHash } } }),
+    deny: (actorId, matchId, reason, qrHash, sectorId, stage) => client.auditLog.create({ data: { actorId, action: 'TICKET_VALIDATION_DENIED', entityId: matchId, details: { reason, qrHash, ...(sectorId ? { sectorId } : {}), ...(stage ? { stage } : {}) } } }),
   };
 }
