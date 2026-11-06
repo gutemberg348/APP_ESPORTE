@@ -1,0 +1,144 @@
+COMPLEMENTO DO BANCO: INTEGRACAO ASAAS
+Data: 06/11/2026
+
+Fonte: schema Prisma e SQL da migration 20261106010000_asaas_payments.
+A migration foi aplicada em PostgreSQL WASM temporario nos testes. O PostgreSQL local estava indisponivel; aplicar com npm run db:deploy.
+
+Relacoes: User 1:N BillingCustomer; BillingCustomer 1:N GatewayIntent; Ticket 1:N GatewayIntent; PaymentCharge 1:0..1 GatewayIntent.
+Cada intencao aponta para exatamente um Ticket OU uma PaymentCharge (CHECK no PostgreSQL).
+GatewayWebhook e inbox de notificacoes: sem FK para aceitar evento antes de vincular o ID remoto.
+Ambientes sandbox/production sao separados nos cadastros, nas referencias e na fila.
+
+Alteracoes em tabelas existentes:
+- TicketPaymentMethod: novo valor ASAAS.
+- TicketPayment.refundedCents: Int NOT NULL DEFAULT 0; CHECK entre zero e amountCents.
+- TicketPayment.reference de recibo Asaas: ASAAS:<ID-do-pagamento>. Confirmacao automatica nao usa confirmedById.
+- GatewayIntent.refundedCents contabiliza recebimento estornado inclusive se nao houve emissao do ingresso.
+- Sem apagar recibos, entradas ou auditoria por causa de devolucao.
+
+TABELA: BillingCustomer
+  id | String | opcional
+  userId | String | opcional
+  environment | String | opcional
+  documentEncrypted | String | opcional
+  documentLast4 | String | opcional
+  providerReference | String | opcional
+  creationStartedAt | DateTime | opcional
+  lockedUntil | DateTime | opcional
+  lockToken | String | opcional
+  createdAt | DateTime | opcional
+  user | User | opcional | RELACAO {}
+  intents | GatewayIntent | opcional | RELACAO {}
+  Unicidades compostas: undefined
+
+TABELA: GatewayIntent
+  id | String | opcional
+  environment | String | opcional
+  ticketId | String | opcional
+  chargeId | String | opcional
+  customerId | String | opcional
+  generation | String | opcional
+  snapshot | Json | opcional
+  amountCents | Int | opcional
+  netCents | Int | opcional
+  refundedCents | Int | opcional
+  state | String | opcional
+  providerReference | String | opcional
+  pixPayload | String | opcional
+  pixImage | String | opcional
+  expiresAt | DateTime | opcional
+  creationStartedAt | DateTime | opcional
+  cancelRequestedAt | DateTime | opcional
+  refundRequestedAt | DateTime | opcional
+  refundStartedAt | DateTime | opcional
+  failureCode | String | opcional
+  attempts | Int | opcional
+  wakeVersion | Int | opcional
+  nextAttemptAt | DateTime | opcional
+  lockedUntil | DateTime | opcional
+  lockToken | String | opcional
+  createdAt | DateTime | opcional
+  updatedAt | DateTime | opcional
+  ticket | Ticket | opcional | RELACAO {}
+  charge | PaymentCharge | opcional | RELACAO {}
+  customer | BillingCustomer | opcional | RELACAO {}
+  Unicidades compostas: undefined
+
+TABELA: GatewayWebhook
+  id | String | opcional
+  environment | String | opcional
+  externalId | String | opcional
+  event | String | opcional
+  paymentId | String | opcional
+  externalReference | String | opcional
+  fingerprint | String | opcional
+  processedAt | DateTime | opcional
+  createdAt | DateTime | opcional
+  Unicidades compostas: undefined
+
+SEGURANCA E OPERACAO
+- Documento CPF/CNPJ e criptografado AES-256-GCM; nonce aleatorio e segredo exclusivo do servidor.
+- App recebe somente os ultimos quatro digitos. Nao registrar documentos, API key ou tokens nos logs.
+- generation associa a cobranca a uma versao da reserva e ao ambiente. ID externo: socio:<UUID-da-intencao>.
+- creationStartedAt e refundStartedAt impedem repetir POST financeiro com resultado desconhecido.
+- lockedUntil/lockToken permitem recuperar trabalho apos reinicio, sem dois workers proprietarios da mesma lease.
+- wakeVersion impede perder evento novo recebido enquanto uma conciliacao estava finalizando.
+- GatewayWebhook.externalId e unico por ambiente. fingerprint rejeita reutilizar ID com outro tipo/objeto.
+- GatewayWebhook guarda apenas metadados necessarios; corpo completo e dados bancarios nao sao armazenados.
+- nextAttemptAt conduz reconsultas; failureCode explica pendencias no painel administrativo.
+
+SQL COMPLETO: CHAVES, INDICES E CHECKS
+ALTER TYPE "TicketPaymentMethod" ADD VALUE 'ASAAS';
+ALTER TABLE "TicketPayment" ADD COLUMN "refundedCents" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "TicketPayment" ADD CONSTRAINT "TicketPayment_refund_valid" CHECK ("refundedCents" BETWEEN 0 AND "amountCents");
+
+CREATE TABLE "BillingCustomer" (
+  "id" UUID NOT NULL, "userId" UUID NOT NULL, "environment" VARCHAR(20) NOT NULL,
+  "documentEncrypted" TEXT NOT NULL, "documentLast4" VARCHAR(4) NOT NULL,
+  "providerReference" TEXT, "creationStartedAt" TIMESTAMP(3),
+  "lockedUntil" TIMESTAMP(3), "lockToken" UUID,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "BillingCustomer_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "BillingCustomer_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT "BillingCustomer_environment_valid" CHECK ("environment" IN ('sandbox', 'production'))
+);
+CREATE UNIQUE INDEX "BillingCustomer_userId_environment_key" ON "BillingCustomer"("userId", "environment");
+
+CREATE TABLE "GatewayIntent" (
+  "id" UUID NOT NULL, "environment" VARCHAR(20) NOT NULL,
+  "ticketId" UUID, "chargeId" UUID, "customerId" UUID NOT NULL,
+  "generation" TEXT NOT NULL, "snapshot" JSONB NOT NULL,
+  "amountCents" INTEGER NOT NULL, "netCents" INTEGER, "refundedCents" INTEGER NOT NULL DEFAULT 0,
+  "state" VARCHAR(24) NOT NULL DEFAULT 'QUEUED', "providerReference" TEXT,
+  "pixPayload" TEXT, "pixImage" TEXT, "expiresAt" TIMESTAMP(3) NOT NULL,
+  "creationStartedAt" TIMESTAMP(3), "cancelRequestedAt" TIMESTAMP(3),
+  "refundRequestedAt" TIMESTAMP(3), "refundStartedAt" TIMESTAMP(3), "failureCode" TEXT,
+  "attempts" INTEGER NOT NULL DEFAULT 0, "wakeVersion" INTEGER NOT NULL DEFAULT 0, "nextAttemptAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "lockedUntil" TIMESTAMP(3), "lockToken" UUID,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "GatewayIntent_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "GatewayIntent_ticketId_fkey" FOREIGN KEY ("ticketId") REFERENCES "Ticket"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT "GatewayIntent_chargeId_fkey" FOREIGN KEY ("chargeId") REFERENCES "PaymentCharge"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT "GatewayIntent_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "BillingCustomer"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT "GatewayIntent_target_valid" CHECK (("ticketId" IS NOT NULL) <> ("chargeId" IS NOT NULL)),
+  CONSTRAINT "GatewayIntent_amount_valid" CHECK ("amountCents" BETWEEN 1 AND 100000000 AND "refundedCents" BETWEEN 0 AND "amountCents" AND ("netCents" IS NULL OR "netCents" BETWEEN 0 AND "amountCents")),
+  CONSTRAINT "GatewayIntent_environment_valid" CHECK ("environment" IN ('sandbox', 'production')),
+  CONSTRAINT "GatewayIntent_state_valid" CHECK ("state" IN ('QUEUED','CREATING','PENDING','PROCESSING','RECEIVED','REFUNDING','REFUNDED','CANCELED','REVIEW','PARTIAL_REFUND'))
+);
+CREATE UNIQUE INDEX "GatewayIntent_generation_key" ON "GatewayIntent"("generation");
+CREATE UNIQUE INDEX "GatewayIntent_chargeId_key" ON "GatewayIntent"("chargeId");
+CREATE UNIQUE INDEX "GatewayIntent_environment_providerReference_key" ON "GatewayIntent"("environment", "providerReference");
+CREATE INDEX "GatewayIntent_environment_nextAttemptAt_idx" ON "GatewayIntent"("environment", "nextAttemptAt");
+CREATE INDEX "GatewayIntent_ticketId_createdAt_idx" ON "GatewayIntent"("ticketId", "createdAt");
+
+CREATE TABLE "GatewayWebhook" (
+  "id" UUID NOT NULL, "environment" VARCHAR(20) NOT NULL,
+  "externalId" VARCHAR(200) NOT NULL, "event" VARCHAR(100) NOT NULL,
+  "paymentId" VARCHAR(100), "externalReference" VARCHAR(200), "fingerprint" VARCHAR(64) NOT NULL,
+  "processedAt" TIMESTAMP(3), "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "GatewayWebhook_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "GatewayWebhook_environment_valid" CHECK ("environment" IN ('sandbox', 'production'))
+);
+CREATE UNIQUE INDEX "GatewayWebhook_environment_externalId_key" ON "GatewayWebhook"("environment", "externalId");
+CREATE INDEX "GatewayWebhook_environment_processedAt_createdAt_idx" ON "GatewayWebhook"("environment", "processedAt", "createdAt");
+

@@ -35,6 +35,7 @@ enum UserRole {
 enum TicketPaymentMethod {
   MANUAL
   FREE
+  ASAAS
 }
 
 model User {
@@ -66,6 +67,7 @@ model User {
   ticketAdmissions TicketAdmission[]
   auditLogs AuditLog[]
   gateAssignments GateAssignment[]
+  billingCustomers BillingCustomer[]
 }
 
 model Session {
@@ -173,6 +175,7 @@ model Ticket {
   payment    TicketPayment?
   admissions TicketAdmission[]
   accessCodes TicketAccessCode[]
+  paymentIntents GatewayIntent[]
 
   // Active-only uniqueness is enforced by a partial index in the migration.
   @@index([userId, matchId])
@@ -363,6 +366,7 @@ model PaymentCharge {
   wallet CashWallet? @relation(fields: [walletId], references: [id], onDelete: Restrict)
   entries CashEntry[]
   events PaymentEvent[]
+  paymentIntent GatewayIntent?
   @@unique([creatorId, requestKey])
   @@index([offerId, createdAt])
   @@index([walletId, createdAt])
@@ -403,8 +407,76 @@ model TicketPayment {
   reference String @unique @db.VarChar(100)
   confirmedById String? @db.Uuid
   confirmedAt DateTime @default(now())
+  refundedCents Int @default(0)
   ticket Ticket @relation(fields: [ticketId], references: [id])
   confirmedBy User? @relation(fields: [confirmedById], references: [id], onDelete: Restrict)
+}
+
+// Provider resources are scoped by environment: sandbox IDs never become live IDs.
+model BillingCustomer {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  environment String @db.VarChar(20)
+  documentEncrypted String
+  documentLast4 String @db.VarChar(4)
+  providerReference String?
+  creationStartedAt DateTime?
+  lockedUntil DateTime?
+  lockToken String? @db.Uuid
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id])
+  intents GatewayIntent[]
+  @@unique([userId, environment])
+}
+
+model GatewayIntent {
+  id String @id @default(uuid()) @db.Uuid
+  environment String @db.VarChar(20)
+  ticketId String? @db.Uuid
+  chargeId String? @unique @db.Uuid
+  customerId String @db.Uuid
+  generation String @unique
+  snapshot Json
+  amountCents Int
+  netCents Int?
+  refundedCents Int @default(0)
+  state String @default("QUEUED") @db.VarChar(24)
+  providerReference String?
+  pixPayload String?
+  pixImage String?
+  expiresAt DateTime
+  creationStartedAt DateTime?
+  cancelRequestedAt DateTime?
+  refundRequestedAt DateTime?
+  refundStartedAt DateTime?
+  failureCode String?
+  attempts Int @default(0)
+  wakeVersion Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  lockedUntil DateTime?
+  lockToken String? @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ticket Ticket? @relation(fields: [ticketId], references: [id])
+  charge PaymentCharge? @relation(fields: [chargeId], references: [id])
+  customer BillingCustomer @relation(fields: [customerId], references: [id])
+  @@unique([environment, providerReference])
+  @@index([environment, nextAttemptAt])
+  @@index([ticketId, createdAt])
+}
+
+model GatewayWebhook {
+  id String @id @default(uuid()) @db.Uuid
+  environment String @db.VarChar(20)
+  externalId String @db.VarChar(200)
+  event String @db.VarChar(100)
+  paymentId String? @db.VarChar(100)
+  externalReference String? @db.VarChar(200)
+  fingerprint String @db.VarChar(64)
+  processedAt DateTime?
+  createdAt DateTime @default(now())
+  @@unique([environment, externalId])
+  @@index([environment, processedAt, createdAt])
 }
 
 model TicketAdmission {

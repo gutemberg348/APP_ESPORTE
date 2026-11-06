@@ -1,5 +1,7 @@
 # Arquitetura
 
+Atualiza??o de 06/11/2026: Pix autom?tico Asaas, webhook, concilia??o e solicita??o de estorno est?o implementados. Consulte [configura??o e contrato atuais](asaas.md); as descri??es do recebimento manual abaixo continuam aplic?veis em `PAYMENT_MODE=disabled`.
+
 ## Backend
 
 ```text

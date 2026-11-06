@@ -22,7 +22,7 @@ export function salesWhere(query, now = new Date()) {
     ...period(query), ...ticketSearch(search),
     ...(matchId ? { matchId } : {}), ...(sectorId ? { sectorId } : {}),
     ...(deleted === 'all' ? {} : { deletedAt: deleted === 'only' ? { not: null } : null }),
-    ...(payment === 'UNPAID' ? { payment: { is: null } } : payment ? { payment: { is: { method: payment === 'FREE' ? 'FREE' : 'MANUAL' } } } : {}),
+    ...(payment === 'UNPAID' ? { payment: { is: null } } : payment ? { payment: { is: { method: payment === 'FREE' ? 'FREE' : { in: ['MANUAL', 'ASAAS'] } } } } : {}),
     ...(status === 'EXPIRED' ? { status: 'PENDING', expiresAt: { lte: now } } : status === 'PENDING' ? { status, expiresAt: { gt: now } } : status ? { status } : {}),
   };
 }
@@ -52,7 +52,7 @@ export function createAdminReportsStore(client, { now = () => new Date() } = {})
           () => tx.ticket.findMany({ where, include: { ...ticketInclude, user: { select: { id: true, name: true, email: true } } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: query.limit, skip: query.offset }),
           () => tx.ticket.aggregate({ where: { AND: [where, { deletedAt: null, status: { in: ['ISSUED', 'USED'] }, payment: { isNot: null } }] }, _sum: { quantity: true } }),
           () => tx.ticket.aggregate({ where: { AND: [where, { deletedAt: null, status: 'PENDING', expiresAt: { gt: instant } }] }, _sum: { quantity: true } }),
-          () => tx.ticketPayment.aggregate({ where: { ticket: where }, _sum: { amountCents: true } }),
+          () => tx.ticketPayment.aggregate({ where: { ticket: where }, _sum: { amountCents: true, refundedCents: true } }),
           () => tx.ticketPayment.aggregate({ where: { ticket: { AND: [where, { deletedAt: { not: null } }] } }, _sum: { amountCents: true } }),
           () => tx.ticket.aggregate({ where: { AND: [where, { deletedAt: null, payment: { is: { method: 'FREE' } } }] }, _sum: { quantity: true } }),
           () => tx.sector.aggregate({ where: location, _sum: { capacity: true } }),
@@ -63,7 +63,7 @@ export function createAdminReportsStore(client, { now = () => new Date() } = {})
         const occupiedTotal = occupiedQuantity(occupied._sum), totalCapacity = sum(capacity, 'capacity');
         return {
           items: items.map((ticket) => toAdminTicket(ticket, instant)), pagination: page(total, query), serverTime: instant.toISOString(),
-          summary: { orders: total, soldQuantity: sum(sold, 'quantity'), reservedQuantity: sum(reserved, 'quantity'), freeQuantity: sum(free, 'quantity'), confirmedRevenueCents: sum(receipts, 'amountCents'), archivedRevenueCents: sum(archivedReceipts, 'amountCents') },
+          summary: { orders: total, soldQuantity: sum(sold, 'quantity'), reservedQuantity: sum(reserved, 'quantity'), freeQuantity: sum(free, 'quantity'), confirmedRevenueCents: sum(receipts, 'amountCents'), refundedRevenueCents: sum(receipts, 'refundedCents'), archivedRevenueCents: sum(archivedReceipts, 'amountCents') },
           inventory: { capacity: totalCapacity, occupied: occupiedTotal, available: Math.max(0, totalCapacity - occupiedTotal), sectors: sectors.map((sector) => {
             const groups = counts.filter((row) => row.sectorId === sector.id);
             const occupied = groups.reduce((value, row) => value + occupiedQuantity(row._sum), 0);

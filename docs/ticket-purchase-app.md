@@ -1,5 +1,7 @@
 # Compra de ingressos no app
 
+Atualiza??o de 06/11/2026: Pix autom?tico Asaas, webhook, concilia??o e solicita??o de estorno est?o implementados. Consulte [configura??o e contrato atuais](asaas.md); as descri??es do recebimento manual abaixo continuam aplic?veis em `PAYMENT_MODE=disabled`.
+
 A **Central de ingressos** fica na tela inicial. O botão **Ingressos** do próximo jogo abre o catálogo. Em **Perfil → Meus ingressos**, o app abre diretamente os pedidos da conta. O visual mantém a paleta verde/dourada, fontes e escudo do projeto.
 
 ## Catálogo e compra

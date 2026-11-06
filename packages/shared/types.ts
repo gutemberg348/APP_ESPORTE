@@ -58,7 +58,7 @@ export interface Ticket {
   voidedQuantity?: number;
   remainingQuantity?: number;
   entryQr?: string | null;
-  payment?: { method: 'MANUAL' | 'FREE'; amountCents: number; confirmedAt: string } | null;
+  payment?: { method: 'MANUAL' | 'FREE' | 'ASAAS'; amountCents: number; refundedCents?: number; confirmedAt: string } | null;
   match: Match;
   sector: Sector;
 }
@@ -84,7 +84,7 @@ export interface AdminTicket extends Ticket { revision: string; user: { id: stri
 export interface ReportPagination { total: number; limit: number; offset: number; hasMore: boolean }
 export interface SalesReport {
   items: AdminTicket[]; pagination: ReportPagination; serverTime: string;
-  summary: { orders: number; soldQuantity: number; reservedQuantity: number; freeQuantity: number; confirmedRevenueCents: number; archivedRevenueCents: number };
+  summary: { orders: number; soldQuantity: number; reservedQuantity: number; freeQuantity: number; confirmedRevenueCents: number; refundedRevenueCents: number; archivedRevenueCents: number };
   inventory: { capacity: number; occupied: number; available: number; sectors: (Sector & { occupied: number; soldQuantity: number; reservedQuantity: number; usedQuantity: number })[] };
 }
 export interface GateOperator { id: string; name: string; email: string; active: boolean }
@@ -105,12 +105,20 @@ export interface AdminSaleQuote {
 export interface ClubPlan { id: string; name: string; priceCents: number; discountPercent: number }
 export interface AuditEvent { id: string; action: string; entityId: string; createdAt: string; actor: { name: string }; details: Record<string, unknown> }
 export interface CashCharge {
+  paymentIntentId?: string | null;
   id: string; tenant: { slug: string; name: string }; merchant: { name: string };
   channel: 'CASHIER_QR' | 'CUSTOMER_QR'; status: 'PENDING' | 'PAID' | 'REFUNDED' | 'CANCELED' | 'EXPIRED';
   amountCents: number; cashbackCents: number; merchantCents: number; commissionCents: number; gatewayFeeCents: number;
   customerLinked: boolean; demo: boolean; pixPayload: string | null; saleCode: string; saleQr: string;
   expiresAt: string; createdAt: string; paidAt: string | null;
 }
+export interface PixIntent {
+  id: string; ticketId: string | null; chargeId: string | null; environment: 'sandbox' | 'production';
+  state: 'QUEUED' | 'CREATING' | 'PENDING' | 'PROCESSING' | 'RECEIVED' | 'REFUNDING' | 'REFUNDED' | 'CANCELED' | 'REVIEW' | 'PARTIAL_REFUND';
+  amountCents: number; refundedCents: number; pixPayload: string | null; expiresAt: string; failureCode: string | null; serverTime: string;
+}
+export interface BillingProfile { enabled: boolean; environment: 'sandbox' | 'production'; configured: boolean; documentLast4: string | null }
+export interface AdminPixIntent extends PixIntent { providerReference: string | null; attempts: number; updatedAt: string }
 export interface CashWallet {
   tenant: { slug: string; name: string }; customerCode: string; availableCents: number; debtCents: number; demo: boolean;
   entries: { id: string; kind: 'CASHBACK' | 'REVERSAL'; amountCents: number; balanceAfterCents: number; merchant: string; createdAt: string }[];

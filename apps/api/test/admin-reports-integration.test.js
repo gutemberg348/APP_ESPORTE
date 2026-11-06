@@ -39,7 +39,7 @@ test('PostgreSQL reports: complete totals, paginated sales, archived receipts, a
   const query = { matchId: match.id, limit: 1, offset: 0, deleted: 'all' };
   const report = await store.sales(query);
   assert.equal(report.pagination.total, 5); assert.equal(report.items.length, 1); assert.equal(report.pagination.hasMore, true);
-  assert.deepEqual(report.summary, { orders: 5, soldQuantity: 3, reservedQuantity: 3, freeQuantity: 1, confirmedRevenueCents: 5000, archivedRevenueCents: 3000 });
+  assert.deepEqual(report.summary, { orders: 5, soldQuantity: 3, reservedQuantity: 3, freeQuantity: 1, confirmedRevenueCents: 5000, refundedRevenueCents: 0, archivedRevenueCents: 3000 });
   assert.equal(report.inventory.capacity, 30); assert.equal(report.inventory.occupied, 7); assert.equal(report.inventory.available, 23);
   const solReport = report.inventory.sectors.find((sector) => sector.id === sol.id);
   assert.equal(solReport.soldQuantity, 2); assert.equal(solReport.reservedQuantity, 3); assert.equal(solReport.usedQuantity, 2); assert.equal(solReport.available, 14);

@@ -1,6 +1,6 @@
 import { AppError } from '../lib/errors.js';
 import { serializable, assertAvailability, ticketPrice } from '../lib/business-rules.js';
-import { assertSalesOpen, inventoryWhere, occupiedQuantity } from '../lib/ticket-rules.js';
+import { assertSalesOpen, inventoryWhere, occupiedQuantity, assertNoPendingPix } from '../lib/ticket-rules.js';
 import { isActiveMember } from '../lib/serializers.js';
 import { ticketInclude, toAdminTicket } from '../lib/ticket-serializers.js';
 import { adminTicketRevision } from '../lib/admin-ticket-revision.js';
@@ -17,9 +17,10 @@ export function createAdminTicketStore(client, { now = () => new Date() } = {}) 
     const entries = await tx.ticketAdmission.aggregate({ where: { ticketId }, _sum: { quantity: true } });
     if ((entries._sum.quantity || 0) !== ticket.usedQuantity) throw new AppError(409, 'SALE_ENTRY_INCONSISTENT', 'As entradas desta venda precisam de conferência antes da alteração.');
     if (editing) {
+      assertNoPendingPix(ticket);
       if (ticket.payment) {
         const payment = ticket.payment;
-        if (!['ISSUED', 'USED'].includes(ticket.status) || payment.amountCents !== ticket.priceCents || !['MANUAL', 'FREE'].includes(payment.method) || (payment.method === 'FREE' && ticket.priceCents !== 0) || (payment.method === 'MANUAL' && !payment.confirmedById)) throw new AppError(409, 'SALE_PAYMENT_INCONSISTENT', 'O pagamento desta venda precisa de conferência antes da edição.');
+        if (!['ISSUED', 'USED'].includes(ticket.status) || payment.amountCents !== ticket.priceCents || (payment.refundedCents || 0) > 0 || !['MANUAL', 'FREE', 'ASAAS'].includes(payment.method) || (payment.method === 'FREE' && ticket.priceCents !== 0) || (payment.method === 'MANUAL' && !payment.confirmedById) || (payment.method === 'ASAAS' && !payment.reference?.startsWith('ASAAS:pay_'))) throw new AppError(409, 'SALE_PAYMENT_INCONSISTENT', 'O pagamento desta venda precisa de conferência antes da edição.');
       } else if (ticket.usedQuantity > 0 || ticket.status !== 'PENDING' || !ticket.expiresAt || ticket.expiresAt <= now()) {
         throw new AppError(409, 'RESERVATION_EXPIRED', 'Reservas não pagas precisam estar pendentes e dentro do prazo para edição.');
       }

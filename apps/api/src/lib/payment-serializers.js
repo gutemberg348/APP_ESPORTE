@@ -6,7 +6,8 @@ export function toCharge(charge) {
     amountCents: charge.grossCents, cashbackCents: charge.cashbackCents,
     merchantCents: charge.merchantCents, commissionCents: charge.commissionCents,
     gatewayFeeCents: charge.gatewayFeeCents, customerLinked: Boolean(charge.walletId),
-    demo: charge.provider === 'demo', pixPayload: charge.pixPayload,
+    demo: charge.provider === 'demo', pixPayload: charge.provider === 'asaas' ? (charge.paymentIntent?.state === 'PENDING' && !charge.paymentIntent.cancelRequestedAt && !charge.paymentIntent.refundRequestedAt && charge.expiresAt > new Date() ? charge.paymentIntent.pixPayload : null) : charge.pixPayload,
+    paymentIntentId: charge.paymentIntent?.id || null,
     saleCode: charge.claimCode, saleQr: `nacional://sale/${charge.claimCode}`,
     expiresAt: charge.expiresAt, createdAt: charge.createdAt, paidAt: charge.paidAt,
   };

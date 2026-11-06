@@ -1,3 +1,5 @@
+ATUALIZACAO 06/11/2026: a integracao Asaas acrescenta BillingCustomer, GatewayIntent, GatewayWebhook, TicketPayment.refundedCents e o metodo ASAAS. O detalhamento de todos os campos, relacoes, chaves, indices e constraints novos esta em docs/banco/asaas.txt. Abaixo permanece o levantamento anterior dos metadados locais; aplique a nova migration para atualizar esse banco.
+
 NACIONAL / SÓCIO CANÁRIO — DICIONÁRIO COMPLETO DO BANCO DE DADOS
 Revisão: 03/11/2026 | Fuso de apresentação da revisão: America/Cayenne
 Banco: nacional; PostgreSQL 17.10; schema public.

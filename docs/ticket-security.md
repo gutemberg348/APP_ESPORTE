@@ -1,5 +1,7 @@
 # Venda e validação de ingressos — estado atual
 
+Atualiza??o de 06/11/2026: Pix autom?tico Asaas, webhook, concilia??o e solicita??o de estorno est?o implementados. Consulte [configura??o e contrato atuais](asaas.md); as descri??es do recebimento manual abaixo continuam aplic?veis em `PAYMENT_MODE=disabled`.
+
 O administrador usa o mesmo cadastro/JWT no app e na versão web do projeto (`npm run web`). O painel web recebe mais largura em desktop; os formulários ficam centralizados. A API e o PostgreSQL são os mesmos. Não foi publicado um site em domínio externo nem foi iniciada uma prévia nesta revisão.
 
 ## Venda
