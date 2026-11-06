@@ -9,6 +9,11 @@ export function createAccessMiddleware(authenticate) {
   const authLimit = createRateLimiter({ max: 10, windowMs: 15 * 60000 });
   const refreshLimit = createRateLimiter({ max: 60, windowMs: 15 * 60000 });
   const gateLimit = createRateLimiter({ max: 90, windowMs: 60000 });
+  const ticketLimits = {
+    quote: createRateLimiter({ max: 30 }),
+    checkout: createRateLimiter({ max: 10 }),
+    qr: createRateLimiter({ max: 20 }),
+  };
   function enforce(res, accepted, seconds, code, message) {
     if (accepted) return;
     res.set('Retry-After', String(seconds));
@@ -26,6 +31,11 @@ export function createAccessMiddleware(authenticate) {
       const auth = route.private ? await authenticate(bearerToken(req.headers.authorization)) : {};
       assertGateRoute(auth.user, route);
       if (route.admin) assertAdmin(auth.user);
+      if (route.ticketLimit) {
+        const limiter = ticketLimits[route.ticketLimit];
+        if (!limiter || !auth.user?.id) throw new Error('Limite de ingresso exige rota privada e escopo válido.');
+        enforce(res, limiter(auth.user.id), 60, 'TICKET_RATE_LIMIT', 'Muitas tentativas com ingressos. Aguarde um minuto.');
+      }
       if (route.gate) {
         assertGateUser(auth.user);
         enforce(res, gateLimit(auth.user.id), 60, 'GATE_RATE_LIMIT', 'Muitas leituras. Aguarde um minuto.');

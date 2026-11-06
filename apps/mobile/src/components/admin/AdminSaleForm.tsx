@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
 import type { AdminTicket, AdminSaleQuote } from '@nacional/shared/types';
 import { Sheet } from '../Sheet';
 import { Text } from '../Typography';
 import { Button, Panel } from '../ui';
 import { AdminField } from '../AdminForms';
+import { AdminSelect } from './AdminControls';
 import { useSession } from '../../providers/SessionProvider';
 import { useTheme } from '../../theme/ThemeProvider';
 import { adminApi } from '../../services/admin';
@@ -53,17 +54,14 @@ export function AdminSaleForm({ ticket, mode, onClose, onSaved }: { ticket: Admi
     {edit ? <>
       <Text style={{ color: colors.muted, fontSize: 12 }}>{paid ? 'Venda paga: o valor recebido será mantido. A edição ajusta setor e quantidade, sem cobrança ou estorno automático.' : 'A alteração recalcula o preço e o desconto atuais. O prazo original da reserva continua valendo.'}</Text>
       {used > 0 && <Text style={{ color: colors.gold, fontSize: 12 }}>{used} entrada(s) já utilizada(s). O setor deve ser mantido e a quantidade não pode ficar abaixo desse total.</Text>}
-      <Text style={{ color: colors.text, fontSize: 12, fontWeight: '600' }}>Setor</Text>
-      <View style={{ gap: 8 }}>{ticket.match.sectors.map((sector) => { const disabled = busy || (!paid && !sector.salesEnabled) || (used > 0 && sector.id !== ticket.sector.id); return <Pressable key={sector.id} disabled={disabled} accessibilityRole="radio" accessibilityState={{ checked: sector.id === sectorId, disabled }} onPress={() => changeSector(sector.id)} style={{ padding: 12, borderRadius: 8, borderWidth: 1, borderColor: sector.id === sectorId ? colors.primary : colors.border, backgroundColor: sector.id === sectorId ? colors.primarySoft : colors.surface, opacity: disabled ? 0.5 : 1 }}><Text style={{ color: sector.id === sectorId ? colors.primary : colors.text, fontSize: 12 }}>{sector.name}{!paid ? ` · ${money(sector.priceCents)}` : ''}{!sector.salesEnabled ? ' · vendas pausadas' : ''}</Text></Pressable>; })}</View>
-      <Text style={{ color: colors.text, fontSize: 12, fontWeight: '600' }}>Quantidade de entradas</Text>
-      <View style={{ flexDirection: 'row', gap: 9 }}>{[1, 2, 3, 4].map((value) => <Pressable key={value} disabled={busy || value < used} onPress={() => changeQuantity(value)} accessibilityRole="radio" accessibilityLabel={`${value} entrada(s)`} accessibilityState={{ checked: quantity === value }} style={{ width: 46, height: 44, borderRadius: 8, borderWidth: 1, borderColor: quantity === value ? colors.primary : colors.border, backgroundColor: quantity === value ? colors.primarySoft : colors.surface, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: quantity === value ? colors.primary : colors.text }}>{value}</Text></Pressable>)}</View>
-      <AdminField label="Motivo da alteração · mínimo 5 caracteres" value={reason} onChange={setReason} />
+      <AdminSelect label="Setor" value={sectorId} onChange={changeSector} disabled={busy} options={ticket.match.sectors.map((sector) => ({ value: sector.id, label: sector.name, description: paid ? undefined : money(sector.priceCents), disabled: (!paid && !sector.salesEnabled) || (used > 0 && sector.id !== ticket.sector.id) }))} /><AdminSelect label="Quantidade de entradas" value={String(quantity)} onChange={(value) => changeQuantity(Number(value))} disabled={busy} options={[1, 2, 3, 4].map((value) => ({ value: String(value), label: `${value} entrada${value > 1 ? 's' : ''}`, disabled: value < used }))} />
+      <AdminField label="Motivo da alteração" hint="No mínimo 5 caracteres." value={reason} onChange={setReason} multiline maxLength={500} />
       <Button secondary label="Conferir novo total e disponibilidade" loading={busy} onPress={() => void run(async () => { setQuote(await adminApi.quoteSale(token!, input)); })} />
       {quote && <Panel style={{ padding: 16, borderRadius: 8, gap: 5 }}><Text style={{ color: colors.muted, fontSize: 12 }}>{quote.quantity} × {quote.sector.name} · {quote.priceLocked ? 'valor pago mantido' : `desconto de ${quote.discountPercent}%`}</Text><Text style={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>{quote.priceLocked ? 'Valor pago: ' : 'Novo total: '}{money(quote.totalCents)}</Text><Text style={{ color: colors.muted, fontSize: 12 }}>Total anterior: {money(ticket.priceCents)}</Text>{!quote.priceLocked && quote.totalCents === 0 && <Text style={{ color: colors.gold, fontSize: 12 }}>Ao salvar, as entradas gratuitas serão emitidas automaticamente.</Text>}</Panel>}
     </> : <>
       <Text style={{ color: colors.muted, fontSize: 13 }}>{ticket.quantity} × {ticket.sector.name} · {money(ticket.priceCents)}</Text>
       <Text style={{ color: colors.danger, fontSize: 13 }}>{mode === 'delete' ? 'A venda será excluída da lista ativa e da conta do torcedor. O ingresso e seus códigos serão invalidados. Pagamento e entradas realizadas ficam preservados no histórico; apenas os lugares não utilizados serão liberados. A exclusão não realiza estorno automático.' : 'A reserva será cancelada e os lugares liberados. O pedido continua no histórico.'}</Text>
-      {mode === 'delete' && <AdminField label="Motivo da exclusão · mínimo 5 caracteres" value={reason} onChange={setReason} />}
+      {mode === 'delete' && <AdminField label="Motivo da exclusão" hint="No mínimo 5 caracteres." value={reason} onChange={setReason} multiline maxLength={500} />}
     </>}
     {!!error && <Text accessibilityRole="alert" style={{ color: colors.danger, fontSize: 13 }}>{error}</Text>}
     <Button label={edit ? 'Salvar alteração da venda' : mode === 'delete' ? 'Confirmar exclusão da venda' : 'Confirmar cancelamento'} loading={busy} disabled={mode !== 'cancel' && (reason.trim().length < 5 || (edit && !quote))} onPress={() => void save()} />

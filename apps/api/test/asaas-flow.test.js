@@ -116,6 +116,94 @@ test('Asaas complete payment saga against isolated PostgreSQL and mocked provide
     await store.process(intent.id); assert.equal(creates, before);
     instant = new Date(instant.getTime() + 61000); await store.process(intent.id); assert.equal(creates, before + 1);
   });
+  await t.test('a replaced worker cannot create a charge or overwrite the winning lease', async () => {
+    const { intent } = await purchase(), before = creates, winner = randomUUID();
+    const find = api.findPayments;
+    api.findPayments = async (ref) => {
+      const result = await find(ref);
+      await db.gatewayIntent.update({ where: { id: intent.id }, data: { lockToken: winner, lockedUntil: new Date(instant.getTime() + 60000), failureCode: 'WINNER_OWNS_PROCESS' } });
+      return result;
+    };
+    try { await store.process(intent.id); } finally { api.findPayments = find; }
+    const row = await db.gatewayIntent.findUnique({ where: { id: intent.id } });
+    assert.equal(creates, before); assert.equal(row.creationStartedAt, null);
+    assert.equal(row.lockToken, winner); assert.equal(row.failureCode, 'WINNER_OWNS_PROCESS');
+    instant = new Date(instant.getTime() + 61000); await store.process(intent.id);
+    assert.equal(creates, before + 1);
+  });
+  await t.test('expired customer leases stop customer POSTs and recover safely', async () => {
+    const { intent } = await purchase(), before = customers.size, chargeCount = creates;
+    const find = api.findCustomer;
+    api.findCustomer = async (ref) => { const result = await find(ref); instant = new Date(instant.getTime() + 121000); return result; };
+    try { await store.process(intent.id); } finally { api.findCustomer = find; }
+    assert.equal(customers.size, before); assert.equal(creates, chargeCount);
+    assert.equal((await db.gatewayIntent.findUnique({ where: { id: intent.id } })).failureCode, 'ASAAS_LEASE_LOST');
+    await store.process(intent.id); assert.equal(customers.size, before + 1); assert.equal(creates, chargeCount + 1);
+  });
+  await t.test('lease takeover immediately after a financial marker stops creation and refund POSTs', async () => {
+    for (const stage of ['creationStartedAt', 'refundStartedAt']) {
+      const { intent } = await purchase();
+      if (stage === 'refundStartedAt') {
+        await store.process(intent.id);
+        const row = await db.gatewayIntent.findUnique({ where: { id: intent.id } }); payments.get(row.providerReference).status = 'RECEIVED';
+        await store.process(intent.id); await store.requestRefund(admin.id, intent.id, 'Teste de troca de worker antes do POST');
+      }
+      const beforeCreates = creates, beforeRefunds = refunds, winner = randomUUID(); let takeovers = 0;
+      const swapped = db.$extends({ query: { gatewayIntent: { async updateMany({ args, query }) {
+        const result = await query(args);
+        if (args.data[stage] instanceof Date && result.count === 1) {
+          takeovers++;
+          await db.gatewayIntent.update({ where: { id: intent.id }, data: { lockToken: winner, lockedUntil: new Date(instant.getTime() + 60000) } });
+        }
+        return result;
+      } } } });
+      await createAsaasStore(swapped, { settings, api, now: () => instant }).process(intent.id);
+      assert.equal(takeovers, 1); assert.equal(creates, beforeCreates); assert.equal(refunds, beforeRefunds);
+      const row = await db.gatewayIntent.findUnique({ where: { id: intent.id } }); assert.equal(row.lockToken, winner); assert.ok(row[stage]);
+    }
+  });
+  await t.test('expired payment leases cannot settle a received payment', async () => {
+    const { intent, ticket } = await purchase(); await store.process(intent.id);
+    const row = await db.gatewayIntent.findUnique({ where: { id: intent.id } }); payments.get(row.providerReference).status = 'RECEIVED';
+    const get = api.payment;
+    api.payment = async (id) => { const result = await get(id); instant = new Date(instant.getTime() + 301000); return result; };
+    try { await store.process(intent.id); } finally { api.payment = get; }
+    assert.equal(await db.ticketPayment.count({ where: { ticketId: ticket.id } }), 0);
+    assert.equal((await db.ticket.findUnique({ where: { id: ticket.id } })).status, 'PENDING');
+    await store.process(intent.id); assert.equal(await db.ticketPayment.count({ where: { ticketId: ticket.id } }), 1);
+  });
+  await t.test('provider identity mismatches never issue, refund or cancel an unrelated charge', async () => {
+    const { intent, ticket } = await purchase(); await store.process(intent.id);
+    const row = await db.gatewayIntent.findUnique({ where: { id: intent.id } }), remote = payments.get(row.providerReference);
+    const original = structuredClone(remote), before = refunds;
+    await store.requestRefund(admin.id, intent.id, 'Verificação de integridade antes do estorno');
+    for (const tamper of [{ customer: 'cus_other' }, { externalReference: 'socio:other' }, { value: 0.01 }, { billingType: 'BOLETO' }, { deleted: true }]) {
+      Object.assign(remote, original, { status: 'RECEIVED', deleted: false }, tamper);
+      await store.process(intent.id);
+      assert.equal((await db.gatewayIntent.findUnique({ where: { id: intent.id } })).failureCode, 'ASAAS_PAYMENT_MISMATCH');
+      assert.equal(refunds, before); assert.equal(await db.ticketPayment.count({ where: { ticketId: ticket.id } }), 0);
+    }
+    Object.assign(remote, original, { customer: 'cus_other', deleted: false });
+    await store.process(intent.id); assert.ok(!remote.deleted, 'must not send cancellation for an unrelated pending charge');
+  });
+  await t.test('recovering an ambiguous creation validates the customer before binding the charge', async () => {
+    const { intent } = await purchase(); uncertain = true; await store.process(intent.id);
+    payments.get(`pay_${creates}`).customer = 'cus_unrelated';
+    const before = creates; await store.process(intent.id);
+    const row = await db.gatewayIntent.findUnique({ where: { id: intent.id } });
+    assert.equal(row.providerReference, null); assert.equal(row.failureCode, 'ASAAS_PAYMENT_MISMATCH'); assert.equal(creates, before);
+  });
+  await t.test('expiration during the inventory query refunds instead of issuing late access', async () => {
+    const { intent, ticket } = await purchase(); await store.process(intent.id);
+    const row = await db.gatewayIntent.findUnique({ where: { id: intent.id } }); payments.get(row.providerReference).status = 'RECEIVED';
+    instant = new Date(ticket.expiresAt.getTime() - 1000);
+    let queries = 0;
+    const delayed = db.$extends({ query: { ticket: { async aggregate({ args, query }) { const result = await query(args); queries++; instant = new Date(instant.getTime() + 2000); return result; } } } });
+    await createAsaasStore(delayed, { settings, api, now: () => instant }).process(intent.id);
+    assert.equal(queries, 1, 'must cross the reservation deadline while reading actual inventory');
+    assert.equal(await db.ticketPayment.count({ where: { ticketId: ticket.id } }), 0);
+    assert.equal((await db.gatewayIntent.findUnique({ where: { id: intent.id } })).state, 'REFUNDED');
+  });
   await t.test('reopening a canceled reservation never reuses its old Pix and ownership is enforced', async () => {
     const { intent, ticket, user } = await purchase(); await store.process(intent.id);
     await assert.rejects(store.ownIntent(admin.id, intent.id), { code: 'PAYMENT_NOT_FOUND' });

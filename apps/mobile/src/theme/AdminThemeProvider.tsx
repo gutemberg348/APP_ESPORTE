@@ -5,8 +5,8 @@ import { TypographyProvider } from '../components/Typography';
 
 const light = {
   ...palettes.light,
-  background: '#f7f7f8', outer: '#f7f7f8', surface: '#ffffff', header: '#ffffff',
-  text: '#202024', muted: '#62626c', subtle: '#71717a', border: '#e4e4e7', soft: '#f4f4f5',
+  background: '#fafafa', outer: '#fafafa', surface: '#ffffff', header: '#fdfdfd',
+  text: '#202124', muted: '#65656b', subtle: '#73737c', border: '#e9e9ec', soft: '#f6f6f7',
   primary: palettes.light.primary, primaryStrong: palettes.light.primaryStrong,
   primaryEnd: palettes.light.primaryStrong, primarySoft: palettes.light.primarySoft,
   onPrimary: palettes.light.onPrimary, brandBorder: palettes.light.brandBorder, gold: '#a16207', danger: '#b42338',
@@ -16,8 +16,8 @@ const light = {
 };
 const dark = {
   ...light,
-  background: '#111113', outer: '#111113', surface: '#1b1b1f', header: '#18181b',
-  text: '#f4f4f5', muted: '#b4b4bc', subtle: '#a1a1aa', border: '#333338', soft: '#242428',
+  background: '#141416', outer: '#141416', surface: '#1c1c1f', header: '#18181a',
+  text: '#f4f4f5', muted: '#b4b4bc', subtle: '#a1a1aa', border: '#303034', soft: '#252528',
   primary: palettes.dark.primary, primaryStrong: palettes.dark.primaryStrong,
   primaryEnd: palettes.dark.primaryStrong, primarySoft: palettes.dark.primarySoft,
   brandBorder: palettes.dark.brandBorder, gold: '#facc75', danger: '#fda4af',

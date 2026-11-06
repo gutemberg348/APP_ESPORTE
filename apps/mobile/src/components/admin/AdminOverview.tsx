@@ -1,22 +1,21 @@
 import React from 'react';
 import { View } from 'react-native';
-import { Users, CalendarDays, Ticket, Clock3, ArrowUpRight, Plus } from 'lucide-react-native';
+import { CalendarDays, ArrowUpRight, Plus } from 'lucide-react-native';
 import type { AdminOverview as Overview, AdminTicket, Match, AuditEvent } from '@nacional/shared/types';
 import { Text } from '../Typography';
 import { Panel } from '../ui';
+import { ReportMetrics } from './AdminReportControls';
 import { AdminAction, AdminBadge, AdminTable, useDesktopAdmin } from './AdminLayout';
 import { useTheme } from '../../theme/ThemeProvider';
 import { money, matchDate } from '../../utils/format';
 
 export function AdminStats({ overview }: { overview: Overview | null }) {
-  const { colors } = useTheme();
-  const desktop = useDesktopAdmin();
-  return <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>{[
-    { title: 'Contas cadastradas', value: overview?.users, icon: Users, hint: 'Base de contas do clube' },
-    { title: 'Partidas cadastradas', value: overview?.matches, icon: CalendarDays, hint: 'Agenda e rascunhos' },
-    { title: 'Ingressos emitidos', value: overview?.issuedTickets, icon: Ticket, hint: 'Confirmadas e utilizadas' },
-    { title: 'Reservas abertas', value: overview?.pendingReservations, icon: Clock3, hint: 'Aguardando confirmação' },
-  ].map(({ title, value, icon: Icon, hint }) => <Panel key={title} style={{ flex: desktop ? 1 : undefined, width: desktop ? undefined : '47%', minWidth: desktop ? 140 : undefined, padding: desktop ? 20 : 15, borderRadius: 10, gap: 15 }}><View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}><Text style={{ color: colors.muted, fontSize: 12, flex: 1 }}>{title}</Text><View style={{ padding: 7, borderRadius: 9, backgroundColor: colors.primarySoft }}><Icon size={16} color={colors.primary} /></View></View><Text heading style={{ color: colors.text, fontSize: desktop ? 31 : 26, lineHeight: 40, fontWeight: '800' }}>{value?.toLocaleString('pt-BR') ?? '—'}</Text><Text style={{ color: colors.subtle, fontSize: 10, lineHeight: 16 }}>{hint}</Text></Panel>)}</View>;
+  return <ReportMetrics items={[
+    { label: 'Contas cadastradas', value: overview?.users.toLocaleString('pt-BR') ?? '—', hint: 'Base de torcedores e equipe' },
+    { label: 'Partidas', value: overview?.matches.toLocaleString('pt-BR') ?? '—', hint: 'Publicadas e rascunhos' },
+    { label: 'Ingressos emitidos', value: overview?.issuedTickets.toLocaleString('pt-BR') ?? '—', hint: 'Confirmados e utilizados' },
+    { label: 'Reservas abertas', value: overview?.pendingReservations.toLocaleString('pt-BR') ?? '—', hint: 'Aguardando pagamento' },
+  ]} />;
 }
 
 export function AdminOverviewPanel({ matches, tickets, audit, loading, onSelect, onCreate }: { matches: Match[]; tickets: AdminTicket[]; audit: AuditEvent[]; loading: boolean; onSelect: (tab: string) => void; onCreate: () => void }) {

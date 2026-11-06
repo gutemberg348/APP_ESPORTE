@@ -1,20 +1,33 @@
 # Venda e validação de ingressos — estado atual
 
-Atualiza??o de 06/11/2026: Pix autom?tico Asaas, webhook, concilia??o e solicita??o de estorno est?o implementados. Consulte [configura??o e contrato atuais](asaas.md); as descri??es do recebimento manual abaixo continuam aplic?veis em `PAYMENT_MODE=disabled`.
+Atualização de 06/11/2026: Pix Asaas, webhook, conciliação e solicitação de estorno estão implementados. O funcionamento depende de `PAYMENT_MODE`: em `asaas`, a emissão é automática após consulta autenticada ao provedor; em `disabled`, depende de confirmação manual administrativa. Consulte a [configuração da integração](asaas.md). As credenciais ficam exclusivamente na API.
 
-O administrador usa o mesmo cadastro/JWT no app e na versão web do projeto (`npm run web`). O painel web recebe mais largura em desktop; os formulários ficam centralizados. A API e o PostgreSQL são os mesmos. Não foi publicado um site em domínio externo nem foi iniciada uma prévia nesta revisão.
+O administrador usa sua conta ADMIN na aplicação e no painel web (`npm run web`). O painel tem navegação administrativa própria e layout responsivo. A API e o PostgreSQL são os mesmos.
 
 ## Venda
 
 1. O administrador cadastra uma partida em rascunho: mandante, adversário, data/horário, competição e estádio.
 2. Cadastra setores com preço por ingresso, capacidade total e habilitação de venda. Define janela de venda, quando necessário.
 3. Publica o jogo. O app mostra os setores e disponibilidade calculada.
-4. O torcedor autenticado escolhe jogo/setor e até 4 lugares. O servidor calcula total/desconto e reserva a capacidade em transação Serializable.
+4. O torcedor autenticado escolhe jogo/setor e de 1 a 4 lugares. A cotação não segura estoque. Ao confirmar, o servidor recalcula preço/desconto e disponibilidade, e reserva a capacidade em transação Serializable. Existe no máximo um pedido não excluído por conta e partida; uma reserva cancelada ou expirada sem pagamento pode ser reaproveitada quando não houver Pix pendente de conciliação.
 5. A reserva fica PENDING por até 15 minutos, limitada ao encerramento das vendas/início do jogo. Cancelamento não pago e expiração liberam a capacidade.
-6. O administrador confere o recebimento externo, informa valor exato e referência única e emite o ingresso. Gratuitos têm emissão automática e registro FREE.
+6. Em modo Asaas, gerar Pix cria uma intenção única para aquela geração da reserva. O webhook autenticado persiste a notificação; o processador consulta a API do Asaas e confere cobrança, cliente pagador, referência, valor e modalidade PIX. Só `RECEIVED` permite emitir; `CONFIRMED` ainda aguarda. A emissão grava recibo e auditoria na mesma transação. Em modo manual, o administrador confere o recebimento externo e informa valor exato e referência única. Gratuitos têm emissão automática e registro FREE.
 7. O titular acompanha o pedido em **Perfil → Meus ingressos** e toca em **Apresentar QR de entrada** quando estiver na portaria. Só um QR fica aberto por vez. A listagem não fornece um segredo de QR estático.
 
-O gateway ainda não foi escolhido. **Não há cobrança Pix/cartão automática**, checkout bancário ou confirmação financeira por webhook de ingresso. A confirmação manual depende da conferência real do clube. Compra com cashback e devolução de ingresso pago continuam pendentes.
+Pagamento recebido depois do prazo da reserva ou com estoque insuficiente não emite ingresso: o processador solicita devolução e acompanha sua confirmação. A validade bancária do Pix pode superar o prazo da reserva; o cancelamento remoto depende da conciliação. Excluir uma venda paga bloqueia seu acesso e preserva o histórico, mas não solicita devolução financeira automaticamente. O estorno é uma ação separada em **Pagamentos**. Não há pagamento de ingresso por cartão ou saldo de cashback nesta etapa.
+
+## Identificação de cada operação
+
+| Identificador | Finalidade | Libera entrada sozinho? |
+| --- | --- | --- |
+| `Ticket.id` (UUID) | Identifica o pedido, que pode conter até 4 lugares; uma reserva não paga reaproveitada pode manter o mesmo ID | Não |
+| `GatewayIntent.id` / `socio:<id>` | Identifica a cobrança e vincula uma geração específica da reserva ao Asaas | Não |
+| `ASAAS:pay_...` | Referência única do recibo confirmado; não é um código de ingresso | Não |
+| QR de entrada | Credencial assinada vinculada ao pedido, jogo, setor, versão e leitura, com validade de até 45 segundos | Apenas após validação online e confirmação pela portaria |
+| Código digitável | 10 caracteres aleatórios, exibidos em dois grupos de 5; usa a mesma validade e leitura do QR, apenas o hash é armazenado | Mesmas verificações do QR |
+| `TicketAdmission.id` (UUID) | Protocolo permanente de uma entrada efetivamente registrada, com operador, quantidade e horário | Não; é comprovante de uma operação já feita |
+
+O QR Pix serve para pagar. O QR de entrada serve para apresentar um ingresso emitido. O UUID do pedido e o código da carteirinha não substituem a credencial de portaria.
 
 ## Portaria
 
@@ -45,6 +58,10 @@ Se o mesmo pedido tem várias pessoas, elas podem entrar juntas ou em grupos par
 | Segredos | QR completo não é armazenado em auditoria, listagens ou registro local de pendência |
 | Falha de conexão | Não há liberação offline; a tela mantém operação pendente e consulta o servidor |
 | Falha após escrita | Se o token vence durante a espera no banco, ou a auditoria falha, a transação é desfeita |
+| Conferência do gateway | Cliente pagador, ambiente, ID, referência, modalidade e valor conferidos antes de emitir, cancelar, configurar split ou estornar; resposta incompatível fica em REVIEW |
+| Processos concorrentes | Travas com token e prazo; escritas da intenção e do cadastro de pagador, marcadores anteriores a POST e conciliação transacional exigem posse atual da trava |
+| Prazo da emissão | A reserva e o início da partida são conferidos novamente depois da consulta ao estoque; vencimento durante a espera encaminha para devolução |
+| Tentativas repetidas | Por conta/minuto: 30 cotações, 10 operações compartilhadas entre reserva/cancelamento/geração Pix e 20 emissões de QR; consultas de pagamento não usam esse limite de compra |
 
 O QR de carteirinha de sócio e o access token JWT de login **não servem como ingresso**. Códigos estáticos antigos foram desativados na migration. O ingresso não se valida pelo que está escrito no celular, pelo PDF, por screenshot ou pelo nome; precisa passar pelas verificações no servidor.
 
@@ -64,7 +81,20 @@ Não existe proteção absoluta contra fraude. A validade curta reduz a janela d
 
 Administrações e partidas desta etapa pertencem ao app Nacional. O módulo de cashback tem separação por instituição, mas a autorização de jogos/portaria ainda não é um sistema completo de clubes independentes com operadores restritos por clube. Há papel GATE separado de ADMIN, com escala por partida/setor conferida novamente dentro da transação de entrada.
 
-JWT assinado não resolve disponibilidade de internet, confiabilidade dos aparelhos ou dimensão da operação do estádio. O rate limiter atual é em memória, com limite geral por IP e limite adicional por conta de portaria; vários leitores sob o mesmo NAT podem atingir o limite. Volume de leitores, proxy, limites compartilhados e infraestrutura da portaria precisam de validação antes de um evento real.
+JWT assinado não resolve disponibilidade de internet, confiabilidade dos aparelhos ou dimensão da operação do estádio. Os limites atuais são em memória por processo: há limite geral por IP e limites adicionais por conta para portaria e ingressos. Trocar IP não reinicia os limites por conta, mas reiniciar o servidor os apaga e múltiplas instâncias precisam de armazenamento compartilhado. Vários leitores sob o mesmo NAT podem atingir o limite geral. Volume de leitores, proxy, infraestrutura e restrições contra contas múltiplas precisam de validação antes de um evento real.
+
+Uma trava com prazo não torna atômicas as APIs de dois sistemas. Os marcadores persistidos antes das operações financeiras e a busca por referência evitam repetir cegamente uma criação ou um estorno com resultado desconhecido. Situações ambíguas ficam em conciliação; podem exigir atendimento. A integração precisa passar pelo sandbox autenticado e pelo teste de entrega do webhook antes do uso real.
+
+## Onde está implementado
+
+- `apps/api/src/models/ticket-checkout.store.js`: cotação, reserva, preço e estoque.
+- `apps/api/src/models/asaas.store.js`: cobrança, webhook persistido, conciliação, emissão e estorno.
+- `apps/api/src/lib/ticket-qr.js` e `models/ticket-code.store.js`: assinatura do QR e código digitável.
+- `apps/api/src/models/ticket-entry.store.js`: consulta, consumo dos acessos e protocolos.
+- `apps/api/src/models/admin-ticket.store.js`: edição e exclusão lógica com auditoria.
+- `apps/api/src/http/middleware/access.js`: autenticação, autorização e limites por conta.
+
+Os testes de `asaas-flow.test.js` usam PostgreSQL descartável e gateway simulado. Incluem perda de trava, dados divergentes do pagamento, resposta inconclusiva, repetição de webhook e vencimento durante consulta ao estoque. Os testes de portaria verificam adulteração, expiração, concorrência, repetição e recuperação de protocolo. Não comprovam disponibilidade de rede ou configuração da conta real do gateway.
 
 ## API
 
@@ -107,12 +137,12 @@ A migration `20261030020000_secure_ticket_entry` adiciona o controle de portaria
 
 A migration `20261030030000_gate_staff_codes` adiciona funcionários GATE, escalas por setor e hashes dos códigos digitáveis com validade curta.
 
-O banco configurado continua recusando conexão nesta revisão. As migrations estão prontas e **não foram aplicadas**. Quando o responsável iniciar o banco:
+A revisão de segurança de 06/11/2026 não adiciona migrations e não alterou o banco de desenvolvimento. As migrations existentes precisam estar aplicadas no ambiente de execução. Com seu PostgreSQL disponível, os comandos são:
 
 ```powershell
-npm run setup
-npm run db:prepare
+npm run db:generate
+npm run db:deploy
 npm run test:integration
 ```
 
-Os testes isolados exercitam assinatura, prazo, escopo, recibo, titular, consumo, versões, repetição e rollback usando o código de produção com persistência em memória atômica. Isso **não comprova o comportamento de concorrência do PostgreSQL**. Há teste específico em `ticket-entry-integration.test.js` para dois leitores disputando o mesmo QR enquanto ainda restam lugares, além do fluxo HTTP administrativo atualizado. Os testes com PostgreSQL e a conferência em aparelho/navegador não foram executados nesta revisão; o agente não iniciou serviços.
+Nesta revisão passaram `npm run test:unit` (API e app), `npm run check` (sintaxe JavaScript e TypeScript) e os novos cenários financeiros. Os testes de assinatura e portaria usam persistência simulada; o fluxo financeiro usa PostgreSQL descartável via PGlite, com as migrations reais e um gateway simulado. Há teste específico em `ticket-entry-integration.test.js` para dois leitores disputando o mesmo QR enquanto ainda restam lugares. Essa integração com o PostgreSQL de execução, o sandbox Asaas autenticado e a conferência física dos leitores continuam necessários antes de um evento. Não foram iniciados a aplicação, a API ou o Docker.

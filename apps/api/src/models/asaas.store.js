@@ -22,6 +22,27 @@ export function createAsaasStore(client, { settings, api, now = () => new Date()
   const environment = settings.ASAAS_ENVIRONMENT, docs = protectDocument(settings.ASAAS_DATA_SECRET || 'disabled');
   const enabled = () => { if (settings.PAYMENT_MODE !== 'asaas') throw new AppError(503, 'ASAAS_DISABLED', 'O pagamento Pix não está habilitado.'); };
   const audit = (tx, actorId, action, entityId, details) => tx.auditLog.create({ data: { actorId, action, entityId, details } });
+  function assertLease(row, token) {
+    if (!row || row.lockToken !== token || !row.lockedUntil || row.lockedUntil <= now()) throw error('ASAAS_LEASE_LOST', 'A conciliação será retomada por outro processo.');
+  }
+  // Fence standalone intent/customer writes, including markers BEFORE financial POSTs.
+  // An expired worker cannot overwrite a newer worker or start another charge.
+  async function leaseWrite(model, id, token, data, extra = {}) {
+    const result = await model.updateMany({ where: { id, lockToken: token, lockedUntil: { gt: now() }, ...extra }, data });
+    if (result.count !== 1) throw error('ASAAS_LEASE_LOST', 'A conciliação será retomada por outro processo.');
+    const current = await model.findUnique({ where: { id } });
+    assertLease(current, token);
+    return current;
+  }
+  async function assertPayment(db, intent, remote) {
+    const customer = await db.billingCustomer.findUnique({ where: { id: intent.customerId } });
+    if (!customer?.providerReference || customer.environment !== environment || remote.customer !== customer.providerReference ||
+        (intent.providerReference && remote.id !== intent.providerReference) || !providerId.safeParse(remote.id).success ||
+        remote.externalReference !== reference(intent) || remote.billingType !== 'PIX' || cents(remote.value) !== intent.amountCents ||
+        (remote.deleted && ['RECEIVED', 'CONFIRMED'].includes(remote.status))) {
+      throw error('ASAAS_PAYMENT_MISMATCH', 'A cobrança do provedor diverge do pedido.');
+    }
+  }
   async function billing(userId) {
     const customer = await client.billingCustomer.findUnique({ where: { userId_environment: { userId, environment } } });
     if (!customer) throw error('BILLING_REQUIRED', 'Cadastre o CPF ou CNPJ do pagador antes de gerar o Pix.');
@@ -41,12 +62,12 @@ export function createAsaasStore(client, { settings, api, now = () => new Date()
       let remote = matches[0];
       if (!remote) {
         if (customer.creationStartedAt) throw error('ASAAS_CUSTOMER_UNCERTAIN', 'O cadastro está em conciliação. Nenhuma criação duplicada será enviada.');
-        await client.billingCustomer.update({ where: { id }, data: { creationStartedAt: now() } });
+        await leaseWrite(client.billingCustomer, id, token, { creationStartedAt: now() }, { creationStartedAt: null });
         try { remote = await api.createCustomer({ name: customer.user.name, email: customer.user.email, cpfCnpj: docs.decrypt(customer.documentEncrypted), externalReference, notificationDisabled: true }); }
-        catch (err) { if (err.code === 'ASAAS_REJECTED' || err.code === 'ASAAS_ACCESS_DENIED') await client.billingCustomer.update({ where: { id }, data: { creationStartedAt: null } }); throw err; }
+        catch (err) { if (err.code === 'ASAAS_REJECTED' || err.code === 'ASAAS_ACCESS_DENIED') await leaseWrite(client.billingCustomer, id, token, { creationStartedAt: null }); throw err; }
       }
       providerId.parse(remote.id);
-      await client.billingCustomer.update({ where: { id }, data: { providerReference: remote.id } });
+      await leaseWrite(client.billingCustomer, id, token, { providerReference: remote.id });
       return remote.id;
     } finally { await client.billingCustomer.updateMany({ where: { id, lockToken: token }, data: { lockedUntil: null, lockToken: null } }); }
   }
@@ -64,13 +85,15 @@ export function createAsaasStore(client, { settings, api, now = () => new Date()
     const sameReceipt = ticket?.payment?.reference === `ASAAS:${remote.id}`;
     if (refunded > 0) { await invalidateTicket(tx, intent, refunded); return; }
     if (sameReceipt) return;
-    if (remote.status !== 'RECEIVED') return;
+    if (remote.status !== 'RECEIVED' || remote.deleted) return;
     const generationMatches = ticket && `${environment}:${ticketGeneration(ticket)}` === intent.generation;
     let canIssue = generationMatches && !ticket.payment && !ticket.deletedAt && ticket.status === 'PENDING' && ticket.user.active && !intent.cancelRequestedAt && !intent.refundRequestedAt && intent.expiresAt > now() && ticket.match.startsAt > now();
     if (canIssue) {
       const occupied = await tx.ticket.aggregate({ where: { id: { not: ticket.id }, sectorId: ticket.sectorId, ...inventoryWhere(now()) }, _sum: { quantity: true, voidedQuantity: true } });
       canIssue = occupiedQuantity(occupied._sum) + ticket.quantity <= ticket.sector.capacity;
     }
+    // Database waits must not extend a reservation or allow issuance after kickoff.
+    canIssue = canIssue && intent.expiresAt > now() && ticket.match.startsAt > now();
     if (!canIssue) {
       await tx.gatewayIntent.update({ where: { id: intent.id }, data: { refundRequestedAt: intent.refundRequestedAt || now(), state: 'REFUNDING', failureCode: 'TICKET_NO_LONGER_PAYABLE' } });
       return;
@@ -117,8 +140,8 @@ export function createAsaasStore(client, { settings, api, now = () => new Date()
   async function applyRemote(id, remote, token) {
     return serializable(client, async (tx) => {
       const intent = await tx.gatewayIntent.findUnique({ where: { id } });
-      if (token && intent.lockToken !== token) throw error('ASAAS_LEASE_LOST', 'A conciliação será retomada por outro processo.');
-      if (remote.id !== intent.providerReference || remote.externalReference !== reference(intent) || remote.billingType !== 'PIX' || cents(remote.value) !== intent.amountCents) throw error('ASAAS_PAYMENT_MISMATCH', 'A cobrança do provedor diverge do pedido.');
+      assertLease(intent, token);
+      await assertPayment(tx, intent, remote);
       const rawRefunded = remote.status === 'REFUNDED' ? intent.amountCents : (remote.refunds || []).filter((refund) => refund.status === 'DONE').reduce((total, refund) => total + cents(refund.value), 0);
       const refunded = Math.max(intent.refundedCents, rawRefunded);
       if (refunded > intent.amountCents) throw error('ASAAS_REFUND_MISMATCH', 'Estorno acima do pagamento.');
@@ -131,6 +154,7 @@ export function createAsaasStore(client, { settings, api, now = () => new Date()
         if (unsafe) await invalidateTicket(tx, intent, refunded);
         else await syncTicket(tx, intent, remote, refunded);
       } else if (!unsafe) await syncCash(tx, intent, remote, refunded);
+      assertLease(intent, token);
     });
   }
   return {
@@ -255,44 +279,50 @@ export function createAsaasStore(client, { settings, api, now = () => new Date()
           const matches = (found.data || []).filter((row) => row.externalReference === reference(intent));
           if (found.hasMore || matches.length > 1) throw error('ASAAS_DUPLICATE_REVIEW', 'Mais de uma cobrança foi localizada para este pedido.');
           remote = matches[0];
-          if (!remote && cancel && !intent.creationStartedAt) { await client.gatewayIntent.update({ where: { id }, data: { state: 'CANCELED' } }); delay = 86400000; return; }
+          if (!remote && cancel && !intent.creationStartedAt) { await leaseWrite(client.gatewayIntent, id, token, { state: 'CANCELED' }); delay = 86400000; return; }
           if (!remote && intent.creationStartedAt) throw error('ASAAS_CREATION_UNCERTAIN', 'Criação em conciliação; nenhuma segunda cobrança foi enviada.');
           if (!remote) {
             const customer = await customerId(intent.customerId);
             // Persist before POST. Never blindly replay an ambiguous monetary request.
-            await client.gatewayIntent.update({ where: { id }, data: { creationStartedAt: now(), state: 'CREATING' } });
+            await leaseWrite(client.gatewayIntent, id, token, { creationStartedAt: now(), state: 'CREATING' }, { creationStartedAt: null });
             try { remote = await api.createPayment({ customer, billingType: 'PIX', value: intent.amountCents / 100, dueDate: dateInPatos(intent.expiresAt), externalReference: reference(intent), description: intent.ticketId ? `Ingresso ${intent.ticketId}` : `Compra ${intent.chargeId}`, interest: { value: 0 }, fine: { value: 0 }, discount: { value: 0 } }); }
-            catch (err) { if (['ASAAS_REJECTED', 'ASAAS_ACCESS_DENIED'].includes(err.code)) await client.gatewayIntent.update({ where: { id }, data: { creationStartedAt: null } }); throw err; }
+            catch (err) { if (['ASAAS_REJECTED', 'ASAAS_ACCESS_DENIED'].includes(err.code)) await leaseWrite(client.gatewayIntent, id, token, { creationStartedAt: null }); throw err; }
           }
           providerId.parse(remote.id);
-          intent = await client.gatewayIntent.update({ where: { id }, data: { providerReference: remote.id } });
+          await assertPayment(client, intent, remote);
+          intent = await leaseWrite(client.gatewayIntent, id, token, { providerReference: remote.id });
         }
         remote = await api.payment(intent.providerReference);
+        // Validate ownership and immutable payment fields before mutating the provider.
+        await assertPayment(client, intent, remote);
         // Configure a fixed split using actual netValue; percentages are on net,
         // while the agreed cashback/commission are calculated on the gross price.
-        if (intent.chargeId && !intent.pixPayload && remote.status === 'PENDING' && !cancel) {
+        if (intent.chargeId && !intent.pixPayload && remote.status === 'PENDING' && !remote.deleted && !cancel) {
           const net = cents(remote.netValue), retained = intent.snapshot.cashbackCents + intent.snapshot.commissionCents;
           if (net < retained || net > intent.amountCents) throw error('ASAAS_FEE_EXCEEDS_SPLIT', 'A tarifa supera o saldo disponível para a divisão.');
           const merchantCents = net - retained;
+          await leaseWrite(client.gatewayIntent, id, token, { state: intent.state });
           remote = await api.updatePayment(remote.id, { split: merchantCents > 0 ? [{ walletId: intent.snapshot.merchantWallet, fixedValue: merchantCents / 100, externalReference: id }] : [] });
+          await assertPayment(client, intent, remote);
           await client.paymentCharge.update({ where: { id: intent.chargeId }, data: { providerReference: remote.id, merchantCents, gatewayFeeCents: intent.amountCents - net } });
         }
         await applyRemote(id, remote, token);
         intent = await client.gatewayIntent.findUnique({ where: { id } });
         if ((cancel || intent.refundRequestedAt) && remote.status === 'RECEIVED' && intent.refundedCents < intent.amountCents) {
           if (!intent.refundStartedAt) {
-            await client.gatewayIntent.update({ where: { id }, data: { refundStartedAt: now(), refundRequestedAt: intent.refundRequestedAt || now(), state: 'REFUNDING', pixPayload: null } });
+            await leaseWrite(client.gatewayIntent, id, token, { refundStartedAt: now(), refundRequestedAt: intent.refundRequestedAt || now(), state: 'REFUNDING', pixPayload: null }, { refundStartedAt: null });
             try { await api.refund(remote.id, (intent.amountCents - intent.refundedCents) / 100); }
-            catch (err) { if (['ASAAS_REJECTED', 'ASAAS_ACCESS_DENIED'].includes(err.code)) await client.gatewayIntent.update({ where: { id }, data: { refundStartedAt: null } }); throw err; }
+            catch (err) { if (['ASAAS_REJECTED', 'ASAAS_ACCESS_DENIED'].includes(err.code)) await leaseWrite(client.gatewayIntent, id, token, { refundStartedAt: null }); throw err; }
             await applyRemote(id, await api.payment(remote.id), token);
-          } else { await client.gatewayIntent.update({ where: { id }, data: { state: 'REFUNDING', failureCode: 'ASAAS_REFUND_PROCESSING', pixPayload: null } }); }
+          } else { await leaseWrite(client.gatewayIntent, id, token, { state: 'REFUNDING', failureCode: 'ASAAS_REFUND_PROCESSING', pixPayload: null }); }
         } else if (cancel && ['PENDING', 'OVERDUE'].includes(remote.status) && !remote.deleted) {
-          try { await api.cancel(remote.id); await client.gatewayIntent.update({ where: { id }, data: { state: 'CANCELED', pixPayload: null, cancelRequestedAt: intent.cancelRequestedAt || now() } }); }
+          await leaseWrite(client.gatewayIntent, id, token, { cancelRequestedAt: intent.cancelRequestedAt || now(), pixPayload: null });
+          try { await api.cancel(remote.id); await leaseWrite(client.gatewayIntent, id, token, { state: 'CANCELED' }); }
           catch (err) { if (err.code !== 'ASAAS_NOT_FOUND') throw err; }
-        } else if (!cancel && !intent.refundRequestedAt && remote.status === 'PENDING' && !intent.pixPayload) {
+        } else if (!cancel && !intent.refundRequestedAt && remote.status === 'PENDING' && !remote.deleted && !intent.pixPayload) {
           const pix = await api.pix(remote.id);
           if (typeof pix.payload !== 'string' || pix.payload.length < 20 || pix.payload.length > 2000) throw error('ASAAS_INVALID_PIX', 'O provedor retornou um Pix inválido.');
-          await client.gatewayIntent.update({ where: { id }, data: { pixPayload: pix.payload, state: 'PENDING' } });
+          await leaseWrite(client.gatewayIntent, id, token, { pixPayload: pix.payload, state: 'PENDING' });
           if (intent.chargeId) await client.paymentCharge.update({ where: { id: intent.chargeId }, data: { pixPayload: pix.payload } });
         }
         const current = await client.gatewayIntent.findUnique({ where: { id } });
@@ -300,7 +330,7 @@ export function createAsaasStore(client, { settings, api, now = () => new Date()
         else if (current.state === 'RECEIVED') delay = 6 * 3600000;
       } catch (err) {
         const code = /^[A-Z_]{3,80}$/.test(err.code || '') ? err.code : 'ASAAS_PROCESSING_ERROR';
-        await client.gatewayIntent.updateMany({ where: { id, lockToken: token }, data: { failureCode: code, state: 'REVIEW', pixPayload: null } });
+        await client.gatewayIntent.updateMany({ where: { id, lockToken: token, lockedUntil: { gt: now() } }, data: { failureCode: code, state: 'REVIEW', pixPayload: null } });
         delay = 60000;
       } finally {
         await serializable(client, async (tx) => {

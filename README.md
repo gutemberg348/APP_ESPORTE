@@ -128,6 +128,8 @@ Documentação: [API](docs/api.md), [arquitetura](docs/architecture.md), [valida
 
 Administração: [gestão de vendas por partida, receita, disponibilidade e histórico de portaria com protocolos](docs/admin-reports.md).
 
+Interface administrativa: [componentes reutilizáveis, calendário, selects e organização das páginas](docs/admin-design.md).
+
 Pagamento Pix automático: [configuração Asaas, webhook, emissão de ingresso e conciliação/estorno](docs/asaas.md). O processamento começa junto da API em modo Asaas. Configure o sandbox em `apps/api/.env` antes de habilitar; o webhook público é `/v1/payments/webhook`.
 
 Banco de dados: [TXT completo de tabelas, campos, relações, chaves e índices](docs/banco/estrutura-completa.txt), conferido com o schema Prisma e os metadados do PostgreSQL.

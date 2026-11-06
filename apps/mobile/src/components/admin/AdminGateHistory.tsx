@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import type { AdminAdmission, GateDenial, GateOperator, Match } from '@nacional/shared/types';
 import { Panel } from '../ui';
+import { AdminFilterPanel } from './AdminControls';
 import { Text } from '../Typography';
 import { Sheet } from '../Sheet';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -32,14 +33,14 @@ export function AdminGateHistory({ matches, refreshKey }: { matches: Match[]; re
   }, [token, refreshKey]);
   function apply() { try { const applied = appliedFilters(draft); if (kind === 'DENIED') delete applied.search; setFilters(applied); setError(''); } catch (err) { setError(messageOf(err)); } }
   return <View style={{ gap: 18 }}>
-    <Panel style={{ padding: 18, borderRadius: 10, gap: 14 }}><Text heading style={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>Histórico de portaria</Text>
+    <View style={{ gap: 16 }}>
       <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}><AdminAction primary={kind === 'ALLOW'} label="Entradas confirmadas" onPress={() => { setKind('ALLOW'); setFilters({ limit: '25', offset: '0' }); setDraft({}); setError(''); }} /><AdminAction primary={kind === 'DENIED'} label="Tentativas recusadas" onPress={() => { setKind('DENIED'); setFilters({ limit: '25', offset: '0' }); setDraft({}); setError(''); }} /></View>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}><LocationFilters matches={matches} draft={draft} setDraft={setDraft} />
+      <AdminFilterPanel title="Filtros do histórico"><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}><LocationFilters matches={matches} draft={draft} setDraft={setDraft} />
         <ReportSelect label="Funcionário responsável" value={draft.actorId || ''} options={[{ value: '', label: 'Todos os funcionários' }, ...operators.map((operator) => ({ value: operator.id, label: `${operator.name} · ${operator.email}${operator.active ? '' : ' · desativado'}` }))]} onChange={(actorId) => setDraft({ ...draft, actorId })} />
         <ReportInput label="Protocolo completo" value={draft.protocol || ''} placeholder="ID registrado na operação" onChange={(protocol) => setDraft({ ...draft, protocol })} />
         {kind === 'ALLOW' && <ReportInput label="Titular ou pedido" value={draft.search || ''} placeholder="Nome, e-mail ou ID completo" onChange={(search) => setDraft({ ...draft, search })} />}
         <PeriodFilters draft={draft} setDraft={setDraft} />
-      </View><Text style={{ color: colors.subtle, fontSize: 11, lineHeight: 18 }}>Horários de Patos (UTC−3). Entradas contam pessoas; uma operação pode liberar mais de um ingresso. Uma recusa pode ocorrer na consulta ou na tentativa de liberar.</Text><View style={{ flexDirection: 'row', gap: 8 }}><AdminAction primary label="Aplicar filtros" onPress={apply} /><AdminAction label="Limpar" onPress={() => { setDraft({}); setFilters({ limit: '25', offset: '0' }); setError(''); }} /></View><ReportError error={error || operatorError} /></Panel>
+      </View><Text style={{ color: colors.subtle, fontSize: 11, lineHeight: 18 }}>Horários de Patos (UTC−3). Entradas contam pessoas; uma operação pode liberar mais de um ingresso. Uma recusa pode ocorrer na consulta ou na tentativa de liberar.</Text><View style={{ flexDirection: 'row', gap: 8 }}><AdminAction primary label="Aplicar filtros" onPress={apply} /><AdminAction label="Limpar" onPress={() => { setDraft({}); setFilters({ limit: '25', offset: '0' }); setError(''); }} /></View><ReportError error={error || operatorError} /></AdminFilterPanel></View>
     {kind === 'ALLOW' ? <ConfirmedEntries matches={matches} filters={filters} onFilters={setFilters} refreshKey={refreshKey} /> : <DeniedEntries filters={filters} onFilters={setFilters} refreshKey={refreshKey} />}
   </View>;
 }

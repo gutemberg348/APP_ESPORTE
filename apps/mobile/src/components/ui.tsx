@@ -4,18 +4,19 @@ import { LinearGradient } from 'expo-linear-gradient';
 import type { LucideIcon } from 'lucide-react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from './Typography';
+import { AdminButton } from './admin/AdminControls';
 export function Button({ label, onPress, loading, gold = false, disabled = false, secondary = false }: { label: string; onPress: () => void; loading?: boolean; gold?: boolean; disabled?: boolean; secondary?: boolean }) {
   const { colors, variant } = useTheme();
   const gradient: [string, string] = secondary ? [colors.soft, colors.soft] : gold ? ['#f1ce75', '#c79939'] : [colors.primaryStrong, colors.primaryEnd];
   const ink = secondary ? colors.primary : gold ? colors.ink : colors.onPrimary;
-  if (variant === 'admin') return <Pressable accessibilityRole="button" accessibilityState={{ disabled: loading || disabled }} onPress={onPress} disabled={loading || disabled} style={({ pressed }) => ({ minHeight: 42, borderRadius: 8, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: secondary ? colors.border : colors.primaryStrong, backgroundColor: secondary ? colors.surface : colors.primaryStrong, alignItems: 'center', justifyContent: 'center', opacity: loading || disabled ? 0.45 : pressed ? 0.75 : 1 })}>{loading ? <ActivityIndicator color={secondary ? colors.primary : colors.onPrimary} /> : <Text style={{ color: secondary ? colors.text : colors.onPrimary, fontWeight: '600', fontSize: 12, lineHeight: 20, textAlign: 'center' }}>{label}</Text>}</Pressable>;
+  if (variant === 'admin') return <AdminButton {...{ label, onPress, loading, disabled }} primary={!secondary} fullWidth />;
   return <Pressable accessibilityRole="button" accessibilityState={{ disabled: loading || disabled }} onPress={onPress} disabled={loading || disabled} style={({ pressed }) => ({ opacity: loading || disabled ? 0.48 : pressed ? 0.8 : 1 })}>
     <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.button, secondary && { borderWidth: 1, borderColor: colors.border }]}>{loading ? <ActivityIndicator color={ink} /> : <Text style={{ color: ink, fontWeight: '700', textAlign: 'center' }}>{label}</Text>}</LinearGradient>
   </Pressable>;
 }
 export function Panel({ children, style }: React.PropsWithChildren<{ style?: StyleProp<ViewStyle> }>) {
-  const { colors } = useTheme();
-  return <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }, style]}>{children}</View>;
+  const { colors, variant } = useTheme();
+  return <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }, variant === 'admin' && { borderRadius: 10, padding: 20 }, style]}>{children}</View>;
 }
 export function Page({ children, refreshing = false, onRefresh, compact = false }: React.PropsWithChildren<{ refreshing?: boolean; onRefresh?: () => void; compact?: boolean }>) {
   const { colors } = useTheme();

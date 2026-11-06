@@ -154,6 +154,27 @@ test('general, refresh and gate limits remain separate and protect their origina
   assert.equal((await (await gate('/gate')).json()).error.code, 'GATE_RATE_LIMIT');
 });
 
+test('ticket throttling follows the authenticated account across IPs and shares checkout operations', async (t) => {
+  let calls = 0;
+  const client = await app(t, {
+    authenticate: async (token) => ({ user: { id: token, role: 'USER', active: true } }),
+    routes: [
+      ...['reserve', 'cancel', 'pix'].map((name) => ({ method: 'POST', path: `/${name}`, private: true, body: false, ticketLimit: 'checkout', handler: async () => { calls++; return { data: true }; } })),
+      { method: 'GET', path: '/qr', private: true, ticketLimit: 'qr', handler: async () => ({ data: true }) },
+      { method: 'POST', path: '/quote', private: true, body: false, ticketLimit: 'quote', handler: async () => ({ data: true }) },
+    ],
+  });
+  const headers = { Authorization: 'Bearer first.header.signature' };
+  for (let index = 0; index < 10; index++) assert.equal((await client(`/${['reserve', 'cancel', 'pix'][index % 3]}`, { method: 'POST', headers, ip: `10.0.0.${index}` })).status, 200);
+  const rejected = await client('/reserve', { method: 'POST', headers, ip: '10.1.1.1' });
+  assert.equal(rejected.status, 429); assert.equal(rejected.headers.get('retry-after'), '60'); assert.equal((await rejected.json()).error.code, 'TICKET_RATE_LIMIT'); assert.equal(calls, 10);
+  assert.equal((await client('/reserve', { method: 'POST', headers: { Authorization: 'Bearer another.header.signature' } })).status, 200);
+  for (let index = 0; index < 20; index++) assert.equal((await client('/qr', { headers })).status, 200);
+  assert.equal((await client('/qr', { headers })).status, 429);
+  for (let index = 0; index < 30; index++) assert.equal((await client('/quote', { method: 'POST', headers })).status, 200);
+  assert.equal((await client('/quote', { method: 'POST', headers })).status, 429);
+});
+
 test('Prisma conflicts keep their public error codes without leaking database messages', async (t) => {
   for (const [code, status, expected] of [['P2002', 409, 'CONFLICT'], ['P2034', 409, 'CONCURRENT_UPDATE'], ['P2025', 404, 'RECORD_NOT_FOUND'], ['P2021', 503, 'DATABASE_SCHEMA_OUTDATED'], ['P2022', 503, 'DATABASE_SCHEMA_OUTDATED'], ['P1001', 503, 'DATABASE_UNAVAILABLE'], ['ECONNREFUSED', 503, 'DATABASE_UNAVAILABLE']]) {
     const client = await app(t, { routes: [{ method: 'GET', path: '/database-error', handler: async () => { throw Object.assign(new Error('secret SQL details'), { code }); } }] });

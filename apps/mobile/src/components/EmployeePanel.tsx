@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
 import type { Employee, Match } from '@nacional/shared/types';
-import { Panel, Button } from './ui';
-import { Text, TextInput } from './Typography';
+import { Panel } from './ui';
+import { Text } from './Typography';
 import { Sheet } from './Sheet';
-import { AdminField } from './AdminForms';
+import { AdminField, AdminFormGrid, AdminToggle, AdminNotice, AdminButton, AdminSection, AdminMenu } from './admin/AdminControls';
+import { AdminTable, AdminBadge } from './admin/AdminLayout';
+import { Search, Plus, RefreshCw } from 'lucide-react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import { useSession } from '../providers/SessionProvider';
 import { employeeApi } from '../services/gate';
@@ -18,6 +20,7 @@ export function EmployeePanel({ matches, desktop = false }: { matches: Match[]; 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [search, setSearch] = useState('');
   const [form, setForm] = useState<'create' | 'password' | 'assignments' | null>(null);
   const [selected, setSelected] = useState<Employee | null>(null);
   const [name, setName] = useState('');
@@ -51,35 +54,21 @@ export function EmployeePanel({ matches, desktop = false }: { matches: Match[]; 
     if (create && (name.trim().length < 2 || !email.trim())) { setError('Informe nome e e-mail do funcionário.'); return; }
     void perform(() => create ? employeeApi.create(token!, { name: name.trim(), email: email.trim().toLowerCase(), password }) : employeeApi.password(token!, selected!.id, password), create ? 'Funcionário cadastrado. Agora libere seus setores em Definir escala.' : 'Senha redefinida e sessões anteriores revogadas.');
   }
-  const passwordField = { color: colors.text, backgroundColor: colors.soft, borderWidth: 1, borderColor: colors.border, padding: 14, borderRadius: 12 };
-  return <View style={{ gap: 16 }}>
-    <Text style={{ color: colors.muted }}>Contas exclusivas para conferir ingressos. O funcionário usa o mesmo login do app e é direcionado à portaria, operando somente nos setores liberados na escala.</Text>
-    <View style={{ flexDirection: desktop ? 'row' : 'column', gap: 12, alignItems: desktop ? 'flex-start' : undefined }}><Button label="Cadastrar funcionário de portaria" disabled={busy} onPress={() => open('create')} /><Button secondary label="Atualizar funcionários" loading={loading} disabled={busy} onPress={() => void refresh()} /></View>
-    {!!notice && <Text accessibilityRole="alert" style={{ color: colors.primary }}>{notice}</Text>}
-    {!!error && !form && <Text accessibilityRole="alert" style={{ color: colors.danger }}>{error}</Text>}
-    <View style={{ flexDirection: desktop ? 'row' : 'column', flexWrap: 'wrap', gap: 18 }}>{employees.map((employee) => <Panel key={employee.id} style={{ gap: 12, flexBasis: desktop ? 310 : undefined, flexGrow: desktop ? 1 : undefined, minWidth: 0, borderRadius: 10 }}>
-      <Text heading style={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>{employee.name}</Text>
-      <Text style={{ color: colors.muted }}>{employee.email}</Text>
-      <Text style={{ color: employee.active ? colors.primary : colors.danger }}>{employee.active ? 'Portaria · conta ativa' : 'Conta desativada'}</Text>
-      <Text style={{ color: colors.muted, fontSize: 14 }}>{employee.assignments.filter((item) => item.active).map((item) => `${item.matchLabel} · ${item.sectorName}`).join('\n') || 'Sem setores liberados'}</Text>
-      <Button secondary label="Definir escala de jogos e setores" disabled={busy} onPress={() => open('assignments', employee)} />
-      <Button secondary label="Redefinir senha" disabled={busy} onPress={() => open('password', employee)} />
-      <Button secondary label={employee.active ? 'Desativar e encerrar sessões' : 'Reativar funcionário'} disabled={busy} onPress={() => void perform(() => employeeApi.update(token!, employee.id, !employee.active), employee.active ? 'Acesso desativado e sessões encerradas.' : 'Funcionário reativado.')} />
-    </Panel>)}</View>
-    {!loading && !employees.length && <Text style={{ color: colors.muted }}>Cadastre a equipe antes de abrir a portaria.</Text>}
-    {form && <Sheet visible title={form === 'create' ? 'Novo funcionário' : form === 'password' ? `Senha · ${selected?.name}` : `Escala · ${selected?.name}`} onClose={close}>
-      {form === 'create' && <><AdminField label="Nome completo" value={name} onChange={setName} /><AdminField label="E-mail de acesso" value={email} onChange={setEmail} /></>}
-      {form !== 'assignments' ? <>
-        <Text style={{ color: colors.muted }}>Senha com pelo menos 12 caracteres. Entregue as credenciais ao funcionário por um canal privado.</Text>
-        <TextInput accessibilityLabel="Senha do funcionário" placeholder="Senha" placeholderTextColor={colors.muted} value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" autoCorrect={false} textContentType="newPassword" maxLength={128} editable={!busy} style={passwordField} />
-        <TextInput accessibilityLabel="Confirmar senha do funcionário" placeholder="Confirmar senha" placeholderTextColor={colors.muted} value={confirmation} onChangeText={setConfirmation} secureTextEntry autoCapitalize="none" autoCorrect={false} textContentType="newPassword" maxLength={128} editable={!busy} style={passwordField} />
-        <Button label={form === 'create' ? 'Criar conta de portaria' : 'Salvar senha e encerrar sessões'} loading={busy} onPress={() => savePassword(form === 'create')} />
-      </> : <>
-        <Text style={{ color: colors.muted }}>Marque cada setor permitido. Salvar sem marcações remove todas as liberações. A alteração vale nas próximas consultas e confirmações.</Text>
-        {matches.map((match) => <View key={match.id} style={{ gap: 10 }}><Text style={{ color: colors.text, fontWeight: '700' }}>{match.homeTeam} × {match.awayTeam}</Text><Text style={{ color: colors.muted, fontSize: 14 }}>{matchDate(match.startsAt)}</Text>{match.sectors.map((sector) => <Pressable key={sector.id} disabled={busy} accessibilityRole="checkbox" accessibilityState={{ checked: sectors.includes(sector.id) }} onPress={() => setSectors((previous) => previous.includes(sector.id) ? previous.filter((id) => id !== sector.id) : [...previous, sector.id])} style={{ padding: 14, borderRadius: 12, borderWidth: 1, borderColor: sectors.includes(sector.id) ? colors.primary : colors.border }}><Text style={{ color: sectors.includes(sector.id) ? colors.primary : colors.muted }}>{sectors.includes(sector.id) ? '✓ ' : '○ '}{sector.name}</Text></Pressable>)}</View>)}
-        <Button label={`Salvar escala · ${sectors.length} setor(es)`} loading={busy} onPress={() => void perform(() => employeeApi.assignments(token!, selected!.id, sectors), 'Escala de portaria atualizada.')} />
-      </>}
-      {!!error && <Text accessibilityRole="alert" style={{ color: colors.danger }}>{error}</Text>}
+  const visible = employees.filter((employee) => (employee.name + ' ' + employee.email).toLocaleLowerCase('pt-BR').includes(search.trim().toLocaleLowerCase('pt-BR')));
+  const actions = (employee: Employee) => <AdminMenu disabled={busy} items={[
+    { label: 'Definir escala', onPress: () => open('assignments', employee) },
+    { label: 'Redefinir senha', onPress: () => open('password', employee) },
+    { label: employee.active ? 'Desativar acesso' : 'Reativar acesso', danger: employee.active, onPress: () => void perform(() => employeeApi.update(token!, employee.id, !employee.active), employee.active ? 'Acesso desativado e sessões encerradas.' : 'Funcionário reativado.') },
+  ]} />;
+  return <View style={{ gap: 20 }}>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', gap: 12 }}><View style={{ flexGrow: 1, flexBasis: 240 }}><AdminField label="Buscar funcionário" icon={Search} placeholder="Nome ou e-mail" value={search} onChange={setSearch} /></View><AdminButton primary label="Novo funcionário" icon={Plus} disabled={busy} onPress={() => open('create')} /><AdminButton label="Atualizar" icon={RefreshCw} loading={loading} disabled={busy} onPress={() => void refresh()} /></View>
+    {!!notice && <AdminNotice tone="success">{notice}</AdminNotice>}{!!error && !form && <AdminNotice tone="error">{error}</AdminNotice>}
+    {desktop ? <AdminTable loading={loading} columns={[{ label: 'Funcionário', flex: 1.4 }, { label: 'Acesso', width: 120 }, { label: 'Escala', flex: 1.5 }, { label: 'Ações', width: 170 }]} rows={visible.map((employee) => ({ id: employee.id, cells: [<View style={{ gap: 4 }}><Text style={{ color: colors.text, fontSize: 13, fontWeight: '500' }}>{employee.name}</Text><Text style={{ color: colors.muted, fontSize: 12 }}>{employee.email}</Text></View>, <AdminBadge label={employee.active ? 'Ativo' : 'Desativado'} tone={employee.active ? 'success' : 'neutral'} />, <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 21 }}>{employee.assignments.filter((item) => item.active).map((item) => item.matchLabel + ' · ' + item.sectorName).join('\n') || 'Sem setores liberados'}</Text>, actions(employee)] }))} empty="Nenhum funcionário encontrado." /> : <View style={{ gap: 12 }}>{visible.map((employee) => <Panel key={employee.id} style={{ gap: 12 }}><View style={{ flexDirection: 'row', gap: 10, justifyContent: 'space-between' }}><Text style={{ color: colors.text, fontSize: 15, fontWeight: '600', flex: 1 }}>{employee.name}</Text><AdminBadge label={employee.active ? 'Ativo' : 'Desativado'} tone={employee.active ? 'success' : 'neutral'} /></View><Text style={{ color: colors.muted, fontSize: 12 }}>{employee.email}</Text><Text style={{ color: colors.subtle, fontSize: 12 }}>{employee.assignments.filter((item) => item.active).length} setor(es) na escala</Text>{actions(employee)}</Panel>)}{!loading && !visible.length && <AdminNotice>Nenhum funcionário encontrado. Cadastre a equipe para organizar a portaria.</AdminNotice>}</View>}
+    {form && <Sheet visible title={form === 'create' ? 'Novo funcionário' : form === 'password' ? 'Redefinir senha' : 'Escala de portaria'} onClose={close}>
+      {selected && <Text style={{ color: colors.muted, fontSize: 13 }}>{selected.name} · {selected.email}</Text>}
+      {form === 'create' && <AdminFormGrid><AdminField label="Nome completo" value={name} onChange={setName} required editable={!busy} /><AdminField label="E-mail de acesso" value={email} onChange={setEmail} required autoCapitalize="none" keyboardType="email-address" editable={!busy} /></AdminFormGrid>}
+      {form !== 'assignments' ? <><AdminNotice>Use uma senha de pelo menos 12 caracteres. Envie as credenciais ao funcionário por um canal privado.</AdminNotice><AdminFormGrid><AdminField label="Senha" value={password} onChange={setPassword} secureTextEntry autoCapitalize="none" autoCorrect={false} textContentType="newPassword" maxLength={128} editable={!busy} /><AdminField label="Confirmar senha" value={confirmation} onChange={setConfirmation} secureTextEntry autoCapitalize="none" autoCorrect={false} textContentType="newPassword" maxLength={128} editable={!busy} /></AdminFormGrid><AdminButton primary label={form === 'create' ? 'Criar conta de portaria' : 'Salvar nova senha'} loading={busy} onPress={() => savePassword(form === 'create')} /></> : <><AdminNotice>Selecione os setores que este funcionário pode operar. Salvar sem marcações remove todas as liberações.</AdminNotice>{matches.map((match) => <AdminSection key={match.id} title={match.homeTeam + ' × ' + match.awayTeam} description={matchDate(match.startsAt)}>{match.sectors.map((sector) => <AdminToggle key={sector.id} checkbox disabled={busy} label={sector.name} value={sectors.includes(sector.id)} onChange={(checked) => setSectors((previous) => checked ? [...previous, sector.id] : previous.filter((id) => id !== sector.id))} />)}</AdminSection>)}<AdminButton primary label={'Salvar escala · ' + sectors.length + ' setor(es)'} loading={busy} onPress={() => void perform(() => employeeApi.assignments(token!, selected!.id, sectors), 'Escala atualizada.')} /></>}
+      {!!error && <AdminNotice tone="error">{error}</AdminNotice>}
     </Sheet>}
   </View>;
 }
