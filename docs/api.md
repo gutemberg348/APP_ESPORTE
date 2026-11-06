@@ -1,5 +1,7 @@
 # API v1
 
+Pix automático e webhook Asaas: veja [rotas financeiras e configuração](asaas.md). O endpoint `/payments/webhook` está ativo quando `PAYMENT_MODE=asaas`, com autenticação por `asaas-access-token`, inbox persistente e conciliação assíncrona. O modo desabilitado continua usando recebimento manual.
+
 Base local: `http://localhost:3333/v1`.
 
 Sucesso: `{ "data": ... }`. Logout retorna 204 sem corpo. Erro: `{ "error": { "code": "...", "message": "...", "requestId": "..." } }`. Validação também inclui `details` com caminho e mensagem. Rotas privadas exigem `Authorization: Bearer <token>`.
@@ -110,7 +112,7 @@ Todos os endpoints abaixo exigem sessão, exceto o webhook. Operações do caixa
 | GET | `/payments/charge?id=<UUID>` | Consultar cobrança já vinculada à própria conta |
 | POST | `/payments/customer-charge?tenant=nacional-patos` | Modelo A: informar valor pelo QR fixo da loja; exige habilitação na oferta |
 | POST | `/merchant/simulate-event` | Somente caixa autorizado, modo demo e fora de produção |
-| POST | `/payments/webhook` | Reservado ao adaptador; retorna 503 sem gateway real autenticado |
+| POST | `/payments/webhook` | Asaas: autentica token, persiste evento e responde 200; 503 se desabilitado |
 
 Modelo B:
 

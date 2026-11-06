@@ -11,6 +11,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { clubApi } from '../services/club';
 import { money, matchDate, messageOf } from '../utils/format';
 import { reservationCountdown, ticketStatus, ticketStatusLabels } from '../utils/ticket-state';
+import { PixCheckout } from './PixCheckout';
 
 export function TicketOrderCard({ ticket, now, instructions, expanded, onExpand, onChanged, onShop }: { ticket: Ticket; now: number; instructions: string; expanded: boolean; onExpand: () => void; onChanged: () => Promise<void>; onShop: () => void }) {
   const { token, demoMode } = useSession();
@@ -46,6 +47,7 @@ export function TicketOrderCard({ ticket, now, instructions, expanded, onExpand,
       <Text style={{ color: colors.muted, fontSize: 14 }}>{instructions || 'Apresente o número do pedido ao clube para receber as orientações de pagamento. A emissão depende da confirmação do recebimento.'}</Text>
       <Text style={{ color: colors.muted, fontSize: 12 }}>Após pagar, aguarde a conferência do clube. O app atualiza o estado do pedido automaticamente enquanto esta tela está aberta.</Text>
       <Button secondary label="Já paguei · consultar confirmação" disabled={busy} onPress={() => void onChanged()} />
+      {!demoMode && <PixCheckout ticketId={ticket.id} onChanged={onChanged} />}
       {confirming ? <><Text style={{ color: colors.gold, fontSize: 14 }}>Cancelar libera os lugares. Confirme somente se esta reserva não foi paga.</Text><Button secondary label="Manter minha reserva" disabled={busy} onPress={() => setConfirming(false)} /><Button label="Confirmar cancelamento" loading={busy} onPress={() => void cancel()} /></> : <Button secondary label="Cancelar reserva não paga" disabled={busy || demoMode} onPress={() => setConfirming(true)} />}
     </>}
     {status === 'ISSUED' && <>
@@ -57,6 +59,7 @@ export function TicketOrderCard({ ticket, now, instructions, expanded, onExpand,
     <Text selectable style={{ color: colors.muted, fontSize: 12 }}>Pedido: {ticket.id}</Text>
     <Button secondary label={copied ? 'Número copiado' : 'Copiar número do pedido'} onPress={() => void copy()} />
     {ticket.payment && <Text style={{ color: colors.muted, fontSize: 12 }}>{ticket.payment.method === 'FREE' ? 'Gratuidade registrada' : 'Recebimento confirmado'} em {new Date(ticket.payment.confirmedAt).toLocaleString('pt-BR', { timeZone: 'America/Fortaleza' })} (Patos).</Text>}
+    {(ticket.payment?.refundedCents || 0) > 0 && <Text style={{ color: colors.gold, fontSize: 13 }}>Estorno confirmado: {money(ticket.payment!.refundedCents!)}</Text>}
     {!!error && <Text accessibilityRole="alert" style={{ color: colors.danger }}>{error}</Text>}
     {demoMode && <Text style={{ color: colors.gold, fontSize: 12 }}>Demonstração sem validade de acesso.</Text>}
   </Panel>;

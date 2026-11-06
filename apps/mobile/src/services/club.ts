@@ -14,7 +14,7 @@ export const clubApi = {
   ticket: (token: string, matchId: string, sectorId: string, quantity: number, expectedTotalCents?: number) => request<Ticket>('/tickets', { token, method: 'POST', body: { matchId, sectorId, quantity, ...(expectedTotalCents !== undefined ? { expectedTotalCents } : {}) } }),
   cancelTicket: (token: string, ticketId: string) => request<Ticket>('/tickets/cancel', { token, method: 'POST', body: { ticketId } }),
   ticketQr: (token: string, ticketId: string) => request<TicketQr>(`/tickets/entry-qr?ticketId=${encodeURIComponent(ticketId)}`, { token }),
-  ticketInstructions: (token: string) => request<{ instructions: string }>('/tickets/payment-instructions', { token }),
+  ticketInstructions: (token: string) => request<{ instructions: string; pixEnabled?: boolean }>('/tickets/payment-instructions', { token }),
   predict: (token: string, matchId: string, homeScore: number, awayScore: number) => request('/predictions', { token, method: 'POST', body: { matchId, homeScore, awayScore } }),
   refer: (token: string, kind: string, name: string, contact: string) => request('/referrals', { token, method: 'POST', body: { kind, name, contact } }),
 };

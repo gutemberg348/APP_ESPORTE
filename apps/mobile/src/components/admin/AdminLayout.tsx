@@ -16,6 +16,7 @@ export const adminSections = [
   { name: 'Visão geral', icon: LayoutDashboard, description: 'Acompanhe os números e as atividades da operação.' },
   { name: 'Jogos', icon: CalendarDays, description: 'Organize partidas, setores, preços e disponibilidade.' },
   { name: 'Vendas', icon: Ticket, description: 'Consulte pedidos e confira os recebimentos.' },
+  { name: 'Pagamentos', icon: BadgeCheck, description: 'Acompanhe Pix, conciliação e solicitações de estorno.' },
   { name: 'Torcedores', icon: Users, description: 'Gerencie contas e associações do clube.' },
   { name: 'Planos', icon: BadgeCheck, description: 'Defina os planos e os benefícios dos associados.' },
   { name: 'Funcionários', icon: UserRoundCog, description: 'Gerencie a equipe e as escalas de portaria.' },

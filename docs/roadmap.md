@@ -2,14 +2,14 @@
 
 1. Validar as telas em Android e iOS físicos, ajustar detalhes visuais em relação à referência e definir ícone/splash oficiais.
 2. Administração de jogos, setores, planos, associações, contas, recebimentos e portaria implementada. Gestão de vendas com filtros, totais e disponibilidade e histórico de entradas/recusas com protocolos implementados e testados no PostgreSQL; ver [relatórios administrativos](admin-reports.md). Falta ampliar gestão de parceiros/recompensas e validar a operação em aparelhos.
-3. Integrar gateway de pagamento com webhook autenticado, idempotência e transação de emissão do ingresso; definir cancelamento e reembolso.
+3. Pix Asaas, webhook autenticado, inbox persistente, emissão automática e conciliação/estorno implementados; validar com a chave da conta sandbox e URL pública. Ver [integração Asaas](asaas.md).
 4. Leitor e consumo de QR de ingresso implementados. Validar em aparelho e integrar à operação da portaria; o leitor do QR de carteirinha continua pendente.
 5. Implementar resultado do jogo, apuração do palpite e regras de indicação. Extrato, check-in diário e resgates transacionais já estão implementados; falta sua validação em PostgreSQL nesta revisão.
 6. Conectar Naça TV, boutique, conteúdo oficial, quiz, votação, atendimento e notificações.
 7. JWT, refresh rotativo, logout-all, troca de senha autenticada e gerenciamento de sessões implementados. Recuperação de senha por mensagem, verificação de e-mail, MFA e dependentes continuam pendentes. Nome, cidade e contato já podem ser atualizados.
 8. Preparar deploy público, monitoramento, backups e gerenciamento de segredos.
 
-Cashback/Pix: modelo B, caixa, carteira monetária, vinculação de QR, simulação e estorno total implementados; modelo A preparado com habilitação por oferta. Próximo passo é escolher o gateway, criar onboarding de recebedores, outbox para cobranças, webhook autenticado/conciliação e gasto do saldo. Ver [escopo e decisões](cashback-pix.md).
+Cashback/Pix: modelo B, caixa, carteira monetária, vinculação de QR e modelo A condicionado à oferta implementados. Integração Asaas adiciona fila persistente, split fixo pelo líquido, webhook, crédito após liquidação do split e reversão proporcional de cashback. Falta validar a conta sandbox e os recebedores reais, desenvolver onboarding/KYC de subcontas e utilização/saque do saldo. Ver [configuração](asaas.md).
 
 ## Dependências
 

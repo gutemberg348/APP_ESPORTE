@@ -2,7 +2,7 @@ import { db } from '../config/database.js';
 import { env } from '../config/env.js';
 import { AppError } from '../lib/errors.js';
 import { serializable } from '../lib/business-rules.js';
-import { inventoryWhere, occupiedQuantity, assertManualConfirmation } from '../lib/ticket-rules.js';
+import { inventoryWhere, occupiedQuantity, assertManualConfirmation, assertNoPendingPix } from '../lib/ticket-rules.js';
 import { createTicketCheckoutStore } from './ticket-checkout.store.js';
 import { ticketInclude, toTicket } from '../lib/ticket-serializers.js';
 
@@ -36,6 +36,7 @@ export const ticketModel = {
         throw new AppError(409, 'PAYMENT_ALREADY_CONFIRMED', 'Pagamento já registrado para esta reserva.');
       }
       assertManualConfirmation(ticket, receivedCents);
+      assertNoPendingPix(ticket);
       await tx.ticketPayment.create({ data: { ticketId, method: 'MANUAL', amountCents: receivedCents, reference, confirmedById: actorId } });
       const updated = await tx.ticket.update({ where: { id: ticketId }, data: { status: 'ISSUED', entryToken: null, expiresAt: null }, include: ticketInclude });
       await writeAudit(tx, actorId, 'TICKET_PAYMENT_CONFIRMED', ticketId, { receivedCents, reference });
@@ -62,5 +63,5 @@ export const ticketModel = {
       return toTicket(updated);
     });
   },
-  paymentInstructions: () => env.TICKET_PAYMENT_INSTRUCTIONS,
+  paymentInstructions: () => env.PAYMENT_MODE === 'asaas' ? 'Pague com Pix pelo app do seu banco. O ingresso será emitido automaticamente após a confirmação do Asaas. Não pague depois do vencimento da reserva.' : env.TICKET_PAYMENT_INSTRUCTIONS,
 };

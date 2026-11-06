@@ -3,6 +3,7 @@ import { paymentGateway } from '../payments/gateway.js';
 import { toCashWallet, toCharge } from '../lib/payment-serializers.js';
 import { env } from '../config/env.js';
 import { AppError } from '../lib/errors.js';
+import { asaasStore } from './asaas.service.js';
 
 export const paymentService = {
   wallet: async (user, tenant = env.TENANT_SLUG) => ({ ...toCashWallet(await paymentModel.wallet(user.id, tenant)), demo: env.PAYMENT_MODE === 'demo' }),
@@ -21,6 +22,7 @@ export const paymentService = {
     return paymentModel.simulateEvent(user.id, input);
   },
   async webhook(req, body) {
+    if (env.PAYMENT_MODE === 'asaas') return asaasStore.webhook(req.headers['asaas-access-token'], body);
     const verified = await paymentGateway.verifyAndReconcileWebhook(req, body);
     return paymentModel.applyVerifiedEvent(verified);
   },

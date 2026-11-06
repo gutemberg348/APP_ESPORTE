@@ -6,5 +6,6 @@ export function adminTicketRevision(ticket) {
     ticket.id, ticket.createdAt, ticket.status, ticket.sectorId, ticket.quantity,
     ticket.priceCents, ticket.expiresAt, ticket.entryVersion, ticket.usedQuantity,
     ticket.payment?.id ?? null, ticket.deletedAt ?? null, ticket.voidedQuantity || 0,
+    ticket.payment?.refundedCents || 0,
   ])).digest('hex');
 }

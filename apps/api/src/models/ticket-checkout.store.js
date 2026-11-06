@@ -1,6 +1,6 @@
 import { AppError } from '../lib/errors.js';
 import { serializable, assertAvailability, ticketPrice } from '../lib/business-rules.js';
-import { assertSalesOpen, inventoryWhere, occupiedQuantity } from '../lib/ticket-rules.js';
+import { assertSalesOpen, inventoryWhere, occupiedQuantity, assertNoPendingPix } from '../lib/ticket-rules.js';
 import { isActiveMember } from '../lib/serializers.js';
 import { ticketInclude, toTicket } from '../lib/ticket-serializers.js';
 
@@ -10,13 +10,14 @@ export function createTicketCheckoutStore(client, { now = () => new Date() } = {
     const [match, user, existing] = await Promise.all([
       tx.match.findUnique({ where: { id: matchId }, include: { sectors: true } }),
       tx.user.findUnique({ where: { id: userId }, include: { membership: { include: { plan: true } } } }),
-      tx.ticket.findFirst({ where: { userId, matchId, deletedAt: null }, include: { payment: true } }),
+      tx.ticket.findFirst({ where: { userId, matchId, deletedAt: null }, include: { payment: true, paymentIntents: { select: { state: true } } } }),
     ]);
     if (!user?.active || !['USER', 'ADMIN'].includes(user.role)) throw new AppError(403, 'TICKET_ACCOUNT_REQUIRED', 'Sua conta não está habilitada para comprar ingressos.');
     if (!match) throw new AppError(404, 'MATCH_NOT_FOUND', 'Jogo não encontrado.');
     const sector = match.sectors.find((item) => item.id === sectorId);
     if (!sector) throw new AppError(422, 'INVALID_SECTOR', 'O setor não pertence a este jogo.');
     assertSalesOpen(match, sector, instant);
+    if (existing) assertNoPendingPix(existing);
     if (existing?.payment || (existing && existing.status !== 'CANCELED' && !(existing.status === 'PENDING' && existing.expiresAt && existing.expiresAt <= instant))) throw new AppError(409, 'TICKET_EXISTS', 'Você já tem uma compra ou reserva para este jogo. Consulte Meus ingressos.');
     const reserved = await tx.ticket.aggregate({ where: { sectorId, ...inventoryWhere(instant) }, _sum: { quantity: true, voidedQuantity: true } });
     const available = Math.max(0, sector.capacity - occupiedQuantity(reserved._sum));

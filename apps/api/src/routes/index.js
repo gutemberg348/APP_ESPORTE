@@ -5,7 +5,17 @@ import { engagementController } from '../controllers/engagement.controller.js';
 import { paymentController } from '../controllers/payment.controller.js';
 import { adminController } from '../controllers/admin.controller.js';
 import { staffController } from '../controllers/staff.controller.js';
+import { asaasController } from '../controllers/asaas.controller.js';
 export const routes = [
+  { method: 'GET', path: '/v1/payments/billing-profile', handler: asaasController.profile, private: true },
+  { method: 'PUT', path: '/v1/payments/billing-profile', handler: asaasController.saveProfile, private: true, authLimit: true },
+  { method: 'POST', path: '/v1/tickets/pix', handler: asaasController.ticketPix, private: true },
+  { method: 'GET', path: '/v1/tickets/payment', handler: asaasController.ticketIntent, private: true },
+  { method: 'POST', path: '/v1/payments/pix', handler: asaasController.cashPix, private: true },
+  { method: 'GET', path: '/v1/payments/intent', handler: asaasController.intent, private: true },
+  { method: 'GET', path: '/v1/admin/payments', handler: asaasController.list, private: true, admin: true },
+  { method: 'POST', path: '/v1/admin/payments/reconcile', handler: asaasController.retry, private: true, admin: true },
+  { method: 'POST', path: '/v1/admin/payments/refund', handler: asaasController.refund, private: true, admin: true },
   { method: 'POST', path: '/v1/tickets/quote', handler: clubController.quoteTicket, private: true },
   { method: 'GET', path: '/v1/admin/employees', handler: staffController.list, private: true, admin: true },
   { method: 'POST', path: '/v1/admin/employees', handler: staffController.create, private: true, admin: true },

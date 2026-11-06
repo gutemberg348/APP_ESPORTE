@@ -42,4 +42,13 @@ for (const path of ['.env', 'apps/api/.env']) {
     await writeFile(target, /^TICKET_QR_SECRET=$/m.test(updated) ? updated.replace(/^TICKET_QR_SECRET=$/m, entry) : `${updated.trimEnd()}\n${entry}\n`);
     console.log(`Segredo de QR dos ingressos configurado: ${path}`);
   }
+  const paymentSettings = await readFile(target, 'utf8');
+  const newSettings = { PAYMENT_MODE: 'disabled', ASAAS_ENVIRONMENT: 'sandbox', ASAAS_API_KEY: '', ASAAS_WEBHOOK_URL: '', ASAAS_WEBHOOK_EMAIL: '', ASAAS_WEBHOOK_TOKEN: randomBytes(32).toString('hex'), ASAAS_DATA_SECRET: randomBytes(64).toString('hex'), ASAAS_MERCHANT_WALLETS: '{}' };
+  let nextSettings = paymentSettings;
+  for (const [name, value] of Object.entries(newSettings)) {
+    const existing = new RegExp(`^${name}=(.*)$`, 'm');
+    if (!existing.test(nextSettings)) nextSettings = `${nextSettings.trimEnd()}\n${name}=${value}\n`;
+    else if (value && ['ASAAS_WEBHOOK_TOKEN', 'ASAAS_DATA_SECRET'].includes(name) && new RegExp(`^${name}=$`, 'm').test(nextSettings)) nextSettings = nextSettings.replace(new RegExp(`^${name}=$`, 'm'), `${name}=${value}`);
+  }
+  if (nextSettings !== paymentSettings) { await writeFile(target, nextSettings); console.log(`Configuração Asaas preparada sem ativar cobranças: ${path}`); }
 }

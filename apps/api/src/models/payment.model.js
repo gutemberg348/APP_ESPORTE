@@ -5,8 +5,9 @@ import { hashToken } from '../lib/crypto.js';
 import { AppError } from '../lib/errors.js';
 import { splitPayment, assertClaimable, assertSettlement, paymentTransition } from '../lib/payment-rules.js';
 import { paymentGateway } from '../payments/gateway.js';
+import { env } from '../config/env.js';
 
-const includeCharge = { offer: { include: { tenant: true, merchant: true } } };
+const includeCharge = { offer: { include: { tenant: true, merchant: true } }, paymentIntent: { select: { id: true, state: true, pixPayload: true, cancelRequestedAt: true, refundRequestedAt: true } } };
 const customerCode = () => `NC-${randomBytes(16).toString('hex').toUpperCase()}`;
 async function findTenant(client, slug) {
   const tenant = await client.tenant.findUnique({ where: { slug } });
@@ -87,7 +88,7 @@ export const paymentModel = {
       const expiresAt = new Date(Date.now() + 15 * 60000);
       // The demo adapter does no IO. Real providers must use an outbox/recovery
       // workflow and charge.id as their idempotency key before being enabled.
-      const gateway = await paymentGateway.createCharge({ chargeId: id, offer, wallet, ...split, expiresAt });
+      const gateway = env.PAYMENT_MODE === 'asaas' ? { provider: 'asaas', expiresAt } : await paymentGateway.createCharge({ chargeId: id, offer, wallet, ...split, expiresAt });
       return tx.paymentCharge.create({ data: { id, offerId: offer.id, creatorId: userId, walletId: wallet?.id, channel, requestKey: input.requestKey, claimCode: randomBytes(24).toString('base64url'), ...split, ...gateway }, include: includeCharge });
     });
   },

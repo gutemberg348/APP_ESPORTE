@@ -1,5 +1,7 @@
 # Gestão de vendas e histórico de portaria
 
+Atualiza??o de 06/11/2026: Pix autom?tico Asaas, webhook, concilia??o e solicita??o de estorno est?o implementados. Consulte [configura??o e contrato atuais](asaas.md); as descri??es do recebimento manual abaixo continuam aplic?veis em `PAYMENT_MODE=disabled`.
+
 O painel administrativo, no navegador e no app, tem **Vendas** e **Histórico de portaria**. Ambos usam a mesma API e exigem ADMIN ativo. As consultas são feitas no PostgreSQL, com paginação de 25 registros na interface. Os totais consideram todos os resultados do filtro, inclusive os que estão nas próximas páginas.
 
 ## Vendas

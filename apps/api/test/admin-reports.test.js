@@ -23,7 +23,7 @@ test('sales search combines location, expiry, deletion and receipt filters witho
   const now = new Date('2026-11-04T18:00:00Z'), matchId = randomUUID(), sectorId = randomUUID();
   const where = salesWhere({ matchId, sectorId, status: 'EXPIRED', payment: 'PAID', deleted: 'exclude', search: 'Alice' }, now);
   assert.equal(where.matchId, matchId); assert.equal(where.sectorId, sectorId); assert.equal(where.deletedAt, null);
-  assert.equal(where.status, 'PENDING'); assert.equal(where.expiresAt.lte, now); assert.equal(where.payment.is.method, 'MANUAL');
+  assert.equal(where.status, 'PENDING'); assert.equal(where.expiresAt.lte, now); assert.deepEqual(where.payment.is.method.in, ['MANUAL', 'ASAAS']);
   assert.equal(where.OR[0].user.name.contains, 'Alice'); assert.equal(where.OR[1].user.email.mode, 'insensitive');
   assert.ok(!Object.hasOwn(salesWhere({ search: randomUUID() }).OR[0], 'entryToken'));
   assert.equal(salesWhere({ payment: 'UNPAID' }).payment.is, null);

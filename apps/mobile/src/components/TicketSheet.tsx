@@ -13,6 +13,7 @@ import { ApiError } from '../services/api';
 import { useServerClock } from '../hooks/useServerClock';
 import { matchDate, money, messageOf } from '../utils/format';
 import { activeTicket, availablePlaces, matchSaleState, ticketStatus, ticketStatusLabels } from '../utils/ticket-state';
+import { PixCheckout } from './PixCheckout';
 
 export function TicketSheet({ visible, onClose, selectedMatch, onMyTickets }: { visible: boolean; onClose: () => void; selectedMatch?: Match; onMyTickets?: () => void }) {
   const { data, requestTicket, refresh } = useClub();
@@ -28,11 +29,12 @@ export function TicketSheet({ visible, onClose, selectedMatch, onMyTickets }: { 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState<Ticket | null>(null);
   const [instructions, setInstructions] = useState('');
+  const [pixEnabled, setPixEnabled] = useState(false);
   const { now, monotonic } = useServerClock(quote?.serverTime || data?.tickets[0]?.serverTime || match?.serverTime);
   const lock = useRef(false);
   useEffect(() => {
     let alive = true;
-    if (token && !demoMode) void clubApi.ticketInstructions(token).then((value) => { if (alive) setInstructions(value.instructions); }).catch(() => {});
+    if (token && !demoMode) void clubApi.ticketInstructions(token).then((value) => { if (alive) { setInstructions(value.instructions); setPixEnabled(Boolean(value.pixEnabled)); } }).catch(() => {});
     return () => { alive = false; };
   }, [token, demoMode]);
   const existing = match ? activeTicket(data?.tickets || [], match.id, now) : undefined;
@@ -95,6 +97,7 @@ export function TicketSheet({ visible, onClose, selectedMatch, onMyTickets }: { 
         {ticketStatus(order, now) === 'PENDING' && <><Text style={{ color: colors.muted }}>{quote?.paymentInstructions || instructions || 'Apresente o pedido ao atendimento do clube para receber as orientações de pagamento.'}</Text><Text style={{ color: colors.gold, fontSize: 14 }}>Prazo: {order.expiresAt ? new Date(order.expiresAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Fortaleza' }) : '—'} (Patos). O ingresso e o QR de entrada são liberados após a confirmação do recebimento pelo clube.</Text></>}
         {ticketStatus(order, now) === 'ISSUED' && <Text style={{ color: colors.muted }}>Seu ingresso está na conta. Apresente o QR ou o código atualizado quando a portaria do jogo estiver aberta.</Text>}
         <Button label="Ver meus ingressos" onPress={myTickets} />
+        {pixEnabled && ticketStatus(order, now) === 'PENDING' && <PixCheckout ticketId={order.id} onChanged={refresh} />}
       </> : uncertain ? <Panel style={{ gap: 12, borderColor: colors.gold }}>
         <Text style={{ color: colors.gold, fontWeight: '700' }}>Conferir resposta da compra</Text><Text style={{ color: colors.muted }}>A conexão falhou e o pedido pode ter sido registrado. A consulta não cria outra reserva.</Text><Button label="Consultar meus pedidos no servidor" loading={busy} onPress={() => void consult()} /><Button secondary label="Abrir meus ingressos" disabled={busy} onPress={myTickets} />
       </Panel> : quote ? <>

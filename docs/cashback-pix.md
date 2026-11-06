@@ -1,5 +1,7 @@
 # Cashback e Pix — modelo B primeiro
 
+Atualiza??o de 06/11/2026: Pix autom?tico Asaas, webhook, concilia??o e solicita??o de estorno est?o implementados. Consulte [configura??o e contrato atuais](asaas.md); as descri??es do recebimento manual abaixo continuam aplic?veis em `PAYMENT_MODE=disabled`.
+
 A decisão desta etapa é iniciar pelo QR gerado pelo caixa (B). O QR fixo da loja (A) usa o mesmo motor, mas fica desativado por parceria até ser habilitado. O gateway ainda não foi escolhido. Nenhuma cobrança, transferência ou custódia de dinheiro real foi habilitada.
 
 ## Jornada do caixa e do torcedor

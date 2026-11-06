@@ -31,7 +31,7 @@ export function assertGateOpen(match, now = new Date()) {
 export function assertTicketPaid(ticket) {
   if (ticket.deletedAt) throw new AppError(409, 'SALE_DELETED', 'Este ingresso foi excluído pela administração.');
   const payment = ticket.payment;
-  if (!payment || !['MANUAL', 'FREE'].includes(payment.method) || payment.amountCents !== ticket.priceCents || (ticket.priceCents > 0 && (payment.method !== 'MANUAL' || !payment.confirmedById)) || (payment.method === 'FREE' && ticket.priceCents !== 0)) throw new AppError(409, 'TICKET_PAYMENT_NOT_CONFIRMED', 'O recebimento deste ingresso não foi confirmado corretamente.');
+  if (!payment || !['MANUAL', 'FREE', 'ASAAS'].includes(payment.method) || (payment.refundedCents || 0) > 0 || payment.amountCents !== ticket.priceCents || (payment.method === 'MANUAL' && !payment.confirmedById) || (payment.method === 'ASAAS' && !/^ASAAS:pay_[A-Za-z0-9_-]+$/.test(payment.reference || '')) || (payment.method === 'FREE' && ticket.priceCents !== 0)) throw new AppError(409, 'TICKET_PAYMENT_NOT_CONFIRMED', 'O recebimento deste ingresso não foi confirmado corretamente.');
   if (!ticket.user?.active) throw new AppError(409, 'HOLDER_DISABLED', 'A conta do titular está desativada.');
 }
 export function assertEntryContext(ticket, claims, selectedMatchId, now = new Date(), selectedSectorId = ticket.sectorId) {
@@ -51,5 +51,8 @@ export function assertMatchSchedule(match) {
   const gate = gateWindow(match);
   if (gate.opensAt >= gate.closesAt) throw new AppError(422, 'INVALID_GATE_WINDOW', 'O fechamento da portaria deve ocorrer depois da abertura.');
 }
-export const inventoryWhere = (now = new Date()) => ({ OR: [{ status: { in: ['ISSUED', 'USED'] } }, { status: 'PENDING', OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }, { deletedAt: { not: null }, usedQuantity: { gt: 0 } }] });
+export const inventoryWhere = (now = new Date()) => ({ OR: [{ status: { in: ['ISSUED', 'USED'] } }, { status: 'PENDING', OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }, { usedQuantity: { gt: 0 }, status: 'CANCELED' }] });
+export function assertNoPendingPix(ticket) {
+  if (!ticket.payment && ticket.paymentIntents?.some((intent) => !['CANCELED', 'REFUNDED'].includes(intent.state))) throw new AppError(409, 'PIX_IN_PROGRESS', 'Há um Pix em processamento. Cancele a reserva e aguarde a conciliação antes de alterar ou registrar outro pagamento.');
+}
 export const occupiedQuantity = (sum) => (sum.quantity || 0) - (sum.voidedQuantity || 0);

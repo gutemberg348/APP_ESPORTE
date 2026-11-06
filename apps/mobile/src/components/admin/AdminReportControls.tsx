@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Pressable, ScrollView } from 'react-native';
+import { View, Pressable, ScrollView, AppState } from 'react-native';
 import { ChevronDown } from 'lucide-react-native';
 import type { Match, ReportPagination } from '@nacional/shared/types';
 import { Text, TextInput } from '../Typography';
@@ -20,8 +20,16 @@ export function useAdminReport<T>(load: (token: string, filters: Filters) => Pro
     const current = ++sequence.current;
     setData(null); setError(''); setLoading(true);
     if (!token) { setLoading(false); return; }
-    void load(token, filters).then((result) => { if (sequence.current === current) setData(result); }).catch((err) => { if (sequence.current === current) setError(messageOf(err)); }).finally(() => { if (sequence.current === current) setLoading(false); });
-    return () => { sequence.current++; };
+    let running = false;
+    const fetchReport = async () => {
+      if (running || AppState.currentState !== 'active') return;
+      running = true;
+      try { const result = await load(token, filters); if (sequence.current === current) { setData(result); setError(''); } }
+      catch (err) { if (sequence.current === current) setError(messageOf(err)); }
+      finally { running = false; if (sequence.current === current) setLoading(false); }
+    };
+    void fetchReport(); const timer = setInterval(() => void fetchReport(), 15000);
+    return () => { sequence.current++; clearInterval(timer); };
   }, [token, filters, refreshKey, load]);
   return { data, loading, error };
 }

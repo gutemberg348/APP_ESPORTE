@@ -19,6 +19,7 @@ import { AdminStats, AdminOverviewPanel } from '../components/admin/AdminOvervie
 import { AdminMatchGrid, AdminAccountsPanel, AdminPlanGrid, AdminAuditPanel } from '../components/admin/AdminDataPanels';
 import { AdminSalesReport } from '../components/admin/AdminSalesReport';
 import { AdminGateHistory } from '../components/admin/AdminGateHistory';
+import { AdminPaymentsPanel } from '../components/admin/AdminPaymentsPanel';
 import { AdminThemeProvider } from '../theme/AdminThemeProvider';
 import { AdminSaleForm } from '../components/admin/AdminSaleForm';
 export function AdminScreen({ onBack }: { onBack: () => void }) {
@@ -90,6 +91,7 @@ function AdminWorkspace({ onBack }: { onBack: () => void }) {
     {tab === 'Portaria' && <View style={{ flexDirection: desktop ? 'row' : 'column', gap: 22, alignItems: 'flex-start' }}><Panel style={{ flex: 1, minWidth: 0, width: desktop ? undefined : '100%', borderRadius: 16, padding: desktop ? 25 : 16 }}><TicketGatePanel matches={matches} onChanged={refresh} /></Panel>{desktop && <Panel style={{ width: 245, borderRadius: 16, padding: 22, gap: 13 }}><ScanLine size={24} color={colors.primary} /><Text heading style={{ color: colors.text, fontWeight: '700' }}>Operação da portaria</Text><Text style={{ color: colors.muted, fontSize: 12 }}>Selecione a partida e o setor físico antes de ler ou digitar o código.</Text><Text style={{ color: colors.muted, fontSize: 12 }}>Confira o titular e a quantidade. A consulta não libera a entrada.</Text><Text style={{ color: colors.gold, fontSize: 12 }}>Libere somente após a confirmação registrada no servidor.</Text></Panel>}</View>}
     {tab === 'Auditoria' && <AdminAuditPanel audit={audit} loading={loading} />}
     {tab === 'Histórico de portaria' && <AdminGateHistory matches={matches} refreshKey={reportRefresh} />}
+    {tab === 'Pagamentos' && <AdminPaymentsPanel refreshKey={reportRefresh} />}
     {matchEdit !== undefined && <MatchForm match={matchEdit} onClose={() => setMatchEdit(undefined)} onSaved={async () => { setMatchEdit(undefined); await refresh(); }} />}
     {sectorEdit && <SectorForm {...sectorEdit} onClose={() => setSectorEdit(null)} onSaved={async () => { setSectorEdit(null); await refresh(); }} />}
     {planEdit !== undefined && <PlanForm plan={planEdit} onClose={() => setPlanEdit(undefined)} onSaved={async () => { setPlanEdit(undefined); await refresh(); }} />}

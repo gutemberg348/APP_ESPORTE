@@ -2,8 +2,13 @@
   "name": "nacional",
   "version": "0.1.0",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
-  "engines": { "node": ">=22.13.0 <23 || >=24.3.0" },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.13.0 <23 || >=24.3.0"
+  },
   "scripts": {
     "dev:api": "npm run dev --workspace @nacional/api",
     "dev:mobile": "npm run start --workspace @nacional/mobile",
@@ -23,6 +28,7 @@
     "test": "npm run test --workspace @nacional/api",
     "test:unit": "npm run test:unit --workspaces --if-present",
     "test:integration": "npm run test:integration --workspace @nacional/api",
-    "setup": "node scripts/setup.mjs"
+    "setup": "node scripts/setup.mjs",
+    "payments:webhook": "npm run payments:webhook --workspace @nacional/api"
   }
 }
