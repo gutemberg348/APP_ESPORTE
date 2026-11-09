@@ -304,7 +304,7 @@ function FinanceSettingsForm({
             {
               value: "NET",
               label: "Líquido · descontar gateway antes de dividir",
-              description: "Padrão: empresa 10% e time 90% do líquido.",
+              description: "A tarifa é descontada antes da divisão configurada.",
             },
             {
               value: "GROSS",

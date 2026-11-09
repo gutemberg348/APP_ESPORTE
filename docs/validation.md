@@ -1,3 +1,5 @@
+Atualização de conexão — 09/11/2026: a configuração de desenvolvimento recomendada é `EXPO_PUBLIC_API_URL=http://localhost:3333/v1`. O IP antigo 192.168.0.100 mudou para 192.168.0.101; os valores abaixo são históricos. O host atual do Expo/navegador é usado em desenvolvimento, e as origens de rede deste computador são aceitas apenas nas portas locais autorizadas. `npm run api:check` verifica API e banco; para uma tela com configuração antiga, use Ctrl+F5 ou `npm run web:clear`. Não é necessário reiniciar o PostgreSQL quando `/health` e `/ready` já respondem 200.
+
 # Validação da revisão naca-digital — 14/10/2026
 
 ## Identidade inicial do Esporte — 03/11/2026
@@ -134,3 +136,9 @@ Executado no ambiente Windows do projeto:
 Os testes HTTP cobrem autenticação, CORS, validação, limites de corpo e ocultação de erros internos. A integração verifica cadastro/login, proteção da carteirinha, sessão armazenada em hash, desconto, ingresso pendente, duplicidade, palpite, atualização de perfil, saldo protegido, indicação, expiração da associação e revogação por logout.
 
 As capturas e scripts temporários da revisão estão em `.artifacts/`, ignorados pelo Git e pelo Docker. A prévia web é uma conferência adicional; ainda falta execução em Android/iOS físicos e geração de APK/IPA. Integrações futuras estão descritas no [roadmap](roadmap.md). Os alertas encontrados no audit estão registrados nesse mesmo documento.
+
+
+Revisão de configurações comerciais (09/11/2026): `npm run check` e `npm run test:unit` passaram com 219 testes (187 API + 32 app). Os testes de configurações usam PostgreSQL descartável e cobrem autorização, edição concorrente, pontos configuráveis, pausa do check-in, custo histórico dos resgates, estoque de recompensas, prazos de reserva/cotação, limite de pendências, política financeira preservada, recebedores distintos por ambiente e cobranças existentes protegidas após editar o parceiro. A migration aditiva 20261109050000_business_configuration foi aplicada ao banco local; `prisma migrate status` confirmou as 15 migrations atualizadas. Nenhum serviço ou container foi iniciado/reiniciado pelo agente nesta revisão. Fluxos em dispositivo físico e pagamentos com credenciais reais não foram executados nesta etapa.
+
+
+Revisão do login e endereço local (09/11/2026): TypeScript e os 36 testes do app passaram. Regressões cobrem IPv4 privado antigo em modo local, preservação de APIs separadas/produção, resolução por requisição sem repetir POST de login, diagnóstico sem credenciais, identidade da API, falha do banco e prazo de diagnóstico. As verificações na API existente retornaram 200 em `/health` e `/ready` por localhost e pelo IP atual do computador, e 401 na rota de login com uma conta inexistente de diagnóstico; o IP antigo da captura não respondeu. Também foi observada uma conexão encerrada durante uma troca de processo Node em modo watch; uma nova tentativa no processo estável respondeu normalmente. Não foi comprovada uma queda causada pelo PostgreSQL. Nenhum serviço ou container foi iniciado/reiniciado nesta revisão. A automação da aba ficou indisponível e o login com a conta real não foi executado.

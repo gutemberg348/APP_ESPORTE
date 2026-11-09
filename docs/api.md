@@ -198,3 +198,6 @@ Invoke-RestMethod -Uri 'http://localhost:3333/v1/dashboard' -Headers $sessionHea
 ```
 
 Erros principais: 400 JSON/setor inválido, 401 credenciais/sessão inválida, 403 associação/origem bloqueada, 404 rota/jogo ausente, 409 registro duplicado/jogo iniciado, 413 corpo grande, 415 Content-Type, 422 validação, 429 limite de requisições, 503 banco indisponível no readiness.
+
+
+Configurações comerciais (ADMIN ativo): `GET/PUT /v1/admin/settings` e `GET/POST/PATCH /v1/admin/rewards`. Atualizações enviam `version`; conflitos de versão retornam 409. Preços, comissões e taxas continuam nos cadastros de Jogos, Planos, Loja, Parceiros e Financeiro. Consulte o [mapa completo das configurações](configuracoes-negocio.md) para regras de snapshots e compatibilidade dos recebedores Asaas.

@@ -17,18 +17,16 @@ export const policySchema = z
   })
   .strict();
 export async function captureFinancialPolicy(tx) {
-  const settings = await tx.financialSettings.findUnique({
-    where: { id: "main" },
+  const settings = await tx.financialSettings.upsert({
+    where: { id: "main" }, create: { id: "main" }, update: {},
   });
-  return settings
-    ? {
-        companyBps: settings.companyBps,
-        commissionBase: settings.commissionBase,
-        gatewayBps: settings.gatewayBps,
-        gatewayFixedCents: settings.gatewayFixedCents,
-        settingsVersion: settings.version,
-      }
-    : { ...DEFAULT_FINANCIAL_POLICY };
+  return {
+    companyBps: settings.companyBps,
+    commissionBase: settings.commissionBase,
+    gatewayBps: settings.gatewayBps,
+    gatewayFixedCents: settings.gatewayFixedCents,
+    settingsVersion: settings.version,
+  };
 }
 export function calculateTicketAllocation(
   grossCents,

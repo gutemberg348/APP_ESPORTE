@@ -1,0 +1,49 @@
+CONFIGURAÇÕES DE NEGÓCIO — 09/11/2026
+Migration: 20261109050000_business_configuration.
+Migration aditiva, aplicada ao banco local. 15 migrations concluídas.
+Nenhum cadastro, segredo ou lançamento financeiro exportado.
+
+BusinessSettings (nova tabela, sem FKs)
+  id TEXT PK DEFAULT 'main'; CHECK permite somente a linha main.
+  ticketReservationMinutes INT NOT NULL DEFAULT 15; de 1 a 1440.
+  shopReservationMinutes INT NOT NULL DEFAULT 30; de 1 a 1440.
+  shopQuoteMinutes INT NOT NULL DEFAULT 10; de 1 a 60.
+  cashChargeMinutes INT NOT NULL DEFAULT 15; de 1 a 1440.
+  shopPendingOrderLimit INT NOT NULL DEFAULT 3; de 1 a 20.
+  checkInEnabled BOOLEAN NOT NULL DEFAULT true.
+  checkInPoints INT NOT NULL DEFAULT 30; de 1 a 100000.
+  version INT NOT NULL DEFAULT 0; não negativa; controle de edição concorrente.
+  updatedAt TIMESTAMP(3) NOT NULL; mantido pelo Prisma.
+  Constraint: BusinessSettings_values_valid.
+  A migration cria a linha main com os valores iniciais, preservando as regras anteriores.
+
+Reward (coluna nova)
+  version INT NOT NULL DEFAULT 0.
+  Incrementada na edição administrativa e no consumo de uma vaga.
+  Campos existentes title, description, cost, stock, icon e active agora são administráveis.
+  FK existente Redemption.rewardId -> Reward.id preservada.
+  Redemption.cost mantém o custo do resgate anterior, mesmo após mudar Reward.cost.
+
+Merchant (colunas novas)
+  asaasSandboxWalletId VARCHAR(36) NULL.
+  asaasProductionWalletId VARCHAR(36) NULL.
+  Constraint Merchant_receiving_wallets_valid: UUID, vazio ou NULL.
+  UUID = recebedor definido pelo admin; vazio = desabilitado naquele ambiente;
+  NULL = compatibilidade com o mapa antigo do ambiente.
+  Não são chaves estrangeiras: são identificadores da conta no Asaas.
+
+PaymentCharge (coluna nova)
+  paymentPolicy JSONB NULL.
+  Para novas cobranças Asaas: environment, merchantWallet, cashbackBps, commissionBps.
+  Snapshot criado com a cobrança e usado para gerar o intent de pagamento.
+  Os valores monetários grossCents, merchantCents, cashbackCents e commissionCents
+  continuam gravados na própria cobrança. GatewayIntent.chargeId e snapshot preservados.
+  NULL identifica cobranças anteriores à migration; não se inventa destino retroativo.
+
+Auditoria
+  AuditLog existente registra BUSINESS_SETTINGS_UPDATED, REWARD_CREATED,
+  REWARD_UPDATED e alterações de ofertas/recebedores em PARTNER_UPDATED.
+  actorId mantém a relação existente com User. Não há novas relações ou enums.
+
+As políticas dos ingressos, pagamentos, carteira, estoque e repasses anteriores
+não são recalculadas ou apagadas por esta migration.

@@ -35,6 +35,9 @@ export function PartnerForm({
     [contact, setContact] = useState(partner?.contact || ""),
     [website, setWebsite] = useState(partner?.website || ""),
     [active, setActive] = useState(partner?.active ?? true);
+  const [sandboxWallet, setSandboxWallet] = useState(partner?.merchant?.asaasSandboxWalletId || ""),
+    [productionWallet, setProductionWallet] = useState(partner?.merchant?.asaasProductionWalletId || ""),
+    [walletsEdited, setWalletsEdited] = useState({ sandbox: !partner, production: !partner });
   const offer = partner?.merchant?.offers[0];
   const [cashback, setCashback] = useState(
       ((offer?.cashbackBps || 0) / 100).toFixed(2).replace(".", ","),
@@ -69,6 +72,7 @@ export function PartnerForm({
           contact: contact.replace(/\D/g, ""),
           website: website.trim(),
           active,
+          ...((walletsEdited.sandbox || walletsEdited.production) ? { receivingWallets: { ...(walletsEdited.sandbox ? { sandbox: sandboxWallet.trim() } : {}), ...(walletsEdited.production ? { production: productionWallet.trim() } : {}) } } : {}),
           offer: {
             cashbackBps,
             commissionBps,
@@ -187,6 +191,12 @@ export function PartnerForm({
           disabled={busy}
           hint="Desativar também bloqueia novas cobranças no caixa. O histórico financeiro permanece disponível."
         />
+      </AdminSection>
+      <AdminSection title="Recebedor Asaas" description="Wallet ID da conta que recebe o split do parceiro. Não é a chave de API. Alterações afetam novas vendas; cobranças existentes mantêm o recebedor original.">
+        <AdminFormGrid>
+          <AdminField label="Wallet ID — sandbox" value={sandboxWallet} onChange={(value) => { setSandboxWallet(value); setWalletsEdited((old) => ({ ...old, sandbox: true })); }} autoCapitalize="none" maxLength={36} editable={!busy} hint={partner?.merchant?.asaasSandboxWalletId == null ? "Cadastro legado: usa o .env até você configurar. Ao editar este campo, vazio desabilita este ambiente." : "Vazio desabilita o recebimento neste ambiente."} />
+          <AdminField label="Wallet ID — produção" value={productionWallet} onChange={(value) => { setProductionWallet(value); setWalletsEdited((old) => ({ ...old, production: true })); }} autoCapitalize="none" maxLength={36} editable={!busy} hint={partner?.merchant?.asaasProductionWalletId == null ? "Cadastro legado: usa o .env até você configurar. Ao editar este campo, vazio desabilita este ambiente." : "Vazio desabilita o recebimento neste ambiente."} />
+        </AdminFormGrid>
       </AdminSection>
       <AdminSection
         title="Cashback e caixa"

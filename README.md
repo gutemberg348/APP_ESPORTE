@@ -48,9 +48,12 @@ Em `apps/mobile/.env`:
 ```dotenv
 EXPO_PUBLIC_DEMO_MODE=false
 EXPO_PUBLIC_API_URL=http://localhost:3333/v1
+EXPO_PUBLIC_API_HOST_MODE=local
 ```
 
-No navegador do próprio computador, mantenha `http://localhost:3333/v1` para não depender do IP atribuído pelo Wi-Fi. No Expo Go nativo em desenvolvimento, localhost é resolvido automaticamente para o host do Expo; URLs explícitas de outra API são preservadas. Para builds instalados ou navegador em outro aparelho, configure o endereço acessível da API. Emulador Android: `http://10.0.2.2:3333/v1`. Recarregue o Expo após editar o ambiente; se ainda aparecer o endereço antigo, reinicie-o com o cache limpo. Para outra origem web, ajuste `CORS_ORIGINS` da API.
+Mantenha `http://localhost:3333/v1` durante o desenvolvimento para não fixar o IP atribuído pelo Wi-Fi. No Expo Go nativo, localhost é resolvido automaticamente para o host atual do Expo. Na web em desenvolvimento, usa o endereço pelo qual o navegador abriu o painel: localhost no próprio PC ou o IP atual no outro aparelho. Com `EXPO_PUBLIC_API_HOST_MODE=local`, um IP privado antigo também acompanha o host atual do Expo/navegador. Para uma API em outra máquina ou um emulador com `http://10.0.2.2:3333/v1`, use `EXPO_PUBLIC_API_HOST_MODE=configured` para preservar exatamente o endereço. O modo `auto` adapta somente localhost; APIs públicas remotas e builds de produção são preservados em todos os modos. A API em `NODE_ENV=development` aceita os IPs atuais do próprio computador nas mesmas portas web já autorizadas para localhost; em produção, só vale `CORS_ORIGINS` explícito. Para builds instalados, configure o endereço acessível da API.
+
+Se a tela mostrar um IP antigo, recarregue com **Ctrl+F5**. Se o Expo ainda entregar a configuração antiga, pare apenas o Expo e execute `npm run web:clear`. Use `npm run api:check` para verificar IPs atuais, `/health` e `/ready` sem iniciar ou reiniciar serviços. `/health` e `/ready` respondendo 200 indicam que API e banco estão acessíveis pelo endereço local; um endereço antigo no cliente deve ser corrigido no app/cache, sem reiniciar o PostgreSQL por esse motivo. Prefira abrir o painel neste PC em `http://localhost:8081/admin`.
 
 **Estado desta máquina — 03/11/2026:** com API e PostgreSQL já iniciados pelo responsável, `npm run db:prepare` aplicou as seis migrations pendentes (sete no total) e configurou o administrador. Cadastro, perfil autenticado, login e rejeição de e-mail duplicado foram verificados pela API na rede local; somente a conta temporária dessa verificação foi removida. O agente não iniciou serviços. As verificações anteriores de 14/10 e 30/10 encontraram o banco indisponível; essa pendência foi resolvida.
 
@@ -145,3 +148,7 @@ Camada HTTP migrada para Express 5.3.0, mantendo os endpoints e o contrato do ap
 Recuperação por email, parceiros, ofertas e equipe: [configuração e uso no admin](docs/recuperacao-parceiros.md).
 
 Saques, pedidos de repasse e comprovantes privados: [operação e instalação](docs/saques.md).
+
+Configurações de valores, taxas, prazos, pontos e recompensas: [mapa do admin e regras de histórico](docs/configuracoes-negocio.md).
+
+No erro de conexão do login, **Verificar conexão** consulta os endpoints públicos de API/banco sem enviar credenciais. O modo de desenvolvimento web também oferece **Atualizar página** para descartar uma tela já carregada com configuração antiga. Não há repetição automática de login em outro endereço.

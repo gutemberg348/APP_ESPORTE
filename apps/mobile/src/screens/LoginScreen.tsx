@@ -10,6 +10,8 @@ import { messageOf } from '../utils/format';
 import { club } from '../config/club';
 import { Sheet } from '../components/Sheet';
 import { PasswordRecoveryForm } from '../components/PasswordRecoveryForm';
+import { ApiConnectionHelp } from '../components/ApiConnectionHelp';
+import { ApiError } from '../services/api';
 export function LoginScreen({ onAdminLogin }: { onAdminLogin?: () => void }) {
   const { colors } = useTheme();
   const { signIn } = useSession();
@@ -21,12 +23,13 @@ export function LoginScreen({ onAdminLogin }: { onAdminLogin?: () => void }) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [connectionError, setConnectionError] = useState(false);
   async function submit() {
     if (busy) return;
     if (!email.trim() || !password || (register && (name.trim().length < 2 || password.length < 10))) { setError(register ? 'Informe seu nome, e-mail e uma senha de pelo menos 10 caracteres.' : 'Informe seu e-mail e senha.'); return; }
-    setBusy(true); setError('');
+    setBusy(true); setError(''); setConnectionError(false);
     try { await signIn(email.trim().toLowerCase(), password, register ? name.trim() : undefined); }
-    catch (err) { setError(messageOf(err)); }
+    catch (err) { setError(messageOf(err)); setConnectionError(err instanceof ApiError && ['API_TIMEOUT', 'API_UNREACHABLE', 'DATABASE_UNAVAILABLE', 'DATABASE_SCHEMA_OUTDATED'].includes(err.code)); }
     finally { setBusy(false); }
   }
   const input = { padding: 16, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, borderWidth: 1, borderColor: colors.border };
@@ -40,10 +43,11 @@ export function LoginScreen({ onAdminLogin }: { onAdminLogin?: () => void }) {
     </View>
     {register && <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18 }}>Use uma senha com pelo menos 10 caracteres.</Text>}
     {error ? <Text style={{ color: colors.danger }} accessibilityRole="alert">{error}</Text> : null}
+    {connectionError && <ApiConnectionHelp disabled={busy} />}
     <Button label={register ? 'Criar conta' : 'Entrar'} loading={busy} onPress={() => void submit()} />
     {!register && <Pressable disabled={busy} onPress={() => setForgot(true)} accessibilityRole="button" style={{ padding: 12, alignItems: 'center' }}><Text style={{ color: colors.muted, fontSize: 13 }}>Esqueci minha senha</Text></Pressable>}
     {forgot && <Sheet visible title="Recuperar senha" onClose={() => setForgot(false)}><PasswordRecoveryForm initialEmail={email} onDone={() => setForgot(false)} /></Sheet>}
-    <Pressable disabled={busy} onPress={() => { setRegister((value) => !value); setPassword(''); setShowPassword(false); setError(''); }} style={{ padding: 16, alignItems: 'center' }} accessibilityRole="button"><Text style={{ color: colors.primary }}>{register ? 'Já tenho uma conta' : 'Quero me cadastrar'}</Text></Pressable>
+    <Pressable disabled={busy} onPress={() => { setRegister((value) => !value); setPassword(''); setShowPassword(false); setError(''); setConnectionError(false); }} style={{ padding: 16, alignItems: 'center' }} accessibilityRole="button"><Text style={{ color: colors.primary }}>{register ? 'Já tenho uma conta' : 'Quero me cadastrar'}</Text></Pressable>
     {onAdminLogin && <Pressable disabled={busy} onPress={onAdminLogin} style={{ padding: 12, alignItems: 'center' }} accessibilityRole="link"><Text style={{ color: colors.muted, fontSize: 12 }}>Acessar painel administrativo</Text></Pressable>}
   </ScrollView></KeyboardAvoidingView>;
 }

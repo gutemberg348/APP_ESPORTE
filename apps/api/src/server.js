@@ -5,8 +5,9 @@ import { routes } from './routes/index.js';
 import { authService } from './services/auth.service.js';
 import { startPaymentWorker } from './services/asaas.service.js';
 import { startMailWorker } from './services/password-recovery.service.js';
+import { createDevelopmentOriginPolicy } from './http/development-origins.js';
 
-const server = createHttpServer({ routes, authenticate: authService.authenticate, corsOrigins: env.corsOrigins, readiness: () => db.$queryRaw`SELECT 1` });
+const server = createHttpServer({ routes, authenticate: authService.authenticate, corsOrigins: env.corsOrigins, allowDevelopmentOrigin: createDevelopmentOriginPolicy({ enabled: env.NODE_ENV === 'development', origins: env.corsOrigins }), readiness: () => db.$queryRaw`SELECT 1` });
 let stopPaymentWorker = async () => {};
 let stopMailWorker = async () => {};
 server.listen(env.PORT, env.HOST, () => { console.log(`Nacional API: http://${env.HOST}:${env.PORT}`); stopPaymentWorker = startPaymentWorker(); stopMailWorker = startMailWorker(); });

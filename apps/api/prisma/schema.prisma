@@ -306,6 +306,19 @@ model PointEntry {
   @@index([userId, createdAt])
 }
 
+model BusinessSettings {
+  id String @id @default("main")
+  ticketReservationMinutes Int @default(15)
+  shopReservationMinutes Int @default(30)
+  shopQuoteMinutes Int @default(10)
+  cashChargeMinutes Int @default(15)
+  shopPendingOrderLimit Int @default(3)
+  checkInEnabled Boolean @default(true)
+  checkInPoints Int @default(30)
+  version Int @default(0)
+  updatedAt DateTime @updatedAt
+}
+
 model Reward {
   id          String       @id @default(uuid()) @db.Uuid
   slug        String       @unique
@@ -313,8 +326,9 @@ model Reward {
   description String
   cost        Int
   stock       Int
-  icon        String       @default("gift")
-  active      Boolean      @default(true)
+  icon        String @default("gift")
+  active      Boolean @default(true)
+  version     Int @default(0)
   redemptions Redemption[]
 }
 
@@ -360,15 +374,17 @@ model Tenant {
 }
 
 model Merchant {
-  id         String             @id @default(uuid()) @db.Uuid
-  slug       String             @unique
-  name       String
-  publicCode String             @unique @default(uuid()) @db.Uuid
-  active     Boolean            @default(true)
-  partnerId  String?            @unique @db.Uuid
-  partner    Partner?           @relation(fields: [partnerId], references: [id])
-  offers     MerchantOffer[]
-  operators  MerchantOperator[]
+  id String @id @default(uuid()) @db.Uuid
+  slug String @unique
+  name String
+  publicCode String @unique @default(uuid()) @db.Uuid
+  asaasSandboxWalletId String? @db.VarChar(36)
+  asaasProductionWalletId String? @db.VarChar(36)
+  active Boolean @default(true)
+  partnerId String? @unique @db.Uuid
+  partner Partner? @relation(fields: [partnerId], references: [id])
+  offers MerchantOffer[]
+  operators MerchantOperator[]
 }
 
 model MerchantOffer {
@@ -413,33 +429,33 @@ model CashWallet {
 }
 
 model PaymentCharge {
-  id                String         @id @default(uuid()) @db.Uuid
-  offerId           String         @db.Uuid
-  creatorId         String         @db.Uuid
-  walletId          String?        @db.Uuid
-  channel           PaymentChannel
-  status            PaymentStatus  @default(PENDING)
-  requestKey        String         @db.VarChar(80)
-  claimCode         String         @unique
-  grossCents        Int
-  merchantCents     Int
-  cashbackCents     Int
-  commissionCents   Int
-  gatewayFeeCents   Int            @default(0)
-  provider          String
-  providerReference String?        @unique
-  pixPayload        String?
-  expiresAt         DateTime
-  paidAt            DateTime?
-  refundedAt        DateTime?
-  createdAt         DateTime       @default(now())
-  offer             MerchantOffer  @relation(fields: [offerId], references: [id])
-  creator           User           @relation(fields: [creatorId], references: [id])
-  wallet            CashWallet?    @relation(fields: [walletId], references: [id], onDelete: Restrict)
-  entries           CashEntry[]
-  events            PaymentEvent[]
-  paymentIntent     GatewayIntent?
-
+  id String @id @default(uuid()) @db.Uuid
+  offerId String @db.Uuid
+  creatorId String @db.Uuid
+  walletId String? @db.Uuid
+  channel PaymentChannel
+  status PaymentStatus @default(PENDING)
+  requestKey String @db.VarChar(80)
+  claimCode String @unique
+  grossCents Int
+  merchantCents Int
+  cashbackCents Int
+  commissionCents Int
+  gatewayFeeCents Int @default(0)
+  provider String
+  providerReference String? @unique
+  paymentPolicy Json?
+  pixPayload String?
+  expiresAt DateTime
+  paidAt DateTime?
+  refundedAt DateTime?
+  createdAt DateTime @default(now())
+  offer MerchantOffer @relation(fields: [offerId], references: [id])
+  creator User @relation(fields: [creatorId], references: [id])
+  wallet CashWallet? @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  entries CashEntry[]
+  events PaymentEvent[]
+  paymentIntent GatewayIntent?
   @@unique([creatorId, requestKey])
   @@index([offerId, createdAt])
   @@index([walletId, createdAt])

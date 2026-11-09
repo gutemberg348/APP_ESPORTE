@@ -3,12 +3,14 @@ export class ApiError extends Error {
 }
 export interface RequestOptions { method?: string; body?: unknown; token?: string | null; timeoutMs?: number }
 
-export function createApiTransport(apiUrl: string, fetcher: typeof fetch = fetch, timeoutMs = 10000) {
+export function createApiTransport(apiUrl: string | (() => string), fetcher: typeof fetch = fetch, timeoutMs = 10000) {
   return async function send<T>(path: string, options: RequestOptions = {}): Promise<T> {
+    // Resolve once per request. Never retry a POST against another destination.
+    const baseUrl = typeof apiUrl === 'function' ? apiUrl() : apiUrl;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), options.timeoutMs === undefined ? timeoutMs : Math.max(1000, Math.min(90000, options.timeoutMs)));
     try {
-      const response = await fetcher(`${apiUrl}${path}`, {
+      const response = await fetcher(`${baseUrl}${path}`, {
         method: options.method || 'GET', signal: controller.signal,
         headers: { Accept: 'application/json', ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}) },
         ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
@@ -26,7 +28,7 @@ export function createApiTransport(apiUrl: string, fetcher: typeof fetch = fetch
       return result.data as T;
     } catch (error) {
       if (error instanceof ApiError) throw error;
-      const host = new URL(apiUrl).origin;
+      const host = new URL(baseUrl).origin;
       throw new ApiError(0, controller.signal.aborted ? `A API em ${host} demorou para responder. Confira o servidor e tente novamente.` : `Não foi possível conectar à API em ${host}. Confira se a API está iniciada e se o endereço e o acesso pela rede estão corretos.`, controller.signal.aborted ? 'API_TIMEOUT' : 'API_UNREACHABLE');
     } finally { clearTimeout(timeout); }
   };

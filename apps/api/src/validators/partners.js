@@ -25,6 +25,7 @@ const fields = {
     .default(""),
   website: website.default(""),
   active: z.boolean().default(true),
+  receivingWallets: z.object({ sandbox: z.union([z.uuid(), z.literal("")]).optional(), production: z.union([z.uuid(), z.literal("")]).optional() }).strict().optional(),
   offer: z
     .object({
       cashbackBps: z.number().int().min(0).max(10000),

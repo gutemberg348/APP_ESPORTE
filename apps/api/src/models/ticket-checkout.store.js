@@ -1,3 +1,4 @@
+import { readBusinessSettings } from '../lib/business-settings.js';
 import { AppError } from '../lib/errors.js';
 import { serializable, assertAvailability, ticketPrice } from '../lib/business-rules.js';
 import { assertSalesOpen, inventoryWhere, occupiedQuantity, assertNoPendingPix } from '../lib/ticket-rules.js';
@@ -52,7 +53,8 @@ export function createTicketCheckoutStore(client, { now = () => new Date() } = {
         const currentTotal = ticketPrice(sector.priceCents, isActiveMember(user, instant) ? user.membership.plan.discountPercent : 0, quantity);
         if (currentTotal !== totalCents || (expectedTotalCents !== undefined && expectedTotalCents !== totalCents)) throw new AppError(409, 'TICKET_PRICE_CHANGED', 'O preço ou desconto mudou. Revise os valores atualizados antes de confirmar.');
         const free = totalCents === 0;
-        const expiresAt = free ? null : new Date(Math.min(instant.getTime() + 15 * 60000, match.startsAt.getTime(), match.salesCloseAt?.getTime() ?? Infinity));
+        const settings = await readBusinessSettings(tx);
+        const expiresAt = free ? null : new Date(Math.min(instant.getTime() + settings.ticketReservationMinutes * 60000, match.startsAt.getTime(), match.salesCloseAt?.getTime() ?? Infinity));
         const financialPolicy = await captureFinancialPolicy(tx);
         const data = { userId, matchId, sectorId, quantity, priceCents: totalCents, status: free ? 'ISSUED' : 'PENDING', usedQuantity: 0, entryToken: null, entryVersion: 0, expiresAt, financialPolicy };
         let ticket = existing ? await tx.ticket.update({ where: { id: existing.id }, data: { ...data, createdAt: instant }, include: ticketInclude }) : await tx.ticket.create({ data, include: ticketInclude });

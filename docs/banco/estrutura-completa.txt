@@ -1,3 +1,5 @@
+ATUALIZACAO CONFIGURACOES 09/11/2026: BusinessSettings, Reward.version, recebedores Asaas em Merchant e PaymentCharge.paymentPolicy estao em docs/banco/configuracoes.txt. Migration 20261109050000_business_configuration aplicada ao banco local; 15 migrations concluidas. Os levantamentos seguintes sao historicos.
+
 ATUALIZACAO SAQUES 09/11/2026: WithdrawalRequest, PayoutAttachment e enum WithdrawalStatus estao em docs/banco/saques.txt. Migration 20261109040000_withdrawals_receipts aplicada ao banco local; 14 migrations concluidas. Os levantamentos seguintes sao historicos.
 
 ATUALIZACAO ACESSO E PARCEIROS 09/11/2026: PasswordResetToken, MailDelivery, PartnerBenefit, novos campos de Partner e perfil CASHIER estao em docs/banco/recuperacao-parceiros.txt. Migration aplicada ao banco local; 13 migrations concluidas. O levantamento abaixo e historico.

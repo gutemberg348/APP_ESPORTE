@@ -1,3 +1,4 @@
+import { paymentDestination } from '../lib/merchant-payment-policy.js';
 import { randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
 import { serializable } from '../lib/business-rules.js';
@@ -219,10 +220,8 @@ export function createAsaasStore(client, { settings, api, now = () => new Date()
         const charge = await tx.paymentCharge.findFirst({ where: { id: chargeId, wallet: { userId } }, include: { offer: true } });
         if (!charge || charge.provider !== 'asaas') throw new AppError(404, 'SALE_NOT_FOUND', 'Venda não encontrada.');
         if (charge.status !== 'PENDING' || charge.expiresAt <= now()) throw error('SALE_CLOSED', 'Esta venda não está disponível para pagamento.');
-        const merchantWallet = settings.asaasMerchantWallets[charge.offer.merchantId];
-        if (!merchantWallet) throw error('ASAAS_MERCHANT_NOT_CONFIGURED', 'O recebedor da loja ainda não foi configurado.');
         const prior = await tx.gatewayIntent.findUnique({ where: { chargeId } });
-        if (prior && prior.environment !== environment) throw error('ASAAS_ENVIRONMENT_MISMATCH', 'Esta venda pertence a outro ambiente de pagamento.');
+        const merchantWallet = paymentDestination(charge, prior, settings);
         const intent = await tx.gatewayIntent.upsert({ where: { chargeId }, update: {}, create: { environment, generation: `${environment}:cash:${chargeId}`, chargeId, customerId: customer.id, amountCents: charge.grossCents, expiresAt: charge.expiresAt, snapshot: { userId, merchantWallet, cashbackCents: charge.cashbackCents, commissionCents: charge.commissionCents } } });
         return publicIntent(intent, now());
       });

@@ -1,3 +1,5 @@
+import { readBusinessSettings } from '../lib/business-settings.js';
+import { captureMerchantPolicy, paymentDestination } from '../lib/merchant-payment-policy.js';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { db } from '../config/database.js';
 import { serializable } from '../lib/business-rules.js';
@@ -22,7 +24,8 @@ async function assertOperator(client, userId, merchantId) {
   if (!operator?.active || !operator.merchant.active) throw new AppError(403, 'MERCHANT_ACCESS_DENIED', 'Você não tem acesso a este caixa.');
 }
 
-export const paymentModel = {
+export function createPaymentModel(db, { settings: env, gateway: paymentGateway, now = () => new Date() }) {
+const paymentModel = {
   async wallet(userId, tenantSlug) {
     const tenant = await findTenant(db, tenantSlug);
     const wallet = await ensureWallet(db, userId, tenant.id);
@@ -85,11 +88,14 @@ export const paymentModel = {
       }
       const id = randomUUID();
       const split = splitPayment(input.amountCents, offer.cashbackBps, offer.commissionBps);
-      const expiresAt = new Date(Date.now() + 15 * 60000);
+      const business = await readBusinessSettings(tx);
+      const expiresAt = new Date(now().getTime() + business.cashChargeMinutes * 60000);
+      const paymentPolicy = env.PAYMENT_MODE === 'asaas' ? captureMerchantPolicy(offer, env) : undefined;
+      if (paymentPolicy) paymentDestination({ paymentPolicy, offer }, null, env);
       // The demo adapter does no IO. Real providers must use an outbox/recovery
       // workflow and charge.id as their idempotency key before being enabled.
       const gateway = env.PAYMENT_MODE === 'asaas' ? { provider: 'asaas', expiresAt } : await paymentGateway.createCharge({ chargeId: id, offer, wallet, ...split, expiresAt });
-      return tx.paymentCharge.create({ data: { id, offerId: offer.id, creatorId: userId, walletId: wallet?.id, channel, requestKey: input.requestKey, claimCode: randomBytes(24).toString('base64url'), ...split, ...gateway }, include: includeCharge });
+      return tx.paymentCharge.create({ data: { id, offerId: offer.id, creatorId: userId, walletId: wallet?.id, channel, requestKey: input.requestKey, claimCode: randomBytes(24).toString('base64url'), paymentPolicy, ...split, ...gateway }, include: includeCharge });
     });
   },
   async simulateEvent(userId, { chargeId, type, eventId }) {
@@ -126,3 +132,6 @@ export const paymentModel = {
     });
   },
 };
+return paymentModel;
+}
+export const paymentModel = createPaymentModel(db, { settings: env, gateway: paymentGateway });

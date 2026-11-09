@@ -3,12 +3,12 @@ import { clubDay } from '../lib/business-rules.js';
 export const engagementService = {
   async summary(user) {
     const day = clubDay();
-    const [entry, ledger, rewards, redemptions, ranking] = await Promise.all([
+    const [entry, ledger, rewards, redemptions, ranking, settings] = await Promise.all([
       engagementModel.checkedIn(user.id, day), engagementModel.points(user.id),
-      engagementModel.rewards(), engagementModel.redemptions(user.id), engagementModel.ranking(),
+      engagementModel.rewards(), engagementModel.redemptions(user.id), engagementModel.ranking(), engagementModel.settings(),
     ]);
     return {
-      checkedIn: Boolean(entry), day, ledger, rewards, redemptions,
+      checkInPoints: settings.checkInPoints, checkInEnabled: settings.checkInEnabled, checkedIn: Boolean(entry), day, ledger, rewards, redemptions,
       ranking: ranking.map((row) => ({
         name: row.id === user.id ? `${row.name.split(' ')[0]} · você` : row.name.split(' ').map((part, index) => index === 0 ? part : `${part[0]}.`).slice(0, 2).join(' '),
         points: row.points, you: row.id === user.id,
