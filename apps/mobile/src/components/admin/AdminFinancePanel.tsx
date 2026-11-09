@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
-import { ArrowUpRight, Wallet, Settings2 } from "lucide-react-native";
+import { Settings2 } from "lucide-react-native";
 import type {
   FinancialSettings,
-  FinancialSummary,
   ClubPayout,
 } from "@nacional/shared/finance";
 import { centsInput } from "@nacional/shared/forms";
@@ -11,8 +10,7 @@ import { financeApi } from "../../services/finance";
 import { useSession } from "../../providers/SessionProvider";
 import { useTheme } from "../../theme/ThemeProvider";
 import { money } from "../../utils/format";
-import { formDate, parseClubDate } from "../../utils/admin";
-import { requestKey, parseAmount } from "../../utils/payments";
+import { parseAmount } from "../../utils/payments";
 import { Text } from "../Typography";
 import { Panel } from "../ui";
 import { Sheet } from "../Sheet";
@@ -26,7 +24,8 @@ import {
   AdminNotice,
   AdminDateTimeField,
 } from "./AdminControls";
-import { AdminTable, AdminBadge } from "./AdminLayout";
+import { PayoutAttachments } from "./PayoutAttachments";
+import { AdminTable, AdminBadge, useDesktopAdmin } from "./AdminLayout";
 import { ReportMetrics, useAdminReport } from "./AdminReportControls";
 import { useShopAction } from "./shop/useShopAction";
 const days = [
@@ -58,7 +57,7 @@ export function AdminPayoutAlert({
             : "Há saldo do time aguardando repasse."}{" "}
           Valor liberado: {money(data.availableCents)}.
         </Text>
-        <AdminButton label="Conferir financeiro e repasses" onPress={onOpen} />
+        <AdminButton label="Conferir saques e envios" onPress={onOpen} />
       </View>
     </AdminNotice>
   );
@@ -73,13 +72,18 @@ function bps(value: string) {
     throw new Error("O percentual não pode ultrapassar 100%.");
   return result;
 }
-export function AdminFinancePanel({ refreshKey }: { refreshKey: number }) {
+export function AdminFinancePanel({
+  refreshKey,
+  onOpenWithdrawals,
+}: {
+  refreshKey: number;
+  onOpenWithdrawals: () => void;
+}) {
   const { token } = useSession(),
     { colors } = useTheme(),
     [revision, setRevision] = useState(0),
-    [tab, setTab] = useState("Repasses"),
+    [tab, setTab] = useState("Resumo"),
     [config, setConfig] = useState<FinancialSettings | null>(null),
-    [payout, setPayout] = useState(false),
     [adopt, setAdopt] = useState(false),
     [legacyReason, setLegacyReason] = useState("");
   const filters = useMemo(() => ({ limit: "25", offset: "0" }), []),
@@ -97,7 +101,7 @@ export function AdminFinancePanel({ refreshKey }: { refreshKey: number }) {
   return (
     <View style={{ gap: 22 }}>
       <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-        {["Repasses", "Por pagamento", "Configurações"].map((name) => (
+        {["Resumo", "Por pagamento", "Configurações"].map((name) => (
           <AdminButton
             key={name}
             label={name}
@@ -187,58 +191,18 @@ export function AdminFinancePanel({ refreshKey }: { refreshKey: number }) {
               />
             </Panel>
           )}
-          {tab === "Repasses" ? (
-            <>
-              <Panel style={{ gap: 17 }}>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    gap: 12,
-                    alignItems: "center",
-                  }}
-                >
-                  <Wallet color={colors.primary} size={24} />
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        color: colors.text,
-                        fontSize: 17,
-                        fontWeight: "600",
-                      }}
-                    >
-                      Repasse semanal ao time
-                    </Text>
-                    <Text style={{ color: colors.muted, fontSize: 12 }}>
-                      Faça a transferência por fora e registre aqui depois.
-                    </Text>
-                  </View>
-                </View>
-                <AdminNotice>
-                  Registrar não envia Pix nem movimenta dinheiro. O saldo
-                  pendente é reduzido pelo valor do comprovante. Novas vendas e
-                  estornos continuam atualizando a conta.
-                </AdminNotice>
-                <Text style={{ color: colors.muted, fontSize: 12 }}>
-                  Agendado para {days[config?.payoutWeekday ?? 5]}. Último
-                  envio:{" "}
-                  {totals?.lastPayout
-                    ? `${money(totals.lastPayout.amountCents)} em ${new Date(totals.lastPayout.transferredAt).toLocaleDateString("pt-BR", { timeZone: "America/Fortaleza" })}`
-                    : "nenhum registrado"}
-                  .
-                </Text>
-                <AdminButton
-                  primary
-                  label="Registrar repasse já enviado"
-                  icon={ArrowUpRight}
-                  disabled={summary.loading || !totals?.availableCents}
-                  onPress={() => setPayout(true)}
-                />
-              </Panel>
-              <PayoutHistory
-                refreshKey={refreshKey + revision}
-                onSaved={reload}
+          {tab === "Resumo" ? (
+            <Panel style={{ gap: 12 }}>
+              <AdminNotice>
+                Pedidos de saque, envios realizados e comprovantes ficam na aba
+                Saques.
+              </AdminNotice>
+              <AdminButton
+                primary
+                label="Abrir saques e envios"
+                onPress={onOpenWithdrawals}
               />
-            </>
+            </Panel>
           ) : (
             <>
               <FinancialReceipts refreshKey={refreshKey + revision} />
@@ -246,17 +210,6 @@ export function AdminFinancePanel({ refreshKey }: { refreshKey: number }) {
             </>
           )}
         </>
-      )}
-      {payout && totals && config && (
-        <PayoutForm
-          summary={totals}
-          settings={config}
-          onClose={() => setPayout(false)}
-          onSaved={async () => {
-            setPayout(false);
-            await reload();
-          }}
-        />
       )}
       {adopt && (
         <Sheet
@@ -443,107 +396,7 @@ function FinanceSettingsForm({
     </Panel>
   );
 }
-function PayoutForm({
-  summary,
-  settings,
-  onClose,
-  onSaved,
-}: {
-  summary: FinancialSummary;
-  settings: FinancialSettings;
-  onClose: () => void;
-  onSaved: () => Promise<unknown>;
-}) {
-  const { token } = useSession(),
-    [amount, setAmount] = useState(centsInput(summary.availableCents)),
-    [reference, setReference] = useState(""),
-    [recipient, setRecipient] = useState(settings.clubRecipient),
-    [date, setDate] = useState(formDate(new Date().toISOString())),
-    [notes, setNotes] = useState(""),
-    [verified, setVerified] = useState(false),
-    [key] = useState(requestKey),
-    { busy, error, run } = useShopAction();
-  return (
-    <Sheet
-      visible
-      title="Registrar repasse ao time"
-      onClose={busy ? () => {} : onClose}
-    >
-      <AdminNotice tone="warning">
-        Registre somente após transferir e conferir o comprovante. Saldo
-        liberado agora: {money(summary.availableCents)}. Um repasse integral
-        zera esse saldo, preservando o histórico e a comissão da empresa.
-      </AdminNotice>
-      <AdminField
-        label="Valor já enviado"
-        prefix="R$"
-        value={amount}
-        onChange={setAmount}
-        numeric
-      />
-      <AdminField
-        label="Favorecido"
-        value={recipient}
-        onChange={setRecipient}
-      />
-      {!!settings.clubPixKey && (
-        <AdminNotice>
-          Destino configurado para conferência: {settings.clubPixKey}
-        </AdminNotice>
-      )}
-      <AdminField
-        label="Identificador único do comprovante / transação"
-        value={reference}
-        onChange={setReference}
-        maxLength={100}
-      />
-      <AdminDateTimeField
-        label="Data e hora da transferência"
-        value={date}
-        onChange={setDate}
-      />
-      <AdminField
-        label="Observações (opcional)"
-        value={notes}
-        onChange={setNotes}
-        multiline
-      />
-      <AdminToggle
-        label="Já enviei esse dinheiro e conferi o comprovante"
-        value={verified}
-        onChange={setVerified}
-        checkbox
-      />
-      {!!error && <AdminNotice tone="error">{error}</AdminNotice>}
-      <AdminButton
-        primary
-        label="Confirmar registro do repasse"
-        loading={busy}
-        disabled={
-          !verified ||
-          reference.trim().length < 5 ||
-          recipient.trim().length < 2
-        }
-        onPress={() =>
-          void run(async () => {
-            await financeApi.payout(token!, {
-              amountCents: parseAmount(amount),
-              expectedBalanceCents: summary.availableCents,
-              reference: reference.trim(),
-              recipient: recipient.trim(),
-              transferredAt: parseClubDate(date),
-              notes,
-              transferVerified: true,
-              requestKey: key,
-            });
-            await onSaved();
-          })
-        }
-      />
-    </Sheet>
-  );
-}
-function PayoutHistory({
+export function PayoutHistory({
   refreshKey,
   onSaved,
 }: {
@@ -552,6 +405,8 @@ function PayoutHistory({
 }) {
   const { token } = useSession(),
     { colors } = useTheme(),
+    desktop = useDesktopAdmin(),
+    [proof, setProof] = useState<ClubPayout | null>(null),
     [offset, setOffset] = useState(0),
     filters = useMemo(
       () => ({ limit: "25", offset: String(offset) }),
@@ -565,69 +420,125 @@ function PayoutHistory({
     [voided, setVoided] = useState<ClubPayout | null>(null),
     [reason, setReason] = useState(""),
     { busy, error: actionError, run } = useShopAction();
+  const payoutActions = (row: ClubPayout) => (
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+      <AdminButton label="Comprovantes" onPress={() => setProof(row)} />
+      {!row.voidedAt && (
+        <AdminButton
+          label="Corrigir registro"
+          variant="ghost"
+          onPress={() => {
+            setVoided(row);
+            setReason("");
+          }}
+        />
+      )}
+    </View>
+  );
   return (
     <View style={{ gap: 14 }}>
       <Text style={{ color: colors.text, fontWeight: "600" }}>
         Histórico de envios
       </Text>
       {!!error && <AdminNotice tone="error">{error}</AdminNotice>}
-      <AdminTable
-        minWidth={800}
-        loading={loading}
-        columns={[
-          { label: "Transferência", width: 155 },
-          { label: "Valor", width: 110 },
-          { label: "Favorecido / comprovante", flex: 1.5 },
-          { label: "Registro", flex: 1 },
-          { label: "", width: 110 },
-        ]}
-        rows={(data?.items || []).map((row) => ({
-          id: row.id,
-          cells: [
-            <Text style={{ color: colors.muted, fontSize: 12 }}>
-              {new Date(row.transferredAt).toLocaleString("pt-BR", {
-                timeZone: "America/Fortaleza",
-              })}
-            </Text>,
-            <Text style={{ color: colors.text }}>
-              {money(row.amountCents)}
-            </Text>,
-            <View>
-              <Text style={{ color: colors.text, fontSize: 12 }}>
-                {row.recipient}
-              </Text>
-              <Text selectable style={{ color: colors.subtle, fontSize: 11 }}>
-                {row.reference}
-              </Text>
-            </View>,
-            <View>
+      {desktop ? (
+        <AdminTable
+          minWidth={800}
+          loading={loading}
+          columns={[
+            { label: "Transferência", width: 155 },
+            { label: "Valor", width: 110 },
+            { label: "Favorecido / comprovante", flex: 1.5 },
+            { label: "Registro", flex: 1 },
+            { label: "", width: 110 },
+          ]}
+          rows={(data?.items || []).map((row) => ({
+            id: row.id,
+            cells: [
+              <Text style={{ color: colors.muted, fontSize: 12 }}>
+                {new Date(row.transferredAt).toLocaleString("pt-BR", {
+                  timeZone: "America/Fortaleza",
+                })}
+              </Text>,
+              <Text style={{ color: colors.text }}>
+                {money(row.amountCents)}
+              </Text>,
+              <View>
+                <Text style={{ color: colors.text, fontSize: 12 }}>
+                  {row.recipient}
+                </Text>
+                <Text selectable style={{ color: colors.subtle, fontSize: 11 }}>
+                  {row.reference}
+                </Text>
+              </View>,
+              <View>
+                <AdminBadge
+                  label={row.voidedAt ? "Registro anulado" : "Confirmado"}
+                  tone={row.voidedAt ? "danger" : "success"}
+                />
+                <Text style={{ color: colors.subtle, fontSize: 11 }}>
+                  {row.actor?.name}
+                </Text>
+                {row.voidReason && (
+                  <Text style={{ color: colors.subtle, fontSize: 11 }}>
+                    {row.voidReason}
+                  </Text>
+                )}
+              </View>,
+              payoutActions(row),
+            ],
+          }))}
+          empty="Nenhum repasse registrado."
+        />
+      ) : (
+        <View style={{ gap: 12 }}>
+          {(data?.items || []).map((row) => (
+            <Panel key={row.id} style={{ gap: 10 }}>
               <AdminBadge
-                label={row.voidedAt ? "Registro anulado" : "Confirmado"}
+                label={row.voidedAt ? "Registro anulado" : "Enviado"}
                 tone={row.voidedAt ? "danger" : "success"}
               />
-              <Text style={{ color: colors.subtle, fontSize: 11 }}>
+              <Text style={{ color: colors.text, fontWeight: "600" }}>
+                {row.recipient} · {money(row.amountCents)}
+              </Text>
+              <Text selectable style={{ color: colors.muted, fontSize: 12 }}>
+                {row.reference}
+              </Text>
+              <Text style={{ color: colors.muted, fontSize: 12 }}>
+                {new Date(row.transferredAt).toLocaleString("pt-BR")} ·{" "}
                 {row.actor?.name}
               </Text>
-              {row.voidReason && (
-                <Text style={{ color: colors.subtle, fontSize: 11 }}>
-                  {row.voidReason}
-                </Text>
-              )}
-            </View>,
-            row.voidedAt ? null : (
-              <AdminButton
-                label="Corrigir registro"
-                variant="ghost"
-                onPress={() => {
-                  setVoided(row);
-                  setReason("");
-                }}
-              />
-            ),
-          ],
-        }))}
-        empty="Nenhum repasse registrado."
-      />
+              {row.voidReason && <AdminNotice>{row.voidReason}</AdminNotice>}
+              {payoutActions(row)}
+            </Panel>
+          ))}
+          {!loading && !data?.items.length && (
+            <AdminNotice>Nenhum envio registrado.</AdminNotice>
+          )}
+        </View>
+      )}
+      {proof && (
+        <Sheet
+          visible
+          title="Comprovantes do envio"
+          onClose={() => setProof(null)}
+        >
+          <Text style={{ color: colors.text }}>
+            {proof.recipient} · {money(proof.amountCents)}
+          </Text>
+          <Text selectable style={{ color: colors.muted }}>
+            {proof.reference}
+          </Text>
+          <PayoutAttachments
+            parent={
+              proof.withdrawal
+                ? { withdrawalId: proof.withdrawal.id }
+                : { payoutId: proof.id }
+            }
+            readOnly={Boolean(proof.voidedAt)}
+          />
+        </Sheet>
+      )}
       <FinancePager
         offset={offset}
         total={data?.total || 0}

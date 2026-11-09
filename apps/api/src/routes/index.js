@@ -7,10 +7,20 @@ import { adminController } from '../controllers/admin.controller.js';
 import { staffController } from '../controllers/staff.controller.js';
 import { asaasController } from '../controllers/asaas.controller.js';
 import { shopController } from '../controllers/shop.controller.js';
+import { withdrawalController } from '../controllers/withdrawal.controller.js';
 import { financeController } from '../controllers/finance.controller.js';
 import { passwordRecoveryController } from '../controllers/password-recovery.controller.js';
 import { partnerController } from '../controllers/partner.controller.js';
 export const routes = [
+  { method: 'GET', path: '/v1/admin/withdrawals/summary', handler: withdrawalController.summary, private: true, admin: true },
+  { method: 'GET', path: '/v1/admin/withdrawals', handler: withdrawalController.list, private: true, admin: true },
+  { method: 'POST', path: '/v1/admin/withdrawals', handler: withdrawalController.create, private: true, admin: true },
+  { method: 'POST', path: '/v1/admin/withdrawals/cancel', handler: withdrawalController.cancel, private: true, admin: true },
+  { method: 'POST', path: '/v1/admin/withdrawals/send', handler: withdrawalController.send, private: true, admin: true },
+  { method: 'GET', path: '/v1/admin/withdrawals/attachments', handler: withdrawalController.attachments, private: true, admin: true },
+  { method: 'POST', path: '/v1/admin/withdrawals/attachments', handler: withdrawalController.upload, private: true, admin: true, bodyLimit: 7100000 },
+  { method: 'POST', path: '/v1/admin/withdrawals/attachments/content', handler: withdrawalController.content, private: true, admin: true },
+  { method: 'DELETE', path: '/v1/admin/withdrawals/attachments', handler: withdrawalController.remove, private: true, admin: true },
   { method: 'POST', path: '/v1/auth/forgot-password', handler: passwordRecoveryController.request, authLimit: true },
   { method: 'POST', path: '/v1/auth/reset-password/validate', handler: passwordRecoveryController.validate, authLimit: true },
   { method: 'POST', path: '/v1/auth/reset-password', handler: passwordRecoveryController.reset, authLimit: true },
@@ -46,6 +56,8 @@ export const routes = [
   { method: 'GET', path: '/v1/admin/shop/settings', handler: shopController.adminSettings, private: true, admin: true },
   { method: 'PUT', path: '/v1/admin/shop/settings', handler: shopController.saveSettings, private: true, admin: true },
   { method: 'GET', path: '/v1/admin/shop/products', handler: shopController.adminProducts, private: true, admin: true },
+  { method: 'POST', path: '/v1/admin/shop/skus/generate', handler: shopController.generateSku, private: true, admin: true },
+  { method: 'POST', path: '/v1/admin/shop/skus/check', handler: shopController.checkSkus, private: true, admin: true },
   { method: 'POST', path: '/v1/admin/shop/products', handler: shopController.createProduct, private: true, admin: true, bodyLimit: 65536 },
   { method: 'PATCH', path: '/v1/admin/shop/products', handler: shopController.updateProduct, private: true, admin: true, bodyLimit: 65536 },
   { method: 'DELETE', path: '/v1/admin/shop/products', handler: shopController.archiveProduct, private: true, admin: true },

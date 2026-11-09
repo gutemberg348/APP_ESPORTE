@@ -9,6 +9,9 @@ export const safeUrl = text(1000).refine((value) => { try { const url = new URL(
 const optionalUrl = z.union([z.literal(''), safeUrl]);
 export const productImage = z.union([safeUrl, z.string().regex(/^\/media\/shop\/[a-z0-9-]+\.(png|jpg|webp)$/)]);
 const version = z.number().int().min(0);
+const sku = text(80).min(1).transform((value) => value.toUpperCase());
+export const generateSkuSchema = z.object({ excludeSkus: z.array(sku).max(50).default([]) }).strict();
+export const checkSkusSchema = z.object({ items: z.array(z.object({ sku, variantId: z.uuid().optional() }).strict()).min(1).max(50) }).strict();
 export const settingsSchema = z.object({ name: text(100).min(2), mode: z.enum(['INTERNAL', 'EXTERNAL']), enabled: z.boolean(), externalUrl: optionalUrl, pickupEnabled: z.boolean(), pickupAddress: text(500), shippingProvider: z.enum(['RULES', 'MELHOR_ENVIO']), originPostalCode: z.union([z.literal(''), postalCode]), paymentInstructions: text(1000), supportPhone: z.union([z.literal(''), phone]) }).strict().superRefine((value, ctx) => {
   if (value.enabled && value.mode === 'EXTERNAL' && !value.externalUrl) ctx.addIssue({ code: 'custom', path: ['externalUrl'], message: 'Informe o link da loja.' });
   if (value.enabled && value.mode === 'INTERNAL' && value.pickupEnabled && !value.pickupAddress) ctx.addIssue({ code: 'custom', path: ['pickupAddress'], message: 'Informe o endereço para retirada.' });

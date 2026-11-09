@@ -1,3 +1,5 @@
+ATUALIZACAO SAQUES 09/11/2026: WithdrawalRequest, PayoutAttachment e enum WithdrawalStatus estao em docs/banco/saques.txt. Migration 20261109040000_withdrawals_receipts aplicada ao banco local; 14 migrations concluidas. Os levantamentos seguintes sao historicos.
+
 ATUALIZACAO ACESSO E PARCEIROS 09/11/2026: PasswordResetToken, MailDelivery, PartnerBenefit, novos campos de Partner e perfil CASHIER estao em docs/banco/recuperacao-parceiros.txt. Migration aplicada ao banco local; 13 migrations concluidas. O levantamento abaixo e historico.
 
 ATUALIZACAO FINANCEIRO 09/11/2026: FinancialSettings, TicketFinancial, TicketFinancialEntry, ClubPayout, TicketRefundCost e Ticket.financialPolicy estao documentados em docs/banco/financeiro.txt. As migrations Asaas, Loja e Financeiro foram aplicadas ao banco local (12 migrations concluidas); os levantamentos mais antigos abaixo continuam historicos.

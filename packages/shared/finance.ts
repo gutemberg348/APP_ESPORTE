@@ -23,7 +23,13 @@ export interface ClubPayout {
   voidReason: string | null;
   createdAt: string;
   actor?: { name: string; email: string };
+  withdrawal?: { id: string } | null;
 }
+export type WithdrawalStatus = 'PENDING' | 'SENT' | 'CANCELED' | 'VOIDED';
+export interface WithdrawalRequest { id: string; amountCents: number; recipient: string; pixKey: string; notes: string; status: WithdrawalStatus; version: number; payoutId: string | null; createdAt: string; resolvedAt: string | null; resolutionReason: string | null; actor: { name: string; email: string }; payout: { id: string; reference: string; transferredAt: string; voidedAt: string | null } | null; _count: { attachments: number } }
+export interface WithdrawalSummary { availableCents: number; availableToRequestCents: number; pendingCents: number; pendingCount: number; totalSentCents: number; outstandingCents: number }
+export type ReceiptParent = { withdrawalId: string; payoutId?: never } | { payoutId: string; withdrawalId?: never };
+export interface PayoutAttachment { id: string; name: string; mimeType: string; byteLength: number; sha256: string; createdAt: string; removedAt: string | null; removalReason: string | null }
 export interface FinancialSummary {
   grossCents: number;
   refundedCents: number;

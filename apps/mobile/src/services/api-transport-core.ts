@@ -1,12 +1,12 @@
 export class ApiError extends Error {
   constructor(public status: number, message: string, public code = 'API_ERROR', public requestId?: string) { super(message); }
 }
-export interface RequestOptions { method?: string; body?: unknown; token?: string | null }
+export interface RequestOptions { method?: string; body?: unknown; token?: string | null; timeoutMs?: number }
 
 export function createApiTransport(apiUrl: string, fetcher: typeof fetch = fetch, timeoutMs = 10000) {
   return async function send<T>(path: string, options: RequestOptions = {}): Promise<T> {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const timeout = setTimeout(() => controller.abort(), options.timeoutMs === undefined ? timeoutMs : Math.max(1000, Math.min(90000, options.timeoutMs)));
     try {
       const response = await fetcher(`${apiUrl}${path}`, {
         method: options.method || 'GET', signal: controller.signal,

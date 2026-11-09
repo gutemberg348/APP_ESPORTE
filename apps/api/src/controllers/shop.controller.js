@@ -1,8 +1,10 @@
-import { shopService, shippingProvider } from '../services/shop.service.js';
+import { shopService, shopSkuService, shippingProvider } from '../services/shop.service.js';
 import * as schema from '../validators/shop.js';
 import { z } from 'zod';
 const query = (url) => Object.fromEntries(url.searchParams);
 export const shopController = {
+  generateSku: async ({ body }) => ({ data: await shopSkuService.generate(schema.generateSkuSchema.parse(body).excludeSkus) }),
+  checkSkus: async ({ body }) => ({ data: await shopSkuService.check(schema.checkSkusSchema.parse(body).items) }),
   settings: async () => ({ data: await shopService.settings() }),
   adminSettings: async () => ({ data: await shopService.settings(true) }),
   saveSettings: async ({ user, body }) => ({ data: await shopService.saveSettings(user.id, schema.settingsSchema.parse(body)) }),

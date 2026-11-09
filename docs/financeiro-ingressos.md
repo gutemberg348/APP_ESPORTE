@@ -1,3 +1,5 @@
+Atualização: pedidos de repasse, envios e comprovantes foram separados em **Saques**. Use **Novo pedido de saque** e depois **Registrar envio realizado**. Veja [o fluxo atual](saques.md). As configurações e a conferência dos recebimentos continuam no Financeiro.
+
 # Ingressos: comissão, taxa e repasse manual
 
 Implementado em 09/11/2026. Menu **Admin → Financeiro**, com Repasses, Por pagamento e Configurações. A implementação faz a apuração dos ingressos desta instância; a loja e as compras com cashback continuam com seus relatórios próprios.

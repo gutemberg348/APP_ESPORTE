@@ -8,25 +8,27 @@ import type { InputMask } from '@nacional/shared/forms';
 
 export interface AdminButtonProps {
   label: string; onPress: () => void; disabled?: boolean; loading?: boolean; primary?: boolean;
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'; icon?: LucideIcon; iconOnly?: boolean; fullWidth?: boolean;
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'; size?: 'normal' | 'small'; icon?: LucideIcon; iconOnly?: boolean; fullWidth?: boolean;
 }
-export function AdminButton({ label, onPress, disabled = false, loading = false, primary = false, variant, icon: Icon, iconOnly = false, fullWidth = false }: AdminButtonProps) {
+export function AdminButton({ label, onPress, disabled = false, loading = false, primary = false, variant, icon: Icon, iconOnly = false, fullWidth = false, size = 'normal' }: AdminButtonProps) {
   const { colors } = useTheme();
   const [hover, setHover] = useState(false), [focus, setFocus] = useState(false);
   const mode = variant || (primary ? 'primary' : 'secondary'), filled = mode === 'primary' || mode === 'danger';
   const ink = mode === 'primary' ? colors.onPrimary : mode === 'danger' ? '#ffffff' : colors.text;
   const inactive = disabled || loading;
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: inactive, busy: loading }} disabled={inactive} onPress={onPress} onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)} onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} style={({ pressed }) => ({ minHeight: 40, minWidth: 40, alignSelf: fullWidth ? 'stretch' : undefined, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, paddingHorizontal: iconOnly ? 9 : 14, paddingVertical: 9, borderRadius: 8, borderWidth: 1, borderColor: focus ? colors.primary : mode === 'ghost' ? 'transparent' : filled ? 'transparent' : colors.border, backgroundColor: mode === 'primary' ? colors.primaryStrong : mode === 'danger' ? '#b42338' : hover || pressed ? colors.soft : mode === 'ghost' ? 'transparent' : colors.surface, opacity: inactive ? 0.45 : pressed ? 0.8 : 1, ...(Platform.OS === 'web' ? { outlineStyle: 'none', boxShadow: focus ? `0 0 0 3px ${colors.primary}20` : 'none', transitionDuration: '140ms' } as object : {}) })}>
+  return <Pressable hitSlop={size === 'small' ? 6 : undefined} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: inactive, busy: loading }} disabled={inactive} onPress={onPress} onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)} onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} style={({ pressed }) => ({ minHeight: size === 'small' ? 32 : 40, minWidth: size === 'small' ? 32 : 40, alignSelf: fullWidth ? 'stretch' : undefined, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, paddingHorizontal: iconOnly ? 9 : size === 'small' ? 10 : 14, paddingVertical: size === 'small' ? 4 : 9, borderRadius: 8, borderWidth: 1, borderColor: focus ? colors.primary : mode === 'ghost' ? 'transparent' : filled ? 'transparent' : colors.border, backgroundColor: mode === 'primary' ? colors.primaryStrong : mode === 'danger' ? '#b42338' : hover || pressed ? colors.soft : mode === 'ghost' ? 'transparent' : colors.surface, opacity: inactive ? 0.45 : pressed ? 0.8 : 1, ...(Platform.OS === 'web' ? { outlineStyle: 'none', boxShadow: focus ? `0 0 0 3px ${colors.primary}20` : 'none', transitionDuration: '140ms' } as object : {}) })}>
     {loading ? <ActivityIndicator size="small" color={ink} /> : Icon ? <Icon size={16} color={filled ? ink : colors.muted} strokeWidth={1.8} /> : null}
     {!iconOnly && <Text style={{ color: ink, fontSize: 13, lineHeight: 20, fontWeight: '600', flexShrink: 1, textAlign: 'center' }}>{label}</Text>}
   </Pressable>;
 }
+const AdminGridContext = React.createContext(false);
 interface FieldShellProps extends React.PropsWithChildren {
   label: string; hint?: string; error?: string; required?: boolean; grow?: boolean;
 }
 function FieldShell({ label, hint, error, required, grow, children }: FieldShellProps) {
+  const inGrid = React.useContext(AdminGridContext);
   const { colors } = useTheme();
-  return <View style={[{ gap: 7, minWidth: 0 }, grow && { flexGrow: 1, flexBasis: 200 }]}><Text style={{ color: colors.text, fontSize: 12, lineHeight: 18, fontWeight: '500' }}>{label}{required && <Text style={{ color: colors.primary }}> *</Text>}</Text>{children}{(error || hint) && <Text accessibilityRole={error ? 'alert' : undefined} style={{ color: error ? colors.danger : colors.subtle, fontSize: 11, lineHeight: 17 }}>{error || hint}</Text>}</View>;
+  return <View style={[{ gap: 7, minWidth: 0 }, !inGrid && grow && { flexGrow: 1, flexBasis: 200 }]}><Text style={{ color: colors.text, fontSize: 12, lineHeight: 18, fontWeight: '500' }}>{label}{required && <Text style={{ color: colors.primary }}> *</Text>}</Text>{children}{(error || hint) && <Text accessibilityRole={error ? 'alert' : undefined} style={{ color: error ? colors.danger : colors.subtle, fontSize: 11, lineHeight: 17 }}>{error || hint}</Text>}</View>;
 }
 export interface AdminFieldProps extends Omit<TextInputProps, 'value' | 'onChange' | 'onChangeText' | 'style'> {
   label: string; value: string; onChange: (value: string) => void; numeric?: boolean; hint?: string; error?: string; required?: boolean; grow?: boolean; icon?: LucideIcon; prefix?: string; mask?: InputMask;
@@ -91,7 +93,8 @@ export function AdminToggle({ label, value, onChange, hint, disabled = false, ch
   return checkbox ? <Pressable disabled={disabled} accessibilityRole="checkbox" accessibilityState={{ checked: value, disabled }} onPress={() => onChange(!value)} style={{ flexDirection: 'row', alignItems: 'center', gap: 11, minHeight: 42, paddingVertical: 9, opacity: disabled ? 0.5 : 1 }}><View style={{ width: 19, height: 19, borderWidth: 1, borderColor: value ? colors.primaryStrong : colors.border, backgroundColor: value ? colors.primaryStrong : colors.surface, borderRadius: 5, alignItems: 'center', justifyContent: 'center' }}>{value && <Check size={13} color={colors.onPrimary} strokeWidth={2.5} />}</View>{content}</Pressable> : <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, minHeight: 48, paddingVertical: 6, opacity: disabled ? 0.5 : 1 }}>{content}<Switch accessibilityLabel={label} disabled={disabled} value={value} onValueChange={onChange} trackColor={{ false: colors.border, true: colors.primaryStrong }} thumbColor="#ffffff" /></View>;
 }
 export function AdminFormGrid({ children }: React.PropsWithChildren) {
-  return <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>{React.Children.toArray(children).map((child, index) => <View key={index} style={{ flexGrow: 1, flexBasis: 240, minWidth: 0 }}>{child}</View>)}</View>;
+  const [width, setWidth] = useState(0);
+  return <AdminGridContext.Provider value={true}><View onLayout={({ nativeEvent }) => setWidth(Math.round(nativeEvent.layout.width))} style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 12 }}>{React.Children.toArray(children).map((child, index) => <View key={index} style={{ flexGrow: 1, flexShrink: 1, flexBasis: width < 520 ? '100%' : 240, maxWidth: '100%', minWidth: 0 }}>{child}</View>)}</View></AdminGridContext.Provider>;
 }
 export function AdminSection({ title, description, children }: React.PropsWithChildren<{ title: string; description?: string }>) {
   const { colors } = useTheme();

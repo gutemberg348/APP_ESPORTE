@@ -1,0 +1,57 @@
+SAQUES E COMPROVANTES — 09/11/2026
+Fonte: schema.prisma e migration 20261109040000_withdrawals_receipts.
+Nao foram exportados comprovantes, credenciais ou dados de pessoas.
+
+WithdrawalStatus: PENDING, SENT, CANCELED, VOIDED.
+
+WithdrawalRequest
+  id UUID PK; actorId UUID FK User.id ON DELETE RESTRICT.
+  requestKey VARCHAR(80) NOT NULL UNIQUE; requestHash VARCHAR(64) NOT NULL.
+  amountCents INTEGER NOT NULL; recipient VARCHAR(200) NOT NULL.
+  pixKey VARCHAR(200) NOT NULL DEFAULT ''; notes VARCHAR(1000) NOT NULL DEFAULT ''.
+  status WithdrawalStatus NOT NULL DEFAULT PENDING; version INTEGER DEFAULT 0.
+  payoutId UUID NULL UNIQUE FK ClubPayout.id ON DELETE RESTRICT.
+  resolvedAt TIMESTAMP(3) NULL; resolutionReason VARCHAR(500) NULL.
+  createdAt TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP.
+  updatedAt TIMESTAMP(3) NOT NULL (@updatedAt Prisma).
+  Indices: PK, UNIQUE requestKey, UNIQUE payoutId, (status, createdAt).
+  CHECK amountCents > 0 AND amountCents <= 100000000.
+  CHECK estados SENT/VOIDED exigem payoutId; PENDING/CANCELED exigem payoutId NULL.
+  User 1:N pedidos. ClubPayout 0..1 pedido. Pedido 1:N comprovantes.
+
+PayoutAttachment
+  id UUID PK; withdrawalId UUID NULL FK WithdrawalRequest.id ON DELETE RESTRICT.
+  payoutId UUID NULL FK ClubPayout.id ON DELETE RESTRICT.
+  actorId UUID NOT NULL FK User.id ON DELETE RESTRICT.
+  name VARCHAR(180) NOT NULL; mimeType VARCHAR(40) NOT NULL.
+  byteLength INTEGER NOT NULL; sha256 VARCHAR(64) NOT NULL; content BYTEA NOT NULL.
+  createdAt TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP.
+  removedAt TIMESTAMP(3) NULL; removalReason VARCHAR(500) NULL.
+  Indices: PK, (withdrawalId, createdAt), (payoutId, createdAt).
+  Indices UNIQUE parciais (withdrawalId, sha256) e (payoutId, sha256)
+  somente para removedAt IS NULL. Reenvio do mesmo arquivo ativo e idempotente.
+  CHECK num_nonnulls(withdrawalId, payoutId) = 1.
+  CHECK 0 < byteLength <= 5242880 e octet_length(content) = byteLength.
+  CHECK MIME em application/pdf, image/jpeg, image/png ou image/webp.
+  Bytes sao armazenados no banco; listagens usam SELECT so dos metadados.
+  Download exige ADMIN e anexo sem removedAt. Nenhuma rota publica de arquivos.
+  Remocao e logica, com motivo/auditoria. Os bytes permanecem para historico.
+
+ClubPayout (tabela existente)
+  Mantidos todos os campos/valores, UNIQUE reference e UNIQUE requestKey.
+  Novas relacoes Prisma: withdrawal opcional e attachments[] para envios legados.
+  Nao ha alteracao de colunas existentes nem baixa ao apenas pedir saque.
+
+Regras financeiras em transacao Serializable
+  Novo pedido: saldo livre = saldo liberado - soma dos pedidos PENDING.
+  Confirmacao: confere versao/saldo, nao consome valores de outros pedidos,
+  cria ClubPayout e vincula o pedido SENT na mesma transacao.
+  Cancelamento PENDING libera compromisso; nao altera valor ja enviado.
+  Anular ClubPayout incorreto marca pedido como VOIDED e recompõe saldo.
+  Uma nova transferencia exige novo pedido; nunca ha Pix automatico.
+  AuditLog registra pedido, cancelamento, envio, anexacao e remocao.
+  Comissao da empresa e taxas continuam nas tabelas financeiras existentes.
+
+Anexos tem no maximo cinco registros ativos por pai, validados pela API.
+SHA-256, assinaturas de formatos, tamanho, exclusividade de pai e idempotencia
+complementam as constraints. Sem exclusao fisica por endpoints administrativos.

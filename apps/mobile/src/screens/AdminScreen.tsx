@@ -25,6 +25,7 @@ import { AdminThemeProvider } from '../theme/AdminThemeProvider';
 import { AdminSaleForm } from '../components/admin/AdminSaleForm';
 import { AdminShopPanel } from '../components/admin/shop/AdminShopPanel';
 import { AdminFinancePanel, AdminPayoutAlert } from '../components/admin/AdminFinancePanel';
+import { AdminWithdrawalsPanel } from '../components/admin/AdminWithdrawalsPanel';
 import { AdminPartnersPanel } from '../components/admin/AdminPartnersPanel';
 import { AdminEmailPanel } from '../components/admin/AdminEmailPanel';
 import { AdminAccountForm } from '../components/admin/AdminAccountForm';
@@ -91,7 +92,7 @@ function AdminWorkspace({ onBack }: { onBack: () => void }) {
   return <AdminLayout active={tab} onSelect={select} onBack={onBack} onSignOut={() => void perform(signOut, false)} refreshing={loading} onRefresh={() => void refresh()} busy={busy} action={action}>
     {!!error && <Panel style={{ borderColor: colors.danger, borderRadius: 12, padding: 16 }}><Text accessibilityRole="alert" style={{ color: colors.danger, fontSize: 13 }}>{error}</Text></Panel>}
     {!!notice && <Text accessibilityRole="alert" style={{ color: colors.primary, fontSize: 13 }}>{notice}</Text>}
-    {tab !== 'Financeiro' && <AdminPayoutAlert refreshKey={reportRefresh} onOpen={()=>select('Financeiro')}/>}
+    {!['Financeiro', 'Saques'].includes(tab) && <AdminPayoutAlert refreshKey={reportRefresh} onOpen={()=>select('Saques')}/>}
     {tab === 'Visão geral' && <><AdminStats overview={overview} /><AdminOverviewPanel matches={matches} tickets={tickets} audit={audit} loading={loading} onSelect={select} onCreate={() => setMatchEdit(null)} /></>}
     {tab === 'Jogos' && <AdminMatchGrid matches={matches} busy={busy} loading={loading} onEdit={setMatchEdit} onSector={(match, sector) => setSectorEdit({ match, sector })} onCreateSector={(match) => setSectorEdit({ match, sector: null })} onToggle={(match, field) => void perform(() => adminApi.updateMatch(token!, { id: match.id, [field]: !match[field] }))} />}
     {tab === 'Vendas' && <AdminSalesReport matches={matches} refreshKey={reportRefresh} busy={busy} onPayment={openPayment} onEdit={(ticket) => setSaleAction({ ticket, mode: 'edit' })} onDelete={(ticket) => setSaleAction({ ticket, mode: 'delete' })} onCancel={(ticket) => setSaleAction({ ticket, mode: 'cancel' })} />}
@@ -103,7 +104,8 @@ function AdminWorkspace({ onBack }: { onBack: () => void }) {
     {tab === 'Histórico de portaria' && <AdminGateHistory matches={matches} refreshKey={reportRefresh} />}
     {tab === 'Pagamentos' && <AdminPaymentsPanel refreshKey={reportRefresh} />}
     {tab === 'Loja' && <AdminShopPanel refreshKey={reportRefresh} onPayments={() => select('Pagamentos')} />}
-    {tab === 'Financeiro' && <AdminFinancePanel refreshKey={reportRefresh}/>}
+    {tab === 'Financeiro' && <AdminFinancePanel refreshKey={reportRefresh} onOpenWithdrawals={() => select('Saques')} />}
+    {tab === 'Saques' && <AdminWithdrawalsPanel refreshKey={reportRefresh} />}
     {tab === 'Parceiros' && <AdminPartnersPanel refreshKey={reportRefresh} />}
     {tab === 'Email e acesso' && <AdminEmailPanel refreshKey={reportRefresh} users={users} />}
     {accountEdit && <AdminAccountForm userId={accountEdit.id} onClose={() => setAccountEdit(null)} onSaved={async (signedOut) => { setAccountEdit(null); setNotice('Conta atualizada.'); if (!signedOut) await refresh(); }} />}

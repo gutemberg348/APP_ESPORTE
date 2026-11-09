@@ -57,6 +57,9 @@ export function createShopStore(client, { now = () => new Date(), shipping, sett
         const previous = id ? await tx.product.findUnique({ where: { id }, include: { variants: true } }) : null;
         if (id && (!previous || previous.archivedAt)) throw missing();
         if (previous && previous.version !== version) throw stale();
+        const occupiedSkus = await tx.productVariant.findMany({ where: { OR: variants.map(({ sku }) => ({ sku: { equals: sku, mode: 'insensitive' } })) }, select: { id: true, sku: true } });
+        const duplicate = variants.find((variant) => occupiedSkus.some((row) => row.sku.toUpperCase() === variant.sku && row.id !== variant.id));
+        if (duplicate) throw shopError('SHOP_SKU_IN_USE', `O SKU ${duplicate.sku} já está cadastrado em outra variação. Gere outra referência.`);
         const row = previous ? await tx.product.update({ where: { id }, data: { ...data, version: { increment: 1 } } }) : await tx.product.create({ data });
         const kept = new Set();
         for (const variant of variants) {
@@ -72,7 +75,7 @@ export function createShopStore(client, { now = () => new Date(), shipping, sett
         await tx.productVariant.updateMany({ where: { productId: row.id, id: { notIn: [...kept] } }, data: { active: false, version: { increment: 1 } } });
         await audit(tx, actorId, previous ? 'SHOP_PRODUCT_UPDATED' : 'SHOP_PRODUCT_CREATED', row.id, { name: row.name, priceCents: row.priceCents, variants: [...kept] });
         return tx.product.findUnique({ where: { id: row.id }, include: { variants: true } });
-      });
+      }).catch((error) => { if (error.code === 'P2002' && /sku/i.test(JSON.stringify(error.meta || {}))) throw shopError('SHOP_SKU_IN_USE', 'Um dos SKUs já foi cadastrado. Confira as referências ou gere outra antes de salvar.'); throw error; });
     },
     archive(actorId, { id, version, reason }) {
       return serializable(client, async (tx) => { const row = await tx.product.findUnique({ where: { id } }); if (!row || row.archivedAt) throw missing(); if (row.version !== version) throw stale(); await tx.product.update({ where: { id }, data: { archivedAt: now(), active: false, version: { increment: 1 } } }); await audit(tx, actorId, 'SHOP_PRODUCT_ARCHIVED', id, { reason }); return { archived: true }; });

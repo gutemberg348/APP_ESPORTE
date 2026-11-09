@@ -11,6 +11,8 @@ export const shopApi = {
   cancel: (token: string, orderId: string) => request<ShopOrder>('/shop/orders/cancel', { token, method: 'POST', body: { orderId } }),
 };
 export const shopAdminApi = {
+  generateSku: (token: string, excludeSkus: string[]) => request<{ sku: string }>('/admin/shop/skus/generate', { token, method: 'POST', body: { excludeSkus } }),
+  checkSkus: (token: string, items: { sku: string; variantId?: string }[]) => request<{ sku: string; status: 'AVAILABLE' | 'CURRENT' | 'USED' }[]>('/admin/shop/skus/check', { token, method: 'POST', body: { items } }),
   settings: (token: string) => request<ShopSettings>('/admin/shop/settings', { token }),
   saveSettings: (token: string, body: ShopSettingsInput) => request<ShopSettings>('/admin/shop/settings', { token, method: 'PUT', body }),
   products: (token: string, filters: Record<string, string> = {}) => request<ProductPage>(`/admin/shop/products?${qs({ limit: '25', ...filters })}`, { token }),

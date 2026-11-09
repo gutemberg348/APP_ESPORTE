@@ -84,7 +84,82 @@ export function createFinanceStore(client, { now = () => new Date() } = {}) {
       ),
     };
   }
+  async function payoutTransaction(tx, actorId, input, withdrawalId) {
+    const requestHash = createHash("sha256")
+      .update(JSON.stringify(withdrawalId ? { ...input, withdrawalId } : input))
+      .digest("hex");
+    const previous = await tx.clubPayout.findUnique({
+      where: { requestKey: input.requestKey },
+    });
+    if (previous) {
+      if (previous.requestHash !== requestHash || previous.actorId !== actorId)
+        throw error(
+          "PAYOUT_KEY_CONFLICT",
+          "Essa operação já foi registrada com outros dados.",
+        );
+      return jsonPayout(previous);
+    }
+    if (new Date(input.transferredAt) > now())
+      throw error(
+        "PAYOUT_FUTURE",
+        "Registre somente uma transferência já realizada.",
+      );
+    const balance = await balances(tx);
+    if (balance.availableCents !== input.expectedBalanceCents)
+      throw error(
+        "PAYOUT_BALANCE_CHANGED",
+        "O saldo mudou. Confira os valores atualizados antes de registrar.",
+      );
+    if (input.amountCents > balance.availableCents)
+      throw error(
+        "PAYOUT_OVER_BALANCE",
+        "O repasse não pode ultrapassar o saldo liberado do time.",
+      );
+    const reserved = await tx.withdrawalRequest.aggregate({
+      where: {
+        status: "PENDING",
+        ...(withdrawalId ? { id: { not: withdrawalId } } : {}),
+      },
+      _sum: { amountCents: true },
+    });
+    if (
+      input.amountCents >
+      balance.availableCents - (reserved._sum.amountCents || 0)
+    )
+      throw error(
+        "PAYOUT_RESERVED",
+        "Parte desse saldo já está comprometida com outros pedidos de saque. Confira os pedidos pendentes.",
+      );
+    const row = await tx.clubPayout.create({
+      data: {
+        actorId,
+        requestKey: input.requestKey,
+        requestHash,
+        amountCents: input.amountCents,
+        balanceBeforeCents: BigInt(balance.availableCents),
+        reference: input.reference,
+        recipient: input.recipient,
+        transferredAt: new Date(input.transferredAt),
+        notes: input.notes,
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        actorId,
+        action: "CLUB_PAYOUT_RECORDED",
+        entityId: row.id,
+        details: {
+          amountCents: input.amountCents,
+          reference: input.reference,
+          balanceBeforeCents: balance.availableCents,
+          balanceAfterCents: balance.availableCents - input.amountCents,
+        },
+      },
+    });
+    return jsonPayout(row);
+  }
   return {
+    balancesInTransaction: balances,
     settings,
     saveSettings(actorId, { version, ...data }) {
       return serializable(client, async (tx) => {
@@ -188,7 +263,10 @@ export function createFinanceStore(client, { now = () => new Date() } = {}) {
     async payouts(query) {
       const [items, total] = await Promise.all([
         client.clubPayout.findMany({
-          include: { actor: { select: { name: true, email: true } } },
+          include: {
+            actor: { select: { name: true, email: true } },
+            withdrawal: { select: { id: true } },
+          },
           orderBy: { createdAt: "desc" },
           take: query.limit,
           skip: query.offset,
@@ -211,69 +289,11 @@ export function createFinanceStore(client, { now = () => new Date() } = {}) {
       ]);
       return { items, total };
     },
+    payoutInTransaction: payoutTransaction,
     payout(actorId, input) {
-      return serializable(client, async (tx) => {
-        const requestHash = createHash("sha256")
-          .update(JSON.stringify(input))
-          .digest("hex");
-        const previous = await tx.clubPayout.findUnique({
-          where: { requestKey: input.requestKey },
-        });
-        if (previous) {
-          if (
-            previous.requestHash !== requestHash ||
-            previous.actorId !== actorId
-          )
-            throw error(
-              "PAYOUT_KEY_CONFLICT",
-              "Essa operação já foi registrada com outros dados.",
-            );
-          return jsonPayout(previous);
-        }
-        if (new Date(input.transferredAt) > now())
-          throw error(
-            "PAYOUT_FUTURE",
-            "Registre somente uma transferência já realizada.",
-          );
-        const balance = await balances(tx);
-        if (balance.availableCents !== input.expectedBalanceCents)
-          throw error(
-            "PAYOUT_BALANCE_CHANGED",
-            "O saldo mudou. Confira os valores atualizados antes de registrar.",
-          );
-        if (input.amountCents > balance.availableCents)
-          throw error(
-            "PAYOUT_OVER_BALANCE",
-            "O repasse não pode ultrapassar o saldo liberado do time.",
-          );
-        const row = await tx.clubPayout.create({
-          data: {
-            actorId,
-            requestKey: input.requestKey,
-            requestHash,
-            amountCents: input.amountCents,
-            balanceBeforeCents: BigInt(balance.availableCents),
-            reference: input.reference,
-            recipient: input.recipient,
-            transferredAt: new Date(input.transferredAt),
-            notes: input.notes,
-          },
-        });
-        await tx.auditLog.create({
-          data: {
-            actorId,
-            action: "CLUB_PAYOUT_RECORDED",
-            entityId: row.id,
-            details: {
-              amountCents: input.amountCents,
-              reference: input.reference,
-              balanceBeforeCents: balance.availableCents,
-              balanceAfterCents: balance.availableCents - input.amountCents,
-            },
-          },
-        });
-        return jsonPayout(row);
-      });
+      return serializable(client, (tx) =>
+        payoutTransaction(tx, actorId, input),
+      );
     },
     voidPayout(actorId, { id, reason }) {
       return serializable(client, async (tx) => {
@@ -288,6 +308,15 @@ export function createFinanceStore(client, { now = () => new Date() } = {}) {
         const updated = await tx.clubPayout.update({
           where: { id },
           data: { voidedAt: now(), voidReason: reason },
+        });
+        await tx.withdrawalRequest.updateMany({
+          where: { payoutId: id, status: "SENT" },
+          data: {
+            status: "VOIDED",
+            resolutionReason: reason,
+            resolvedAt: now(),
+            version: { increment: 1 },
+          },
         });
         await tx.auditLog.create({
           data: {

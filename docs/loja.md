@@ -21,6 +21,10 @@ A migration `20261106020000_shop` cria as tabelas da loja e adiciona um terceiro
 
 As fotos são cadastradas por **URLs HTTPS de imagens já hospedadas**; podem ser reordenadas alterando os campos, e a primeira vira capa. Upload/armazenamento de arquivos não foi implementado. Não são necessárias novas dependências de interface: os campos, selects, botões, tabelas, modais e avisos reutilizam os componentes existentes.
 
+O campo **SKU / referência** possui um botão pequeno vermelho **Gerar**. A API propõe uma referência aleatória `PRD-...`, consulta os SKUs existentes (inclusive de produtos arquivados e variações inativas) e evita os códigos já preenchidos no formulário. Ao digitar, a consulta automática informa se o código está disponível, pertence à própria variação ou já foi cadastrado. Referências repetidas no formulário também bloqueiam o envio. Gerar um SKU não cadastra nem reserva um produto; o cadastro é confirmado ao salvar, e a lista mostra a mensagem de sucesso. O índice UNIQUE e a transação impedem SKUs duplicados mesmo em salvamentos concorrentes.
+
+Rotas exclusivas do administrador: POST `/v1/admin/shop/skus/generate` com `{excludeSkus: string[]}` e POST `/v1/admin/shop/skus/check` com `{items: [{sku, variantId?}]}`. Até 50 referências por consulta. Não há nova tabela ou migração para essa função. A grade dos formulários passa a empilhar os campos quando o espaço útil é menor que 520 px, mantendo os tamanhos naturais dos campos e eliminando as alturas extras causadas pelo `grow` dentro da grade.
+
 ## Frete automático: Melhor Envio
 
 A integração da API é gratuita e exige uma conta/token. A compra de etiquetas e o transporte são pagos separadamente. A API direta de preços dos Correios exige contrato habilitado; por isso o projeto usa Melhor Envio para consultar esses serviços. [Introdução oficial do Melhor Envio](https://docs.melhorenvio.com.br/reference/introducao-api-melhor-envio) e [requisitos dos Correios](https://www.correios.com.br/atendimento/developers/manuais/manual-api-preco-1).

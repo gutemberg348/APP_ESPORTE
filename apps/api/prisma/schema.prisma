@@ -74,6 +74,8 @@ model User {
   stockMovements StockMovement[]
   shippingQuotes ShopShippingQuote[]
   clubPayouts ClubPayout[]
+  withdrawalRequests WithdrawalRequest[]
+  payoutAttachments PayoutAttachment[]
   passwordResets PasswordResetToken[]
 }
 
@@ -538,7 +540,58 @@ model ClubPayout {
   voidReason String? @db.VarChar(500)
   createdAt DateTime @default(now())
   actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  withdrawal WithdrawalRequest?
+  attachments PayoutAttachment[]
   @@index([createdAt])
+}
+
+enum WithdrawalStatus {
+  PENDING
+  SENT
+  CANCELED
+  VOIDED
+}
+
+model WithdrawalRequest {
+  id String @id @default(uuid()) @db.Uuid
+  actorId String @db.Uuid
+  requestKey String @unique @db.VarChar(80)
+  requestHash String @db.VarChar(64)
+  amountCents Int
+  recipient String @db.VarChar(200)
+  pixKey String @default("") @db.VarChar(200)
+  notes String @default("") @db.VarChar(1000)
+  status WithdrawalStatus @default(PENDING)
+  version Int @default(0)
+  payoutId String? @unique @db.Uuid
+  resolvedAt DateTime?
+  resolutionReason String? @db.VarChar(500)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  payout ClubPayout? @relation(fields: [payoutId], references: [id], onDelete: Restrict)
+  attachments PayoutAttachment[]
+  @@index([status, createdAt])
+}
+
+model PayoutAttachment {
+  id String @id @default(uuid()) @db.Uuid
+  withdrawalId String? @db.Uuid
+  payoutId String? @db.Uuid
+  actorId String @db.Uuid
+  name String @db.VarChar(180)
+  mimeType String @db.VarChar(40)
+  byteLength Int
+  sha256 String @db.VarChar(64)
+  content Bytes
+  createdAt DateTime @default(now())
+  removedAt DateTime?
+  removalReason String? @db.VarChar(500)
+  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  withdrawal WithdrawalRequest? @relation(fields: [withdrawalId], references: [id], onDelete: Restrict)
+  payout ClubPayout? @relation(fields: [payoutId], references: [id], onDelete: Restrict)
+  @@index([withdrawalId, createdAt])
+  @@index([payoutId, createdAt])
 }
 
 // Provider resources are scoped by environment: sandbox IDs never become live IDs.
