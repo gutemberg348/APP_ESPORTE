@@ -11,12 +11,15 @@ import { useTheme } from '../theme/ThemeProvider';
 import { useSession } from '../providers/SessionProvider';
 import { club } from '../config/club';
 import { messageOf } from '../utils/format';
+import { Sheet } from '../components/Sheet';
+import { PasswordRecoveryForm } from '../components/PasswordRecoveryForm';
 interface Props { onOpenApp: () => void; loading: boolean; bootError: string | null; onRetry: () => void }
 export function AdminLoginScreen(props: Props) { return <AdminThemeProvider><AdminLoginPage {...props} /></AdminThemeProvider>; }
 function AdminLoginPage({ onOpenApp, loading, bootError, onRetry }: Props) {
   const desktop = useWindowDimensions().width >= 1000, { colors, isDark, toggle } = useTheme(), { signIn } = useSession(), insets = useSafeAreaInsets();
   const [email, setEmail] = useState(''), [password, setPassword] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const lock = useRef(false), disabled = busy || loading || Boolean(bootError);
+  const [forgot, setForgot] = useState(false);
   async function submit() {
     if (lock.current || loading || bootError) return;
     if (!email.trim() || !password) { setError('Preencha seu e-mail e sua senha.'); return; }
@@ -30,6 +33,8 @@ function AdminLoginPage({ onOpenApp, loading, bootError, onRetry }: Props) {
     <View style={{ flex: 1, minWidth: 0 }}><View style={{ minHeight: 68, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: desktop ? 36 : 20 }}><Text style={{ color: colors.muted, fontSize: 12 }}>{desktop ? 'Administração' : club.shortName}</Text><AdminButton label={isDark ? 'Usar tema claro' : 'Usar tema escuro'} icon={isDark ? Sun : Moon} iconOnly variant="ghost" onPress={toggle} /></View><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: desktop ? 40 : 24, paddingBottom: Math.max(insets.bottom, 32) }}><View style={{ width: '100%', maxWidth: 380, gap: 28 }}><View style={{ gap: 8 }}><Text heading accessibilityRole="header" style={{ color: colors.text, fontSize: 28, lineHeight: 38, fontWeight: '600', letterSpacing: -0.8 }}>{loading ? 'Restaurando acesso' : 'Entrar no painel'}</Text><Text style={{ color: colors.muted, fontSize: 13, lineHeight: 22 }}>Use sua conta administrativa para continuar.</Text></View>
       {loading ? <View style={{ gap: 12, paddingVertical: 28 }}><ActivityIndicator color={colors.primary} /><Text style={{ color: colors.muted, fontSize: 12, textAlign: 'center' }}>Conferindo sua sessão…</Text></View> : bootError ? <><AdminNotice tone="error">{bootError}</AdminNotice><AdminButton primary label="Tentar restaurar acesso" onPress={onRetry} /></> : <View style={{ gap: 18 }}><AdminField label="E-mail" value={email} onChange={setEmail} icon={Mail} placeholder="voce@clube.com.br" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} autoComplete="username" textContentType="username" maxLength={254} editable={!disabled} onSubmitEditing={() => void submit()} /><AdminField label="Senha" value={password} onChange={setPassword} placeholder="Digite sua senha" secureTextEntry autoCapitalize="none" autoCorrect={false} autoComplete="current-password" textContentType="password" returnKeyType="go" maxLength={128} editable={!disabled} onSubmitEditing={() => void submit()} />{!!error && <AdminNotice tone="error">{error}</AdminNotice>}<AdminButton primary label="Entrar no painel" icon={ArrowRight} loading={busy} disabled={disabled} fullWidth onPress={() => void submit()} /><Text style={{ color: colors.subtle, fontSize: 11, lineHeight: 19 }}>Para obter acesso, fale com o responsável pelo clube.</Text></View>}
       <View style={{ borderTopWidth: 1, borderColor: colors.border, paddingTop: 20, gap: 7 }}><Text style={{ color: colors.subtle, fontSize: 11 }}>Ingressos e benefícios para você?</Text><View style={{ alignSelf: 'flex-start' }}><AdminButton label="Abrir área do torcedor" icon={ArrowUpRight} variant="ghost" disabled={busy} onPress={onOpenApp} /></View></View>
+      <AdminButton label="Esqueci minha senha" variant="ghost" disabled={busy || loading} onPress={() => setForgot(true)} />
+      {forgot && <Sheet visible title="Recuperar acesso ao painel" onClose={() => setForgot(false)}><PasswordRecoveryForm initialEmail={email} portal="ADMIN" onDone={() => setForgot(false)} /></Sheet>}
     </View></ScrollView></View>
   </View></KeyboardAvoidingView>;
 }

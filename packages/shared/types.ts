@@ -10,7 +10,7 @@ export interface Member {
   id: string;
   name: string;
   email: string;
-  role: 'USER' | 'ADMIN' | 'GATE';
+  role: 'USER' | 'ADMIN' | 'GATE' | 'CASHIER';
   active: boolean;
   avatar: string | null;
   points: number;
@@ -26,6 +26,7 @@ export interface Member {
   } | null;
 }
 export interface Sector { id: string; name: string; priceCents: number; capacity?: number; available?: number; salesEnabled?: boolean }
+export interface AdminAccount extends Member { updatedAt: string }
 export interface Match {
   id: string;
   serverTime?: string;
@@ -44,7 +45,9 @@ export interface Match {
   gateCloseAt?: string | null;
   sectors: Sector[];
 }
-export interface Partner { id: string; name: string; discount: string; category: string; icon?: string; description?: string; conditions?: string; location?: string }
+export interface PartnerBenefit { id: string; title: string; description: string; conditions: string; startsAt: string | null; endsAt: string | null; active?: boolean; updatedAt?: string }
+export interface Partner { id: string; name: string; discount: string; category: string; icon?: string; description?: string; conditions?: string; location?: string; contact?: string; website?: string; benefits?: PartnerBenefit[] }
+export interface AdminPartner extends Partner { active: boolean; archivedAt: string | null; updatedAt: string; merchant: { id: string; active: boolean; offers: { id: string; cashbackBps: number; commissionBps: number; active: boolean; customerQrEnabled: boolean }[]; operators: { userId: string; active: boolean; user: Pick<Member, 'id' | 'name' | 'email' | 'active' | 'role'> }[] } | null }
 export interface Ticket {
   id: string;
   serverTime?: string;
@@ -70,7 +73,7 @@ export interface TicketQuote {
   serverTime: string; expiresAt: string; paymentInstructions: string;
 }
 export interface GateCredential { token?: string; code?: string }
-export interface Employee { id: string; name: string; email: string; role: 'GATE'; active: boolean; assignments: { sectorId: string; sectorName: string; matchId: string; matchLabel: string; active: boolean }[] }
+export interface Employee { id: string; name: string; email: string; contact: string; updatedAt: string; role: 'GATE' | 'ADMIN' | 'CASHIER'; active: boolean; assignments: { sectorId: string; sectorName: string; matchId: string; matchLabel: string; active: boolean }[] }
 export interface TicketReview extends Ticket { holder: string; qrExpiresAt: string; serverTime: string; decision: 'REVIEW'; message: string }
 export interface AdmissionResult { ticket: Ticket & { holder: string }; duplicate: boolean; decision: 'ALLOW' | 'ALREADY_RECORDED'; admission: { id: string; quantity: number; createdAt: string } }
 export interface PointEntry { id: string; amount: number; reason: string; createdAt: string }
@@ -84,7 +87,7 @@ export interface AdminTicket extends Ticket { revision: string; user: { id: stri
 export interface ReportPagination { total: number; limit: number; offset: number; hasMore: boolean }
 export interface SalesReport {
   items: AdminTicket[]; pagination: ReportPagination; serverTime: string;
-  summary: { orders: number; soldQuantity: number; reservedQuantity: number; freeQuantity: number; confirmedRevenueCents: number; refundedRevenueCents: number; archivedRevenueCents: number };
+  summary: { orders: number; soldQuantity: number; reservedQuantity: number; freeQuantity: number; confirmedRevenueCents: number; refundedRevenueCents: number; archivedRevenueCents: number; gatewayFeeCents:number; companyCents:number; clubCents:number };
   inventory: { capacity: number; occupied: number; available: number; sectors: (Sector & { occupied: number; soldQuantity: number; reservedQuantity: number; usedQuantity: number })[] };
 }
 export interface GateOperator { id: string; name: string; email: string; active: boolean }

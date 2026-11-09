@@ -1,5 +1,6 @@
 ﻿import express from 'express';
 import { requestContext } from './middleware/request-context.js';
+import { fileURLToPath } from 'node:url';
 import { cors } from './middleware/cors.js';
 import { createAccessMiddleware } from './middleware/access.js';
 import { errorHandler } from './middleware/errors.js';
@@ -17,6 +18,11 @@ export function createApp({ routes, authenticate, corsOrigins = [], readiness = 
   const access = createAccessMiddleware(authenticate);
 
   app.use(requestContext(logger));
+  // Only versioned, public catalogue images. Paths never come from user input.
+  app.use('/media/shop', express.static(fileURLToPath(new URL('../../public/shop/', import.meta.url)), {
+    dotfiles: 'deny', index: false, immutable: true, maxAge: '365d',
+    setHeaders: (res) => res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'),
+  }));
   app.use(cors(corsOrigins));
   app.use(access.general);
   // Keep HEAD from falling through to Express's implicit GET support.

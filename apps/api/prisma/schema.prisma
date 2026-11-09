@@ -30,6 +30,7 @@ enum UserRole {
   USER
   ADMIN
   GATE
+  CASHIER
 }
 
 enum TicketPaymentMethod {
@@ -72,6 +73,40 @@ model User {
   shopPayments ShopPayment[]
   stockMovements StockMovement[]
   shippingQuotes ShopShippingQuote[]
+  clubPayouts ClubPayout[]
+  passwordResets PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  tokenHash String @unique
+  credentialHash String
+  emailAtIssue String @db.VarChar(254)
+  expiresAt DateTime
+  usedAt DateTime?
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  delivery MailDelivery?
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+}
+
+model MailDelivery {
+  id String @id @default(uuid()) @db.Uuid
+  resetId String @unique @db.Uuid
+  payload String?
+  status String @default("QUEUED") @db.VarChar(16)
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  lockedUntil DateTime?
+  lockToken String? @db.Uuid
+  sentAt DateTime?
+  errorCode String? @db.VarChar(40)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  reset PasswordResetToken @relation(fields: [resetId], references: [id], onDelete: Cascade)
+  @@index([status, nextAttemptAt])
 }
 
 model Session {
@@ -173,6 +208,7 @@ model Ticket {
   createdAt  DateTime     @default(now())
   deletedAt  DateTime?
   voidedQuantity Int     @default(0)
+  financialPolicy Json?
   user       User         @relation(fields: [userId], references: [id])
   match      Match        @relation(fields: [matchId], references: [id])
   sector     Sector       @relation(fields: [sectorId], references: [id])
@@ -197,9 +233,30 @@ model Partner {
   description String @default("")
   conditions  String @default("")
   location    String @default("")
+  contact String @default("") @db.VarChar(30)
+  website String @default("") @db.VarChar(500)
+  archivedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  benefits PartnerBenefit[]
   merchant Merchant?
 
   @@index([active, category])
+}
+
+model PartnerBenefit {
+  id String @id @default(uuid()) @db.Uuid
+  partnerId String @db.Uuid
+  title String @db.VarChar(100)
+  description String @default("") @db.VarChar(2000)
+  conditions String @default("") @db.VarChar(2000)
+  active Boolean @default(true)
+  startsAt DateTime?
+  endsAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  @@index([partnerId, active])
 }
 
 model Prediction {
@@ -414,6 +471,74 @@ model TicketPayment {
   refundedCents Int @default(0)
   ticket Ticket @relation(fields: [ticketId], references: [id])
   confirmedBy User? @relation(fields: [confirmedById], references: [id], onDelete: Restrict)
+  financial TicketFinancial?
+}
+
+model FinancialSettings {
+  id String @id @default("main")
+  companyName String @default("Empresa operadora") @db.VarChar(100)
+  companyBps Int @default(1000)
+  commissionBase String @default("NET") @db.VarChar(10)
+  gatewayBps Int @default(0)
+  gatewayFixedCents Int @default(0)
+  payoutWeekday Int @default(5)
+  clubRecipient String @default("") @db.VarChar(200)
+  clubPixKey String @default("") @db.VarChar(200)
+  version Int @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model TicketFinancial {
+  id String @id @default(uuid()) @db.Uuid
+  paymentId String @unique @db.Uuid
+  policy Json
+  grossCents Int
+  refundedCents Int @default(0)
+  gatewayFeeCents Int
+  feeSource String @db.VarChar(20)
+  companyCents Int
+  clubCents Int
+  blocked Boolean @default(false)
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  payment TicketPayment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  entries TicketFinancialEntry[]
+  @@index([blocked, feeSource])
+}
+
+model TicketFinancialEntry {
+  id String @id @default(uuid()) @db.Uuid
+  financialId String @db.Uuid
+  revision Int
+  grossDeltaCents Int
+  refundedDeltaCents Int
+  gatewayDeltaCents Int
+  companyDeltaCents Int
+  clubDeltaCents Int
+  reason String @db.VarChar(200)
+  createdAt DateTime @default(now())
+  financial TicketFinancial @relation(fields: [financialId], references: [id], onDelete: Restrict)
+  @@unique([financialId, revision])
+  @@index([createdAt])
+}
+
+model ClubPayout {
+  id String @id @default(uuid()) @db.Uuid
+  actorId String @db.Uuid
+  requestKey String @unique @db.VarChar(80)
+  requestHash String @db.VarChar(64)
+  amountCents Int
+  balanceBeforeCents BigInt
+  reference String @unique @db.VarChar(100)
+  recipient String @db.VarChar(200)
+  transferredAt DateTime
+  notes String @default("") @db.VarChar(1000)
+  voidedAt DateTime?
+  voidReason String? @db.VarChar(500)
+  createdAt DateTime @default(now())
+  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  @@index([createdAt])
 }
 
 // Provider resources are scoped by environment: sandbox IDs never become live IDs.
@@ -466,9 +591,23 @@ model GatewayIntent {
   charge PaymentCharge? @relation(fields: [chargeId], references: [id])
   shopOrder ShopOrder? @relation(fields: [shopOrderId], references: [id])
   customer BillingCustomer @relation(fields: [customerId], references: [id])
+  ticketRefundCost TicketRefundCost?
   @@unique([environment, providerReference])
   @@index([environment, nextAttemptAt])
   @@index([ticketId, createdAt])
+}
+
+// A late payment can be refunded without ever issuing a TicketPayment receipt.
+// Its provider fee still belongs in the reconciliation and team balance.
+model TicketRefundCost {
+  id String @id @default(uuid()) @db.Uuid
+  intentId String @unique @db.Uuid
+  grossCents Int
+  refundedCents Int
+  gatewayFeeCents Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  intent GatewayIntent @relation(fields: [intentId], references: [id], onDelete: Restrict)
 }
 
 model ShopSettings {

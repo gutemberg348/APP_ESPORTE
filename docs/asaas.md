@@ -4,6 +4,8 @@ Integração implementada para ingressos, compras com cashback e pedidos da loja
 
 ## Configurar no desenvolvimento
 
+Desde 09/11/2026, os ingressos também têm [apuração de comissão, tarifa efetiva e repasse manual](financeiro-ingressos.md). A taxa é conciliada com os dados do provedor; o registro de repasse ao time não inicia transferência Asaas.
+
 Em `apps/api/.env`:
 
 ```dotenv

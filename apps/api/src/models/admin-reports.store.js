@@ -47,7 +47,7 @@ export function createAdminReportsStore(client, { now = () => new Date() } = {})
       const location = { ...(query.matchId ? { matchId: query.matchId } : {}), ...(query.sectorId ? { id: query.sectorId } : {}) };
       const inventoryLocation = { ...(query.matchId ? { matchId: query.matchId } : {}), ...(query.sectorId ? { sectorId: query.sectorId } : {}) };
       return read(async (tx) => {
-        const [total, items, sold, reserved, receipts, archivedReceipts, free, capacity, occupied, sectors, counts] = await inOrder([
+        const [total, items, sold, reserved, receipts, archivedReceipts, free, capacity, occupied, sectors, counts, financial] = await inOrder([
           () => tx.ticket.count({ where }),
           () => tx.ticket.findMany({ where, include: { ...ticketInclude, user: { select: { id: true, name: true, email: true } } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: query.limit, skip: query.offset }),
           () => tx.ticket.aggregate({ where: { AND: [where, { deletedAt: null, status: { in: ['ISSUED', 'USED'] }, payment: { isNot: null } }] }, _sum: { quantity: true } }),
@@ -59,11 +59,12 @@ export function createAdminReportsStore(client, { now = () => new Date() } = {})
           () => tx.ticket.aggregate({ where: { ...inventoryLocation, ...inventoryWhere(instant) }, _sum: { quantity: true, voidedQuantity: true } }),
           () => query.matchId ? tx.sector.findMany({ where: location, orderBy: [{ name: 'asc' }, { id: 'asc' }] }) : [],
           () => query.matchId ? tx.ticket.groupBy({ by: ['sectorId', 'status', 'deletedAt'], where: { ...inventoryLocation, ...inventoryWhere(instant) }, _sum: { quantity: true, voidedQuantity: true, usedQuantity: true } }) : [],
+          () => tx.ticketFinancial.aggregate({ where: { payment: { ticket: where } }, _sum: { gatewayFeeCents: true, companyCents: true, clubCents: true } }),
         ]);
         const occupiedTotal = occupiedQuantity(occupied._sum), totalCapacity = sum(capacity, 'capacity');
         return {
           items: items.map((ticket) => toAdminTicket(ticket, instant)), pagination: page(total, query), serverTime: instant.toISOString(),
-          summary: { orders: total, soldQuantity: sum(sold, 'quantity'), reservedQuantity: sum(reserved, 'quantity'), freeQuantity: sum(free, 'quantity'), confirmedRevenueCents: sum(receipts, 'amountCents'), refundedRevenueCents: sum(receipts, 'refundedCents'), archivedRevenueCents: sum(archivedReceipts, 'amountCents') },
+          summary: { orders: total, soldQuantity: sum(sold, 'quantity'), reservedQuantity: sum(reserved, 'quantity'), freeQuantity: sum(free, 'quantity'), confirmedRevenueCents: sum(receipts, 'amountCents'), refundedRevenueCents: sum(receipts, 'refundedCents'), archivedRevenueCents: sum(archivedReceipts, 'amountCents'), gatewayFeeCents: sum(financial, 'gatewayFeeCents'), companyCents: sum(financial, 'companyCents'), clubCents: sum(financial, 'clubCents') },
           inventory: { capacity: totalCapacity, occupied: occupiedTotal, available: Math.max(0, totalCapacity - occupiedTotal), sectors: sectors.map((sector) => {
             const groups = counts.filter((row) => row.sectorId === sector.id);
             const occupied = groups.reduce((value, row) => value + occupiedQuantity(row._sum), 0);

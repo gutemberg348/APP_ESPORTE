@@ -18,5 +18,6 @@ export function assertGateScope(user, assignment) {
   if (user.role !== 'ADMIN' && (!assignment?.active || assignment.userId !== user.id)) throw new AppError(403, 'GATE_SCOPE_DENIED', 'Você não está escalado para esta partida e setor.');
 }
 export function assertGateRoute(user, route) {
+  if (user?.role === 'CASHIER' && !route.cashier && !route.staffSelf) throw new AppError(403, 'CASHIER_ONLY_ACCOUNT', 'Esta conta tem acesso somente aos caixas autorizados e à segurança da própria conta.');
   if (user?.role === 'GATE' && !route.gate && !route.staffSelf) throw new AppError(403, 'GATE_ONLY_ACCOUNT', 'Esta conta tem acesso somente à portaria e à segurança da própria conta.');
 }

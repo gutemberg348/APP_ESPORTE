@@ -8,7 +8,7 @@
     "start": "node src/server.js",
     "check": "node scripts/check.mjs",
     "test": "node --test test/*.test.js",
-    "test:unit": "node --test test/crypto.test.js test/business-rules.test.js test/payment-rules.test.js test/ticket-rules.test.js test/jwt.test.js test/auth-service.test.js test/ticket-entry.test.js test/gate-rules.test.js test/ticket-checkout.test.js test/http.test.js test/admin-sales.test.js test/admin-reports.test.js test/asaas.test.js test/asaas-flow.test.js test/shop.test.js",
+    "test:unit": "node --test test/crypto.test.js test/business-rules.test.js test/payment-rules.test.js test/ticket-rules.test.js test/jwt.test.js test/auth-service.test.js test/ticket-entry.test.js test/gate-rules.test.js test/ticket-checkout.test.js test/http.test.js test/admin-sales.test.js test/admin-reports.test.js test/asaas.test.js test/asaas-flow.test.js test/shop.test.js test/finance.test.js test/recovery-partners.test.js",
     "test:integration": "node scripts/test-integration.mjs",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -18,6 +18,7 @@
     "db:prepare": "node scripts/prepare-database.mjs",
     "auth:cleanup": "node scripts/cleanup-auth.mjs",
     "shop:cleanup": "node scripts/cleanup-shop.mjs",
+    "shop:seed-demo": "node prisma/seed-shop-demo.js",
     "db:studio": "prisma studio",
     "payments:webhook": "node scripts/configure-asaas-webhook.mjs"
   },
@@ -28,6 +29,7 @@
     "dotenv": "^17.2.3",
     "express": "5.3.0",
     "jose": "^6.2.14",
+    "nodemailer": "^10.4.0",
     "pg": "^8.16.3",
     "zod": "^4.3.6"
   },

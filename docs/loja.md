@@ -1,6 +1,6 @@
 # Loja oficial: produtos, estoque, pedidos e frete
 
-Implementação em 06/11/2026. O menu **Loja** do administrador tem Produtos, Pedidos, Estoque, Frete e Configurações. O botão **Loja** do aplicativo abre o catálogo ou o link externo configurado. Não houve publicação, início da aplicação ou alteração do banco local durante a implementação.
+Implementação inicial em 06/11/2026. O menu **Loja** do administrador tem Produtos, Pedidos, Estoque, Frete e Configurações. O botão **Loja** do aplicativo abre o catálogo ou o link externo configurado. Em 09/11/2026, as migrations foram aplicadas ao banco local e foram cadastrados [cinco produtos demonstrativos com imagens](catalogo-esporte-teste.md). Não foi iniciado um servidor ou enviada cobrança real pelo agente.
 
 ## Ativar no seu ambiente
 

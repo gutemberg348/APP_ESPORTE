@@ -1,0 +1,245 @@
+FINANCEIRO DOS INGRESSOS — 09/11/2026
+
+Fontes: schema Prisma e migrations versionadas. Migrations aplicadas ao PostgreSQL local nesta revisao.
+Nenhum comprovante, CPF, senha, chave Pix real ou registro de cliente foi exportado neste documento.
+
+NOVOS RELACIONAMENTOS
+Ticket.financialPolicy: JSONB opcional com regra capturada ao reservar; nao e exposto ao torcedor.
+TicketPayment 0..1 TicketFinancial, por paymentId UNIQUE.
+TicketFinancial 1:N TicketFinancialEntry; revisao unica por apuracao, com deltas preservados.
+User 1:N ClubPayout; ator registra repasse manual, sem transferencia bancaria pela API.
+GatewayIntent 0..1 TicketRefundCost: tarifa retida de cobranca devolvida sem emissao.
+
+CONVENCOES
+Valores em centavos inteiros. Percentuais em pontos-base: 1000 = 10%.
+companyCents e a comissao acumulada, clubCents pode ficar negativo apos estornos/tarifas.
+companyBps inicial 1000; commissionBase inicial NET; payoutWeekday 5 = sexta-feira.
+ClubPayout.balanceBeforeCents e BIGINT; a API converte para Number no JSON e limita valores seguros.
+Anular repasse preserva referencia e valores, preenche voidedAt/voidReason e gera auditoria.
+Nada apaga vendas ou faz uma transferencia real ao registrar um repasse.
+
+MODELOS PRISMA
+
+model FinancialSettings {
+  id String @id @default("main")
+  companyName String @default("Empresa operadora") @db.VarChar(100)
+  companyBps Int @default(1000)
+  commissionBase String @default("NET") @db.VarChar(10)
+  gatewayBps Int @default(0)
+  gatewayFixedCents Int @default(0)
+  payoutWeekday Int @default(5)
+  clubRecipient String @default("") @db.VarChar(200)
+  clubPixKey String @default("") @db.VarChar(200)
+  version Int @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model TicketFinancial {
+  id String @id @default(uuid()) @db.Uuid
+  paymentId String @unique @db.Uuid
+  policy Json
+  grossCents Int
+  refundedCents Int @default(0)
+  gatewayFeeCents Int
+  feeSource String @db.VarChar(20)
+  companyCents Int
+  clubCents Int
+  blocked Boolean @default(false)
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  payment TicketPayment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  entries TicketFinancialEntry[]
+  @@index([blocked, feeSource])
+}
+
+model TicketFinancialEntry {
+  id String @id @default(uuid()) @db.Uuid
+  financialId String @db.Uuid
+  revision Int
+  grossDeltaCents Int
+  refundedDeltaCents Int
+  gatewayDeltaCents Int
+  companyDeltaCents Int
+  clubDeltaCents Int
+  reason String @db.VarChar(200)
+  createdAt DateTime @default(now())
+  financial TicketFinancial @relation(fields: [financialId], references: [id], onDelete: Restrict)
+  @@unique([financialId, revision])
+  @@index([createdAt])
+}
+
+model ClubPayout {
+  id String @id @default(uuid()) @db.Uuid
+  actorId String @db.Uuid
+  requestKey String @unique @db.VarChar(80)
+  requestHash String @db.VarChar(64)
+  amountCents Int
+  balanceBeforeCents BigInt
+  reference String @unique @db.VarChar(100)
+  recipient String @db.VarChar(200)
+  transferredAt DateTime
+  notes String @default("") @db.VarChar(1000)
+  voidedAt DateTime?
+  voidReason String? @db.VarChar(500)
+  createdAt DateTime @default(now())
+  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  @@index([createdAt])
+}
+
+model TicketRefundCost {
+  id String @id @default(uuid()) @db.Uuid
+  intentId String @unique @db.Uuid
+  grossCents Int
+  refundedCents Int
+  gatewayFeeCents Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  intent GatewayIntent @relation(fields: [intentId], references: [id], onDelete: Restrict)
+}
+
+SQL COMPLETO: COLUNAS, CHAVES, RELACOES, INDICES E CHECKS
+
+MIGRATION 20261109010000_ticket_finance
+
+-- AlterTable
+ALTER TABLE "Ticket" ADD COLUMN     "financialPolicy" JSONB;
+
+-- CreateTable
+CREATE TABLE "FinancialSettings" (
+    "id" TEXT NOT NULL DEFAULT 'main',
+    "companyName" VARCHAR(100) NOT NULL DEFAULT 'Empresa operadora',
+    "companyBps" INTEGER NOT NULL DEFAULT 1000,
+    "commissionBase" VARCHAR(10) NOT NULL DEFAULT 'NET',
+    "gatewayBps" INTEGER NOT NULL DEFAULT 0,
+    "gatewayFixedCents" INTEGER NOT NULL DEFAULT 0,
+    "payoutWeekday" INTEGER NOT NULL DEFAULT 5,
+    "clubRecipient" VARCHAR(200) NOT NULL DEFAULT '',
+    "clubPixKey" VARCHAR(200) NOT NULL DEFAULT '',
+    "version" INTEGER NOT NULL DEFAULT 0,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "FinancialSettings_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "TicketFinancial" (
+    "id" UUID NOT NULL,
+    "paymentId" UUID NOT NULL,
+    "policy" JSONB NOT NULL,
+    "grossCents" INTEGER NOT NULL,
+    "refundedCents" INTEGER NOT NULL DEFAULT 0,
+    "gatewayFeeCents" INTEGER NOT NULL,
+    "feeSource" VARCHAR(20) NOT NULL,
+    "companyCents" INTEGER NOT NULL,
+    "clubCents" INTEGER NOT NULL,
+    "blocked" BOOLEAN NOT NULL DEFAULT false,
+    "version" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "TicketFinancial_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "TicketFinancialEntry" (
+    "id" UUID NOT NULL,
+    "financialId" UUID NOT NULL,
+    "revision" INTEGER NOT NULL,
+    "grossDeltaCents" INTEGER NOT NULL,
+    "refundedDeltaCents" INTEGER NOT NULL,
+    "gatewayDeltaCents" INTEGER NOT NULL,
+    "companyDeltaCents" INTEGER NOT NULL,
+    "clubDeltaCents" INTEGER NOT NULL,
+    "reason" VARCHAR(200) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "TicketFinancialEntry_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ClubPayout" (
+    "id" UUID NOT NULL,
+    "actorId" UUID NOT NULL,
+    "requestKey" VARCHAR(80) NOT NULL,
+    "requestHash" VARCHAR(64) NOT NULL,
+    "amountCents" INTEGER NOT NULL,
+    "balanceBeforeCents" BIGINT NOT NULL,
+    "reference" VARCHAR(100) NOT NULL,
+    "recipient" VARCHAR(200) NOT NULL,
+    "transferredAt" TIMESTAMP(3) NOT NULL,
+    "notes" VARCHAR(1000) NOT NULL DEFAULT '',
+    "voidedAt" TIMESTAMP(3),
+    "voidReason" VARCHAR(500),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ClubPayout_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "TicketFinancial_paymentId_key" ON "TicketFinancial"("paymentId");
+
+-- CreateIndex
+CREATE INDEX "TicketFinancial_blocked_feeSource_idx" ON "TicketFinancial"("blocked", "feeSource");
+
+-- CreateIndex
+CREATE INDEX "TicketFinancialEntry_createdAt_idx" ON "TicketFinancialEntry"("createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "TicketFinancialEntry_financialId_revision_key" ON "TicketFinancialEntry"("financialId", "revision");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ClubPayout_requestKey_key" ON "ClubPayout"("requestKey");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ClubPayout_reference_key" ON "ClubPayout"("reference");
+
+-- CreateIndex
+CREATE INDEX "ClubPayout_createdAt_idx" ON "ClubPayout"("createdAt");
+
+-- AddForeignKey
+ALTER TABLE "TicketFinancial" ADD CONSTRAINT "TicketFinancial_paymentId_fkey" FOREIGN KEY ("paymentId") REFERENCES "TicketPayment"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TicketFinancialEntry" ADD CONSTRAINT "TicketFinancialEntry_financialId_fkey" FOREIGN KEY ("financialId") REFERENCES "TicketFinancial"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ClubPayout" ADD CONSTRAINT "ClubPayout_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- Financial amounts are cents; percentages are basis points. Never erase paid history.
+ALTER TABLE "FinancialSettings" ADD CONSTRAINT "FinancialSettings_values_valid" CHECK ("companyBps" BETWEEN 0 AND 10000 AND "gatewayBps" BETWEEN 0 AND 10000 AND "gatewayFixedCents" BETWEEN 0 AND 100000000 AND "commissionBase" IN ('NET','GROSS') AND "payoutWeekday" BETWEEN 0 AND 6 AND "version" >= 0);
+ALTER TABLE "TicketFinancial" ADD CONSTRAINT "TicketFinancial_balance_valid" CHECK ("grossCents" > 0 AND "refundedCents" BETWEEN 0 AND "grossCents" AND "gatewayFeeCents" >= 0 AND "companyCents" >= 0 AND "version" >= 0 AND "feeSource" IN ('PROVIDER','MANUAL','ESTIMATED') AND "grossCents"::bigint - "refundedCents"::bigint = "gatewayFeeCents"::bigint + "companyCents"::bigint + "clubCents"::bigint);
+ALTER TABLE "TicketFinancialEntry" ADD CONSTRAINT "TicketFinancialEntry_balance_valid" CHECK ("revision" >= 0 AND "grossDeltaCents"::bigint - "refundedDeltaCents"::bigint = "gatewayDeltaCents"::bigint + "companyDeltaCents"::bigint + "clubDeltaCents"::bigint);
+ALTER TABLE "ClubPayout" ADD CONSTRAINT "ClubPayout_amount_valid" CHECK ("amountCents" > 0 AND "balanceBeforeCents" >= "amountCents" AND (("voidedAt" IS NULL AND "voidReason" IS NULL) OR ("voidedAt" IS NOT NULL AND "voidReason" IS NOT NULL)));
+
+
+MIGRATION 20261109020000_unissued_ticket_refund_cost
+
+-- CreateTable
+CREATE TABLE "TicketRefundCost" (
+    "id" UUID NOT NULL,
+    "intentId" UUID NOT NULL,
+    "grossCents" INTEGER NOT NULL,
+    "refundedCents" INTEGER NOT NULL,
+    "gatewayFeeCents" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "TicketRefundCost_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "TicketRefundCost_intentId_key" ON "TicketRefundCost"("intentId");
+
+-- AddForeignKey
+ALTER TABLE "TicketRefundCost" ADD CONSTRAINT "TicketRefundCost_intentId_fkey" FOREIGN KEY ("intentId") REFERENCES "GatewayIntent"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+ALTER TABLE "TicketRefundCost" ADD CONSTRAINT "TicketRefundCost_values_valid" CHECK ("grossCents" > 0 AND "refundedCents" = "grossCents" AND "gatewayFeeCents" BETWEEN 0 AND "grossCents");
+
+
+REGRA DE CONFERENCIA
+bruto - devolucoes = gateway + empresa + time.
+Saldo pendente do time = parte apurada do time - repasses nao anulados.
+Tarifa estimada ou recebimento bloqueado nao libera novo repasse.
+A tarifa de um pagamento devolvido sem emissao e incluída uma vez por GatewayIntent.
+Guia funcional e limites: docs/financeiro-ingressos.md.

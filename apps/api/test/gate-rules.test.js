@@ -27,8 +27,11 @@ test('entry schemas require exactly one credential and public registration canno
   assert.equal(admissionSchema.safeParse({ ...context, code: 'ABCDE-FGHJK', quantity: 1, requestKey: randomUUID() }).success, true);
   const account = { name: 'Porteiro', email: 'gate@example.com', password: 'SenhaSegura123' };
   assert.equal(employeeCreateSchema.safeParse(account).success, true);
-  assert.equal(employeeCreateSchema.safeParse({ ...account, role: 'ADMIN' }).success, false);
-  assert.equal(registerSchema.safeParse({ ...account, role: 'GATE' }).success, false);
+  assert.equal(employeeCreateSchema.safeParse({ ...account, role: 'ADMIN' }).success, true);
+  for (const role of ['ADMIN', 'GATE', 'CASHIER']) {
+    assert.equal(employeeCreateSchema.safeParse({ ...account, role }).success, true);
+    assert.equal(registerSchema.safeParse({ ...account, role }).success, false);
+  }
   const sectorId = randomUUID();
   assert.equal(employeeAssignmentsSchema.safeParse({ userId: randomUUID(), sectorIds: [sectorId, sectorId] }).success, false);
 });

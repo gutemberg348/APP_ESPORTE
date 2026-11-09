@@ -3,5 +3,5 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": { "./types": "./types.ts", "./shop": "./shop.ts", "./forms": { "types": "./forms.d.ts", "default": "./forms.js" }, "./demo.json": "./demo.json", "./brands.json": "./brands.json" }
+  "exports": { "./types": "./types.ts", "./shop": "./shop.ts", "./finance": "./finance.ts", "./forms": { "types": "./forms.d.ts", "default": "./forms.js" }, "./demo.json": "./demo.json", "./brands.json": "./brands.json" }
 }

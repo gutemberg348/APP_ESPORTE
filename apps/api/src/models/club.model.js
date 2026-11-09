@@ -1,10 +1,11 @@
 import { db } from '../config/database.js';
 import { ticketModel } from './ticket.model.js';
+import { partnerModel } from './partner.model.js';
 export const clubModel = {
   nextMatch: async () => (await ticketModel.matches())[0] || null,
   matches: ticketModel.matches,
   match: (id) => db.match.findUnique({ where: { id }, include: { sectors: true } }),
-  partners: ({ category, search, limit = 100, offset = 0 } = {}) => db.partner.findMany({ where: { active: true, ...(category ? { category } : {}), ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}) }, orderBy: [{ name: 'asc' }, { id: 'asc' }], take: limit, skip: offset }),
+  partners: (query) => partnerModel.publicList(query),
   tickets: ticketModel.tickets,
   reserveTicket: ticketModel.reserve,
   quoteTicket: ticketModel.quote,

@@ -35,10 +35,16 @@ import { FeatureSheet } from '../components/FeatureSheet';
 import { PartnerSheet } from '../components/PartnerSheet';
 import { StadiumModal } from '../components/StadiumModal';
 import { Button } from '../components/ui';
+import { usePasswordRecoveryLink } from './usePasswordRecoveryLink';
+import { PasswordResetScreen } from '../screens/PasswordResetScreen';
+import { CashierScreen } from '../screens/CashierScreen';
 export function AppNavigator() {
   const { colors, isDark } = useTheme();
-  const { member, loading, bootError, retry, demoMode, resumeDemo } = useSession();
+  const { member, loading, bootError, retry, demoMode, resumeDemo, clearSession } = useSession();
   const { portal, navigate } = useWebPortal();
+  const recovery = usePasswordRecoveryLink();
+  if (recovery.link) return <PasswordResetScreen {...recovery.link} onDone={() => { const destination = recovery.link!.portal; void clearSession().then(() => { recovery.clear(); navigate(destination === 'ADMIN' ? 'admin' : 'app'); }); }} />;
+  if (member?.role === 'CASHIER') return <PaymentsProvider><CashierScreen /></PaymentsProvider>;
   if (Platform.OS === 'web' && portal === 'admin' && !member && !demoMode) return <AdminLoginScreen loading={loading} bootError={bootError} onRetry={() => void retry()} onOpenApp={() => navigate('app')} />;
   return <View style={{ flex: 1, backgroundColor: colors.outer, alignItems: 'center' }}><StatusBar style={isDark ? 'light' : 'dark'} /><SafeAreaView edges={member?.role === 'ADMIN' ? [] : ['top']} style={{ flex: 1, width: '100%', maxWidth: member?.role === 'ADMIN' ? undefined : Platform.OS === 'web' && member?.role === 'GATE' ? 1180 : 448, backgroundColor: colors.background }}>
     {loading ? <View style={layout.center}><ActivityIndicator color={colors.primary} /></View> : bootError ? <View style={[layout.center, { padding: 32, gap: 16 }]}><Text style={{ color: colors.danger, textAlign: 'center' }}>{bootError}</Text><Button label="Tentar novamente" onPress={() => void retry()} /></View> : member ? member.role === 'GATE' ? <GateScreen /> : <ClubProvider><PaymentsProvider><MainNavigator /></PaymentsProvider></ClubProvider> : demoMode ? <View style={[layout.center, { padding: 32, gap: 22 }]}><Crest size={78} height={98} /><Text heading style={{ color: colors.text, fontSize: 28, lineHeight: 36, fontWeight: '800', textAlign: 'center' }}>Sua torcida está aqui.</Text><Button label={`Voltar ao ${club.shortName}`} onPress={resumeDemo} /></View> : <LoginScreen onAdminLogin={Platform.OS === 'web' ? () => navigate('admin') : undefined} />}

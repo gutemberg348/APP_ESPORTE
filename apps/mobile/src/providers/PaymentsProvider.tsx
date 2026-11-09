@@ -33,12 +33,12 @@ export function PaymentsProvider({ children }: React.PropsWithChildren) {
     const current = ++revision.current;
     setLoading(true); setError('');
     try {
-      const [freshWallet, freshSetup, merchantCharges] = await Promise.all([paymentsApi.wallet(token), paymentsApi.setup(token), paymentsApi.merchantCharges(token)]);
+      const [freshWallet, freshSetup, merchantCharges] = await Promise.all([member?.role === 'CASHIER' ? Promise.resolve(null) : paymentsApi.wallet(token), paymentsApi.setup(token), paymentsApi.merchantCharges(token)]);
       if (current !== revision.current) return;
       setWallet(freshWallet); setSetup(freshSetup); setCharges(merchantCharges);
     } catch (err) { if (current === revision.current) setError(err instanceof Error ? err.message : 'Não foi possível carregar a carteira.'); }
     finally { if (current === revision.current) setLoading(false); }
-  }, [demoMode, token]);
+  }, [demoMode, token, member?.role]);
   useEffect(() => { void refresh(); return () => { revision.current++; }; }, [member?.id, demoMode]);
   async function create(offerId: string, amountCents: number, code: string, key: string) {
     return exclusive(async () => {

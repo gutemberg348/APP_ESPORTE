@@ -3,6 +3,7 @@ import { ticketService } from '../services/ticket.service.js';
 import { ticketEntryService } from '../services/ticket-entry.service.js';
 import * as schemas from '../validators/admin.js';
 import { paginationSchema } from '../validators/index.js';
+import { accountDetailSchema, accountUpdateSchema } from '../validators/accounts.js';
 const query = (url) => Object.fromEntries(url.searchParams);
 export const adminController = {
   overview: async ({ user }) => ({ data: await adminService.overview(user) }),
@@ -21,6 +22,8 @@ export const adminController = {
   updateSale: async ({ user, body }) => ({ data: await adminService.updateSale(user, schemas.saleUpdateSchema.parse(body)) }),
   deleteSale: async ({ user, body }) => ({ data: await adminService.deleteSale(user, schemas.saleDeleteSchema.parse(body)) }),
   users: async ({ user, url }) => ({ data: await adminService.users(user, schemas.adminQuerySchema.parse(query(url))) }),
+  userDetail: async ({ user, url }) => ({ data: await adminService.userDetail(user, accountDetailSchema.parse(query(url))) }),
+  updateUser: async ({ user, body }) => ({ data: await adminService.updateUser(user, accountUpdateSchema.parse(body)) }),
   plans: async ({ user }) => ({ data: await adminService.plans(user) }),
   createPlan: async ({ user, body }) => ({ status: 201, data: await adminService.plan(user, schemas.planCreateSchema.parse(body)) }),
   updatePlan: async ({ user, body }) => ({ data: await adminService.plan(user, schemas.planUpdateSchema.parse(body)) }),

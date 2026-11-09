@@ -134,6 +134,12 @@ Pagamento Pix automático: [configuração Asaas, webhook, emissão de ingresso 
 
 Loja oficial: [produtos, variações, estoque, pedidos, checkout, Pix, Melhor Envio e modo de loja externa](docs/loja.md). Aplique a migration `20261106020000_shop` com `npm run db:deploy` e configure **Loja** no admin. CPF/CNPJ, telefone, CEP e valores em reais usam máscaras compartilhadas em `packages/shared/forms.js`.
 
+Catálogo do Esporte: [cinco produtos de teste, imagens hospedadas na API e seed idempotente](docs/catalogo-esporte-teste.md).
+
+Financeiro dos ingressos: [empresa 10%, time 90%, tarifas do gateway e repasse semanal manual](docs/financeiro-ingressos.md). Configure em **Admin → Financeiro → Configurações**; registre transferências já realizadas em **Repasses**. Registros não enviam dinheiro e não apagam o histórico.
+
 Banco de dados: [TXT completo de tabelas, campos, relações, chaves e índices](docs/banco/estrutura-completa.txt), conferido com o schema Prisma e os metadados do PostgreSQL.
 
 Camada HTTP migrada para Express 5.3.0, mantendo os endpoints e o contrato do app: [estrutura e verificação](docs/express-migration.md). `createApp` monta a aplicação sem abrir porta; `createHttpServer` prepara o servidor e seus timeouts, e somente `src/server.js` inicia a escuta quando executado.
+
+Recuperação por email, parceiros, ofertas e equipe: [configuração e uso no admin](docs/recuperacao-parceiros.md).

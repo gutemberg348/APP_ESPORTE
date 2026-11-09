@@ -79,7 +79,8 @@ test('PostgreSQL/HTTP: admin provisions staff; scoped camera/code admission, res
   assert.equal((await call('/gate/matches', { token: gateToken })).status, 401);
   assert.equal((await call('/auth/login', { method: 'POST', body: { email: employeeData.email, password, portal: 'GATE' } })).status, 401);
   gateToken = (await call('/auth/login', { method: 'POST', body: { email: employeeData.email, password: password + 'Nova', portal: 'GATE' } })).data.accessToken;
-  assert.equal((await call('/admin/employees', { method: 'PATCH', token: adminToken, body: { userId: created.data.id, active: false } })).status, 200);
+  const staffVersion = (await call(`/admin/employees?search=${encodeURIComponent(employeeData.email)}`, { token: adminToken })).data.find((row) => row.id === created.data.id).updatedAt;
+  assert.equal((await call('/admin/employees', { method: 'PATCH', token: adminToken, body: { userId: created.data.id, updatedAt: staffVersion, active: false } })).status, 200);
   assert.equal((await call('/gate/matches', { token: gateToken })).status, 401);
   assert.equal(await db.ticketAdmission.count({ where: { ticketId: ticket.id } }), 2);
   assert.ok(await db.auditLog.count({ where: { actorId: admin.id, action: 'EMPLOYEE_CREATED' } }));

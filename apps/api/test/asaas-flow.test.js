@@ -66,6 +66,9 @@ test('Asaas complete payment saga against isolated PostgreSQL and mocked provide
     await store.tick();
     assert.equal((await db.ticket.findUnique({ where: { id: ticket.id } })).status, 'ISSUED');
     assert.equal((await db.ticketPayment.findUnique({ where: { ticketId: ticket.id } })).amountCents, 5000);
+    const allocation = await db.ticketFinancial.findFirst({ where: { payment: { ticketId: ticket.id } } });
+    assert.equal(allocation.gatewayFeeCents, 100); assert.equal(allocation.feeSource, 'PROVIDER');
+    assert.equal(allocation.companyCents, 490); assert.equal(allocation.clubCents, 4410);
     assert.equal(await db.ticketPayment.count({ where: { ticketId: ticket.id } }), 1);
     await store.process(intent.id); assert.equal(await db.ticketPayment.count({ where: { ticketId: ticket.id } }), 1);
     instant = new Date(instant.getTime() + 16 * 60000);
@@ -93,6 +96,8 @@ test('Asaas complete payment saga against isolated PostgreSQL and mocked provide
     remote.status = 'RECEIVED'; remote.refunds = []; await store.process(intent.id);
     assert.equal((await db.gatewayIntent.findUnique({ where: { id: intent.id } })).state, 'REFUNDED');
     assert.equal(await db.ticketPayment.count({ where: { ticketId: ticket.id } }), 0);
+    const cost=await db.ticketRefundCost.findUnique({where:{intentId:intent.id}});assert.equal(cost.gatewayFeeCents,100);assert.equal(cost.grossCents,cost.refundedCents);
+    await store.process(intent.id);assert.equal(await db.ticketRefundCost.count({where:{intentId:intent.id}}),1);
   });
   await t.test('CONFIRMED is not RECEIVED and amount tampering never issues access', async () => {
     const { intent, ticket } = await purchase(); await store.process(intent.id);
@@ -238,6 +243,8 @@ test('Asaas complete payment saga against isolated PostgreSQL and mocked provide
     assert.equal((await db.ticket.findUnique({ where: { id: ticket.id } })).status, 'CANCELED');
     const before = refunds; await store.process(intent.id); await store.process(intent.id); assert.equal(refunds, before + 1);
     const receipt = await db.ticketPayment.findUnique({ where: { ticketId: ticket.id } }); assert.equal(receipt.refundedCents, 5000);
+    const financial = await db.ticketFinancial.findUnique({ where: { paymentId: receipt.id } });
+    assert.equal(financial.companyCents, 0); assert.equal(financial.clubCents, -100);
     const invalid = await db.ticket.findUnique({ where: { id: ticket.id } }); assert.equal(invalid.voidedQuantity, 1); assert.equal(invalid.usedQuantity, 1);
   });
   await t.test('cashback is credited only after split DONE, partial/full refunds conserve the wallet', async () => {

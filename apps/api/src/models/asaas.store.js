@@ -5,6 +5,7 @@ import { inventoryWhere, occupiedQuantity } from '../lib/ticket-rules.js';
 import { AppError } from '../lib/errors.js';
 import { authenticateAsaasWebhook, protectDocument, validTaxId, cents } from '../payments/asaas-client.js';
 import { settleShopOrder, reverseShopOrder, shopOrderInclude } from '../lib/shop-inventory.js';
+import { recordTicketFinancial } from '../lib/ticket-finance.js';
 
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 const providerId = z.string().regex(/^[A-Za-z0-9_-]{3,100}$/);
@@ -165,6 +166,18 @@ export function createAsaasStore(client, { settings, api, now = () => new Date()
       if (intent.ticketId) {
         if (unsafe) await invalidateTicket(tx, intent, refunded);
         else await syncTicket(tx, intent, remote, refunded);
+        const financialTicket = await tx.ticket.findUnique({ where: { id: intent.ticketId }, include: { payment: true } });
+        if (financialTicket?.payment?.reference === `ASAAS:${intent.providerReference}`) await recordTicketFinancial(tx, financialTicket, {
+          providerNetCents: remote.netValue == null ? undefined : cents(remote.netValue), blocked: unsafe || Boolean(intent.refundRequestedAt && refunded < intent.amountCents) || (refunded > 0 && refunded < intent.amountCents), reason: refunded ? 'Estorno confirmado pelo Asaas' : 'Recebimento/tarifa conciliados com Asaas',
+        });
+        else if (refunded === intent.amountCents && remote.netValue != null) {
+          const gatewayFeeCents = intent.amountCents - cents(remote.netValue);
+          const previousCost = await tx.ticketRefundCost.findUnique({ where: { intentId: intent.id } });
+          if (!previousCost || previousCost.gatewayFeeCents !== gatewayFeeCents) {
+            await tx.ticketRefundCost.upsert({ where: { intentId: intent.id }, create: { intentId: intent.id, grossCents: intent.amountCents, refundedCents: refunded, gatewayFeeCents }, update: { gatewayFeeCents } });
+            await audit(tx, intent.snapshot.userId, 'UNISSUED_TICKET_REFUND_FEE', intent.id, { grossCents: intent.amountCents, refundedCents: refunded, gatewayFeeCents, previousFeeCents: previousCost?.gatewayFeeCents ?? null });
+          }
+        }
       } else if (intent.shopOrderId) {
         if (unsafe) await reverseShopOrder(tx, intent, refunded, now);
         else await syncShop(tx, intent, remote, refunded);
@@ -268,7 +281,11 @@ export function createAsaasStore(client, { settings, api, now = () => new Date()
         const intent = await tx.gatewayIntent.findFirst({ where: { id, environment } });
         if (!intent) throw new AppError(404, 'PAYMENT_NOT_FOUND', 'Pagamento não encontrado.');
         await tx.gatewayIntent.update({ where: { id }, data: { refundRequestedAt: intent.refundRequestedAt || now(), nextAttemptAt: now(), pixPayload: null, wakeVersion: { increment: 1 } } });
-        if (intent.ticketId) await invalidateTicket(tx, intent, intent.refundedCents);
+        if (intent.ticketId) {
+          await invalidateTicket(tx, intent, intent.refundedCents);
+          const ticket = await tx.ticket.findUnique({ where: { id: intent.ticketId }, include: { payment: true } });
+          if (ticket?.payment?.reference === `ASAAS:${intent.providerReference}`) await recordTicketFinancial(tx, ticket, { blocked: true, reason: 'Solicitação administrativa de estorno' });
+        }
         if (intent.shopOrderId) await reverseShopOrder(tx, intent, intent.refundedCents, now);
         await audit(tx, actorId, 'ASAAS_REFUND_REQUESTED', id, { reason, amountCents: intent.amountCents, ticketId: intent.ticketId, chargeId: intent.chargeId, shopOrderId: intent.shopOrderId });
         return { requested: true };

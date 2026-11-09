@@ -8,10 +8,13 @@ import { useSession } from '../providers/SessionProvider';
 import { useTheme } from '../theme/ThemeProvider';
 import { messageOf } from '../utils/format';
 import { club } from '../config/club';
+import { Sheet } from '../components/Sheet';
+import { PasswordRecoveryForm } from '../components/PasswordRecoveryForm';
 export function LoginScreen({ onAdminLogin }: { onAdminLogin?: () => void }) {
   const { colors } = useTheme();
   const { signIn } = useSession();
   const [register, setRegister] = useState(false);
+  const [forgot, setForgot] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -38,6 +41,8 @@ export function LoginScreen({ onAdminLogin }: { onAdminLogin?: () => void }) {
     {register && <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18 }}>Use uma senha com pelo menos 10 caracteres.</Text>}
     {error ? <Text style={{ color: colors.danger }} accessibilityRole="alert">{error}</Text> : null}
     <Button label={register ? 'Criar conta' : 'Entrar'} loading={busy} onPress={() => void submit()} />
+    {!register && <Pressable disabled={busy} onPress={() => setForgot(true)} accessibilityRole="button" style={{ padding: 12, alignItems: 'center' }}><Text style={{ color: colors.muted, fontSize: 13 }}>Esqueci minha senha</Text></Pressable>}
+    {forgot && <Sheet visible title="Recuperar senha" onClose={() => setForgot(false)}><PasswordRecoveryForm initialEmail={email} onDone={() => setForgot(false)} /></Sheet>}
     <Pressable disabled={busy} onPress={() => { setRegister((value) => !value); setPassword(''); setShowPassword(false); setError(''); }} style={{ padding: 16, alignItems: 'center' }} accessibilityRole="button"><Text style={{ color: colors.primary }}>{register ? 'Já tenho uma conta' : 'Quero me cadastrar'}</Text></Pressable>
     {onAdminLogin && <Pressable disabled={busy} onPress={onAdminLogin} style={{ padding: 12, alignItems: 'center' }} accessibilityRole="link"><Text style={{ color: colors.muted, fontSize: 12 }}>Acessar painel administrativo</Text></Pressable>}
   </ScrollView></KeyboardAvoidingView>;

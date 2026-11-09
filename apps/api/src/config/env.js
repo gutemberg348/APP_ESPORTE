@@ -31,10 +31,27 @@ const schema = z.object({
   MELHOR_ENVIO_CONTACT_EMAIL: z.union([z.literal(''), z.email()]).default(''),
   MELHOR_ENVIO_SERVICES: z.string().regex(/^(\d+(,\d+)*)?$/).max(100).default('1,2'),
   TENANT_SLUG: z.string().regex(/^[a-z0-9-]{2,60}$/).default('nacional-patos'),
+  SMTP_ENABLED: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  SMTP_HOST: z.string().default(''),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  SMTP_SECURE: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  SMTP_USER: z.string().default(''),
+  SMTP_PASSWORD: z.string().default(''),
+  SMTP_FROM_EMAIL: z.union([z.literal(''), z.email()]).default(''),
+  SMTP_FROM_NAME: z.string().max(100).default('Sócio Esporte'),
+  MAIL_DATA_SECRET: z.string().default(''),
+  PASSWORD_RESET_PUBLIC_URL: z.url().default('http://localhost:8081/reset-password'),
+  PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().min(5).max(30).default(15),
+  MAIL_WORKER_INTERVAL_MS: z.coerce.number().int().min(1000).max(60000).default(3000),
   TICKET_PAYMENT_INSTRUCTIONS: z.string().min(10).max(1000).default('Após reservar, apresente o número da reserva no atendimento do clube. O ingresso é emitido quando o administrador confirmar o pagamento recebido.'),
 });
 export function parseEnv(input) {
   const result = schema.parse(input);
+  const resetUrl = new URL(result.PASSWORD_RESET_PUBLIC_URL);
+  if (!['http:', 'https:'].includes(resetUrl.protocol) || resetUrl.username || resetUrl.password || resetUrl.search || resetUrl.hash) throw new Error('PASSWORD_RESET_PUBLIC_URL deve ser uma URL web sem credenciais, query ou fragmento.');
+  if (result.NODE_ENV === 'production' && result.SMTP_ENABLED && resetUrl.protocol !== 'https:') throw new Error('Recuperação de senha exige HTTPS em produção.');
+  if (result.SMTP_ENABLED && (!result.SMTP_HOST || !result.SMTP_USER || !result.SMTP_PASSWORD || !result.SMTP_FROM_EMAIL || result.MAIL_DATA_SECRET.length < 64)) throw new Error('Configure SMTP_HOST, SMTP_USER, SMTP_PASSWORD, SMTP_FROM_EMAIL e MAIL_DATA_SECRET (64+ caracteres).');
+  if (result.SMTP_ENABLED && [result.JWT_SECRET, result.CARD_TOKEN_SECRET, result.TICKET_QR_SECRET, result.ASAAS_DATA_SECRET].includes(result.MAIL_DATA_SECRET)) throw new Error('MAIL_DATA_SECRET deve ser exclusivo dos emails.');
   if (result.JWT_SECRET === result.CARD_TOKEN_SECRET) throw new Error('JWT_SECRET deve ser diferente do segredo da carteirinha.');
   if ([result.JWT_SECRET, result.CARD_TOKEN_SECRET].includes(result.TICKET_QR_SECRET)) throw new Error('TICKET_QR_SECRET deve ser exclusivo dos ingressos.');
   if (/development|change.?me|replace|exemplo/i.test(result.JWT_SECRET)) throw new Error('Configure JWT_SECRET com um segredo aleatório; execute npm run setup para gerar um.');

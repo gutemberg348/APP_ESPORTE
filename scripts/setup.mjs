@@ -55,3 +55,15 @@ for (const path of ['.env', 'apps/api/.env']) {
   }
   if (nextSettings !== paymentSettings) { await writeFile(target, nextSettings); console.log(`Configurações de pagamento e frete preparadas sem ativar cobranças: ${path}`); }
 }
+
+// Prepare recovery settings without enabling SMTP or replacing existing credentials.
+for (const path of ['.env', 'apps/api/.env']) {
+  const target = new URL(path, root);
+  let text = await readFile(target, 'utf8');
+  const settings = { SMTP_ENABLED: 'false', SMTP_HOST: '', SMTP_PORT: '587', SMTP_SECURE: 'false', SMTP_USER: '', SMTP_PASSWORD: '', SMTP_FROM_EMAIL: '', SMTP_FROM_NAME: '"Sócio Esporte"', PASSWORD_RESET_PUBLIC_URL: 'http://localhost:8081/reset-password', PASSWORD_RESET_TTL_MINUTES: '15', MAIL_WORKER_INTERVAL_MS: '3000', MAIL_DATA_SECRET: randomBytes(32).toString('hex') };
+  for (const [key, value] of Object.entries(settings)) {
+    if (!new RegExp('^' + key + '=', 'm').test(text)) text = text.trimEnd() + '\n' + key + '=' + value + '\n';
+    else if (key === 'MAIL_DATA_SECRET' && /^MAIL_DATA_SECRET=$/m.test(text)) text = text.replace(/^MAIL_DATA_SECRET=$/m, key + '=' + value);
+  }
+  await writeFile(target, text);
+}

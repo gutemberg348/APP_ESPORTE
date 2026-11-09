@@ -3,6 +3,7 @@ import { serializable, assertAvailability, ticketPrice } from '../lib/business-r
 import { assertSalesOpen, inventoryWhere, occupiedQuantity, assertNoPendingPix } from '../lib/ticket-rules.js';
 import { isActiveMember } from '../lib/serializers.js';
 import { ticketInclude, toTicket } from '../lib/ticket-serializers.js';
+import { captureFinancialPolicy } from '../lib/ticket-finance.js';
 
 export function createTicketCheckoutStore(client, { now = () => new Date() } = {}) {
   async function checkout(tx, userId, { matchId, sectorId, quantity }) {
@@ -52,7 +53,8 @@ export function createTicketCheckoutStore(client, { now = () => new Date() } = {
         if (currentTotal !== totalCents || (expectedTotalCents !== undefined && expectedTotalCents !== totalCents)) throw new AppError(409, 'TICKET_PRICE_CHANGED', 'O preço ou desconto mudou. Revise os valores atualizados antes de confirmar.');
         const free = totalCents === 0;
         const expiresAt = free ? null : new Date(Math.min(instant.getTime() + 15 * 60000, match.startsAt.getTime(), match.salesCloseAt?.getTime() ?? Infinity));
-        const data = { userId, matchId, sectorId, quantity, priceCents: totalCents, status: free ? 'ISSUED' : 'PENDING', usedQuantity: 0, entryToken: null, entryVersion: 0, expiresAt };
+        const financialPolicy = await captureFinancialPolicy(tx);
+        const data = { userId, matchId, sectorId, quantity, priceCents: totalCents, status: free ? 'ISSUED' : 'PENDING', usedQuantity: 0, entryToken: null, entryVersion: 0, expiresAt, financialPolicy };
         let ticket = existing ? await tx.ticket.update({ where: { id: existing.id }, data: { ...data, createdAt: instant }, include: ticketInclude }) : await tx.ticket.create({ data, include: ticketInclude });
         if (free) {
           await tx.ticketPayment.create({ data: { ticketId: ticket.id, method: 'FREE', amountCents: 0, reference: `FREE-${ticket.id}` } });

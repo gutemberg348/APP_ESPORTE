@@ -1,3 +1,7 @@
+ATUALIZACAO ACESSO E PARCEIROS 09/11/2026: PasswordResetToken, MailDelivery, PartnerBenefit, novos campos de Partner e perfil CASHIER estao em docs/banco/recuperacao-parceiros.txt. Migration aplicada ao banco local; 13 migrations concluidas. O levantamento abaixo e historico.
+
+ATUALIZACAO FINANCEIRO 09/11/2026: FinancialSettings, TicketFinancial, TicketFinancialEntry, ClubPayout, TicketRefundCost e Ticket.financialPolicy estao documentados em docs/banco/financeiro.txt. As migrations Asaas, Loja e Financeiro foram aplicadas ao banco local (12 migrations concluidas); os levantamentos mais antigos abaixo continuam historicos.
+
 ATUALIZACAO LOJA 06/11/2026: nove tabelas novas e GatewayIntent.shopOrderId estao detalhados em docs/banco/loja.txt, com todos os campos, FKs, indices e CHECKs. A migration 20261106020000_shop precisa ser aplicada ao banco de execucao. O levantamento abaixo e historico e deve ser lido junto aos complementos Asaas e Loja.
 
 ATUALIZACAO 06/11/2026: a integracao Asaas acrescenta BillingCustomer, GatewayIntent, GatewayWebhook, TicketPayment.refundedCents e o metodo ASAAS. O detalhamento de todos os campos, relacoes, chaves, indices e constraints novos esta em docs/banco/asaas.txt. Abaixo permanece o levantamento anterior dos metadados locais; aplique a nova migration para atualizar esse banco.

@@ -5,6 +5,7 @@ import { serializable } from '../lib/business-rules.js';
 import { inventoryWhere, occupiedQuantity, assertManualConfirmation, assertNoPendingPix } from '../lib/ticket-rules.js';
 import { createTicketCheckoutStore } from './ticket-checkout.store.js';
 import { ticketInclude, toTicket } from '../lib/ticket-serializers.js';
+import { recordTicketFinancial } from '../lib/ticket-finance.js';
 
 const checkout = createTicketCheckoutStore(db);
 export const writeAudit = (tx, actorId, action, entityId, details) => tx.auditLog.create({ data: { actorId, action, entityId, details } });
@@ -26,18 +27,19 @@ export const ticketModel = {
   },
   quote: checkout.quote,
   reserve: checkout.reserve,
-  async confirm(actorId, { ticketId, receivedCents, reference }) {
+  async confirm(actorId, { ticketId, receivedCents, reference, gatewayFeeCents = 0 }) {
     try { return await serializable(db, async (tx) => {
       const ticket = await tx.ticket.findUnique({ where: { id: ticketId }, include: ticketInclude });
       if (!ticket) throw new AppError(404, 'TICKET_NOT_FOUND', 'Reserva não encontrada.');
       if (ticket.deletedAt) throw new AppError(409, 'SALE_DELETED', 'Esta venda foi excluída pela administração.');
       if (ticket.payment) {
-        if (ticket.payment.reference === reference && ticket.payment.amountCents === receivedCents) return toTicket(ticket);
+        if (ticket.payment.reference === reference && ticket.payment.amountCents === receivedCents && (!ticket.payment.financial || ticket.payment.financial.gatewayFeeCents === gatewayFeeCents)) return toTicket(ticket);
         throw new AppError(409, 'PAYMENT_ALREADY_CONFIRMED', 'Pagamento já registrado para esta reserva.');
       }
       assertManualConfirmation(ticket, receivedCents);
       assertNoPendingPix(ticket);
       await tx.ticketPayment.create({ data: { ticketId, method: 'MANUAL', amountCents: receivedCents, reference, confirmedById: actorId } });
+      await recordTicketFinancial(tx, ticket, { manualFeeCents: gatewayFeeCents, reason: 'Recebimento manual confirmado' });
       const updated = await tx.ticket.update({ where: { id: ticketId }, data: { status: 'ISSUED', entryToken: null, expiresAt: null }, include: ticketInclude });
       await writeAudit(tx, actorId, 'TICKET_PAYMENT_CONFIRMED', ticketId, { receivedCents, reference });
       return toTicket(updated);
@@ -47,7 +49,7 @@ export const ticketModel = {
       // different receipt or silently accept a different total.
       if (error.code === 'P2002') {
         const committed = await db.ticket.findUnique({ where: { id: ticketId }, include: ticketInclude });
-        if (!committed?.deletedAt && committed?.payment?.reference === reference && committed.payment.amountCents === receivedCents) return toTicket(committed);
+        if (!committed?.deletedAt && committed?.payment?.reference === reference && committed.payment.amountCents === receivedCents && (!committed.payment.financial || committed.payment.financial.gatewayFeeCents === gatewayFeeCents)) return toTicket(committed);
       }
       throw error;
     }

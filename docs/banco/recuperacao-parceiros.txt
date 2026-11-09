@@ -1,0 +1,91 @@
+RECUPERACAO DE SENHA, PARCEIROS E FUNCIONARIOS — 09/11/2026
+Fonte: schema Prisma e migration 20261109030000_recovery_partners_staff.
+Nenhuma credencial ou dado pessoal foi exportado.
+
+1. PasswordResetToken
+  id UUID PK (uuid gerado pelo Prisma)
+  userId UUID NOT NULL FK User.id ON DELETE CASCADE
+  tokenHash TEXT NOT NULL UNIQUE (SHA-256 do segredo de 256 bits)
+  credentialHash TEXT NOT NULL (SHA-256 do passwordHash no momento da emissao)
+  emailAtIssue VARCHAR(254) NOT NULL (invalida apos troca do email)
+  expiresAt TIMESTAMP(3) NOT NULL
+  usedAt TIMESTAMP(3) NULL (consumo/invalidation)
+  createdAt TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  Indices: PK, UNIQUE tokenHash, (userId, createdAt), expiresAt.
+  CHECK expiresAt > createdAt.
+  User 1:N PasswordResetToken; PasswordResetToken 0..1 MailDelivery.
+
+2. MailDelivery
+  id UUID PK
+  resetId UUID NOT NULL UNIQUE FK PasswordResetToken.id ON DELETE CASCADE
+  payload TEXT NULL (JSON cifrado AES-256-GCM; removido no fim)
+  status VARCHAR(16) NOT NULL DEFAULT QUEUED
+  attempts INTEGER NOT NULL DEFAULT 0
+  nextAttemptAt TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  lockedUntil TIMESTAMP(3) NULL
+  lockToken UUID NULL (lease de processamento)
+  sentAt TIMESTAMP(3) NULL
+  errorCode VARCHAR(40) NULL (codigo sanitizado; nunca resposta SMTP bruta)
+  createdAt TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  updatedAt TIMESTAMP(3) NOT NULL (mantido pelo Prisma)
+  Indices: PK, UNIQUE resetId, (status, nextAttemptAt).
+  CHECK status IN (QUEUED, SENDING, SENT, FAILED, SKIPPED).
+  CHECK attempts >= 0.
+  Consumo do token e revogacao de Session sao atomicos.
+  Envio SMTP acontece fora da transacao, com lease e ate cinco tentativas.
+  Cleanup remove tokens vencidos ha mais de 30 dias e emails por CASCADE.
+
+3. Partner: campos novos
+  contact VARCHAR(30) NOT NULL DEFAULT '' (digitos do telefone)
+  website VARCHAR(500) NOT NULL DEFAULT '' (HTTPS validado pela API)
+  archivedAt TIMESTAMP(3) NULL (exclusao logica)
+  createdAt TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  updatedAt TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP (@updatedAt Prisma)
+  Mantidos: id, slug UNIQUE, name, discount, category, active, icon,
+  description, conditions, location e relacao opcional 1:1 Merchant.
+  Indice existente: (active, category).
+
+4. PartnerBenefit
+  id UUID PK
+  partnerId UUID NOT NULL FK Partner.id ON DELETE RESTRICT
+  title VARCHAR(100) NOT NULL
+  description VARCHAR(2000) NOT NULL DEFAULT ''
+  conditions VARCHAR(2000) NOT NULL DEFAULT ''
+  active BOOLEAN NOT NULL DEFAULT true
+  startsAt TIMESTAMP(3) NULL
+  endsAt TIMESTAMP(3) NULL
+  createdAt TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  updatedAt TIMESTAMP(3) NOT NULL (@updatedAt Prisma)
+  Indices: PK, (partnerId, active).
+  CHECK endsAt IS NULL OR startsAt IS NULL OR endsAt > startsAt.
+  Partner 1:N PartnerBenefit. Desativacao preserva dados; sem DELETE publico.
+  Consulta publica: parceiro ativo sem archivedAt + beneficio ativo,
+  startsAt ausente ou <= agora, endsAt ausente ou > agora.
+
+5. UserRole e equipe
+  UserRole: USER, ADMIN, GATE, CASHIER (novo).
+  Cadastro publico: USER. Criacao de equipe: somente ADMIN autenticado.
+  ADMIN: painel. GATE: escalas GateAssignment. CASHIER: MerchantOperator.
+  Mantidos: User.email UNIQUE; User.contact; User.updatedAt; User.active.
+  Troca de perfil desativa GateAssignment e MerchantOperator, revoga Session.
+  Troca de email/desativacao invalida tokens e revoga sessoes.
+  Troca de senha invalida recuperacoes pelo credentialHash e revoga sessoes.
+  Ultimo ADMIN ativo protegido em transacao Serializable; sem exclusao fisica.
+
+6. Cashback e autorizacoes (tabelas existentes)
+  Partner 0..1 Merchant por Merchant.partnerId UNIQUE.
+  Merchant 1:N MerchantOffer; Tenant 1:N MerchantOffer.
+  MerchantOffer UNIQUE (tenantId, merchantId), cashbackBps, commissionBps,
+  active e customerQrEnabled. Soma dos percentuais <= 10000 pela API/DB existente.
+  Merchant 1:N MerchantOperator; User 1:N MerchantOperator.
+  MerchantOperator UNIQUE (userId, merchantId), active.
+  Permissoes novas aceitam usuarios ativos ADMIN/CASHIER.
+  Arquivar parceiro desativa Merchant e operadores; nao apaga PaymentCharge.
+  AuditLog guarda ator/acao/entidade, sem token/email SMTP/passwordHash.
+
+7. Concorrencia e horarios
+  Edicao de parceiro, beneficio e funcionario confere updatedAt.
+  Escritas sensiveis usam transacoes Serializable com retry de conflito.
+  Datas sao instantes ISO; formularios de ofertas usam horario de Patos UTC-3.
+  Dicionario principal historico: estrutura-completa.txt. Demais modulos
+  continuam documentados em asaas.txt, loja.txt e financeiro.txt.

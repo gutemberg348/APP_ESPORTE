@@ -96,7 +96,10 @@ export const adminModel = {
       if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'Conta não encontrada.');
       if (user.role === 'ADMIN' && !active && await tx.user.count({ where: { role: 'ADMIN', active: true } }) <= 1) throw new AppError(409, 'LAST_ADMIN_PROTECTED', 'O último administrador ativo não pode ser desativado.');
       await tx.user.update({ where: { id: userId }, data: { active } });
-      if (!active) await tx.session.deleteMany({ where: { userId } });
+      if (!active) {
+        await tx.session.deleteMany({ where: { userId } });
+        await tx.passwordResetToken.updateMany({ where: { userId, usedAt: null }, data: { usedAt: new Date() } });
+      }
       await writeAudit(tx, actorId, 'ACCOUNT_STATUS_CHANGED', userId, { active });
       return { userId, active };
     });
