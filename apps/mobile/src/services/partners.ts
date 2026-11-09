@@ -11,6 +11,7 @@ export interface PartnerInput {
   contact: string;
   website: string;
   active: boolean;
+  receivingWallets?: { sandbox?: string; production?: string };
   offer: {
     cashbackBps: number;
     commissionBps: number;

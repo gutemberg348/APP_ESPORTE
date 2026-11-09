@@ -301,6 +301,19 @@ model PointEntry {
   @@index([userId, createdAt])
 }
 
+model BusinessSettings {
+  id String @id @default("main")
+  ticketReservationMinutes Int @default(15)
+  shopReservationMinutes Int @default(30)
+  shopQuoteMinutes Int @default(10)
+  cashChargeMinutes Int @default(15)
+  shopPendingOrderLimit Int @default(3)
+  checkInEnabled Boolean @default(true)
+  checkInPoints Int @default(30)
+  version Int @default(0)
+  updatedAt DateTime @updatedAt
+}
+
 model Reward {
   id          String @id @default(uuid()) @db.Uuid
   slug        String @unique
@@ -310,6 +323,7 @@ model Reward {
   stock       Int
   icon        String @default("gift")
   active      Boolean @default(true)
+  version     Int @default(0)
   redemptions Redemption[]
 }
 
@@ -358,6 +372,8 @@ model Merchant {
   slug String @unique
   name String
   publicCode String @unique @default(uuid()) @db.Uuid
+  asaasSandboxWalletId String? @db.VarChar(36)
+  asaasProductionWalletId String? @db.VarChar(36)
   active Boolean @default(true)
   partnerId String? @unique @db.Uuid
   partner Partner? @relation(fields: [partnerId], references: [id])
@@ -419,6 +435,7 @@ model PaymentCharge {
   gatewayFeeCents Int @default(0)
   provider String
   providerReference String? @unique
+  paymentPolicy Json?
   pixPayload String?
   expiresAt DateTime
   paidAt DateTime?

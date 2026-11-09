@@ -47,7 +47,7 @@ export interface Match {
 }
 export interface PartnerBenefit { id: string; title: string; description: string; conditions: string; startsAt: string | null; endsAt: string | null; active?: boolean; updatedAt?: string }
 export interface Partner { id: string; name: string; discount: string; category: string; icon?: string; description?: string; conditions?: string; location?: string; contact?: string; website?: string; benefits?: PartnerBenefit[] }
-export interface AdminPartner extends Partner { active: boolean; archivedAt: string | null; updatedAt: string; merchant: { id: string; active: boolean; offers: { id: string; cashbackBps: number; commissionBps: number; active: boolean; customerQrEnabled: boolean }[]; operators: { userId: string; active: boolean; user: Pick<Member, 'id' | 'name' | 'email' | 'active' | 'role'> }[] } | null }
+export interface AdminPartner extends Partner { active: boolean; archivedAt: string | null; updatedAt: string; merchant: { id: string; active: boolean; asaasSandboxWalletId: string | null; asaasProductionWalletId: string | null; offers: { id: string; cashbackBps: number; commissionBps: number; active: boolean; customerQrEnabled: boolean }[]; operators: { userId: string; active: boolean; user: Pick<Member, 'id' | 'name' | 'email' | 'active' | 'role'> }[] } | null }
 export interface Ticket {
   id: string;
   serverTime?: string;
@@ -79,7 +79,7 @@ export interface AdmissionResult { ticket: Ticket & { holder: string }; duplicat
 export interface PointEntry { id: string; amount: number; reason: string; createdAt: string }
 export interface Reward { id: string; title: string; description: string; cost: number; stock: number; icon: string }
 export interface Redemption { id: string; rewardId: string; cost: number; createdAt: string; reward: Reward }
-export interface Engagement { checkedIn: boolean; day: string; ledger: PointEntry[]; rewards: Reward[]; redemptions: Redemption[]; ranking: { name: string; points: number; you: boolean }[] }
+export interface Engagement { checkInPoints: number; checkInEnabled: boolean; checkedIn: boolean; day: string; ledger: PointEntry[]; rewards: Reward[]; redemptions: Redemption[]; ranking: { name: string; points: number; you: boolean }[] }
 export interface Prediction { matchId: string; homeScore: number; awayScore: number }
 export interface Dashboard { member: Member; nextMatch: Match | null; matches: Match[]; partners: Partner[]; tickets: Ticket[]; engagement: Engagement; predictions: Prediction[] }
 export interface AdminOverview { users: number; matches: number; issuedTickets: number; pendingReservations: number }

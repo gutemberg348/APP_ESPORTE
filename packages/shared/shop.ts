@@ -15,7 +15,7 @@ export interface ShopPage<T> { items: T[]; total: number; limit?: number; offset
 export interface ProductPage extends ShopPage<Product> { categories: string[] }
 export interface ShippingRule { id: string; name: string; postalCodeFrom: string; postalCodeTo: string; baseCents: number; perKgCents: number; freeAboveCents: number | null; minDays: number; maxDays: number; active: boolean; version: number }
 export interface ShippingOption { id: string; name: string; amountCents: number; totalCents: number; minDays: number; maxDays: number; testMode: boolean }
-export interface ShopQuote { id: string; subtotalCents: number; options: ShippingOption[]; expiresAt: string; serverTime: string }
+export interface ShopQuote { reservationMinutes: number; id: string; subtotalCents: number; options: ShippingOption[]; expiresAt: string; serverTime: string }
 export interface CartInput { items: { variantId: string; quantity: number }[]; deliveryMethod: 'PICKUP' | 'DELIVERY'; postalCode: string }
 export interface ShopAddress { postalCode: string; street: string; number: string; complement: string; district: string; city: string; state: string }
 export interface ShopCheckoutInput extends CartInput { quoteId: string; shippingOptionId: string; recipient: string; phone: string; address?: ShopAddress; expectedTotalCents: number; requestKey: string }

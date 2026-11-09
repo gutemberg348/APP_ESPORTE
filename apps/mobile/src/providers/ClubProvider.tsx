@@ -69,8 +69,8 @@ export function ClubProvider({ children }: React.PropsWithChildren) {
       if (!data) return;
       if (!demoMode) { await clubApi.checkIn(token!); await refresh(); return; }
       if (data.engagement.checkedIn && data.engagement.day === today()) throw new Error('Você já fez o check-in de hoje.');
-      const updated = { ...data.member, points: data.member.points + 30 };
-      setData({ ...data, member: updated, engagement: { ...data.engagement, checkedIn: true, day: today(), ledger: [{ id: `demo-${Date.now()}`, amount: 30, reason: 'Check-in diário', createdAt: new Date().toISOString() }, ...data.engagement.ledger] } });
+      const updated = { ...data.member, points: data.member.points + data.engagement.checkInPoints };
+      setData({ ...data, member: updated, engagement: { ...data.engagement, checkedIn: true, day: today(), ledger: [{ id: `demo-${Date.now()}`, amount: data.engagement.checkInPoints, reason: 'Check-in diário', createdAt: new Date().toISOString() }, ...data.engagement.ledger] } });
       updateMember(updated);
     });
   }

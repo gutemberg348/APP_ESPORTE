@@ -172,7 +172,9 @@
         "points": 1050,
         "you": false
       }
-    ]
+    ],
+    "checkInEnabled": true,
+    "checkInPoints": 30
   },
   "products": [
     {

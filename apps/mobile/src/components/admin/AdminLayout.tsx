@@ -2,7 +2,7 @@
 import { View, ScrollView, Pressable, Modal, useWindowDimensions, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { LayoutDashboard, CalendarDays, Ticket, Users, BadgeCheck, UserRoundCog, ScanLine, History, ArrowUpRight, LogOut, RefreshCw, Sun, Moon, ChevronRight, Building2, Menu, X, PanelLeftClose, PanelLeftOpen, ShoppingBag } from 'lucide-react-native';
+import { LayoutDashboard, CalendarDays, Ticket, Users, BadgeCheck, UserRoundCog, ScanLine, History, ArrowUpRight, LogOut, RefreshCw, Sun, Moon, ChevronRight, Building2, Menu, X, PanelLeftClose, PanelLeftOpen, ShoppingBag, Settings2 } from 'lucide-react-native';
 import { Text } from '../Typography';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useSession } from '../../providers/SessionProvider';
@@ -21,6 +21,7 @@ export const adminSections = [
   { name: 'Torcedores', icon: Users, group: 'Gestão', description: 'Contas e associações da sua torcida.' },
   { name: 'Planos', icon: BadgeCheck, group: 'Gestão', description: 'Mensalidades e benefícios de cada plano.' },
   { name: 'Parceiros', icon: Building2, group: 'Gestão', description: 'Estabelecimentos, ofertas, cashback e acessos de caixa.' },
+  { name: 'Configurações', icon: Settings2, group: 'Gestão', description: 'Regras comerciais, prazos, pontos e recompensas.' },
   { name: 'Email e acesso', icon: UserRoundCog, group: 'Gestão', description: 'Recuperação de senha, configuração SMTP e acompanhamento dos envios.' },
   { name: 'Funcionários', icon: UserRoundCog, group: 'Gestão', description: 'Equipe, acessos e escalas de portaria.' },
   { name: 'Portaria', icon: ScanLine, group: 'Controle', description: 'Confira o ingresso e registre a entrada.' },

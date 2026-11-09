@@ -93,19 +93,20 @@ export function createPartnerStore(db, tenantSlug) {
       ]);
       return { items, total, limit, offset };
     },
-    create(actorId, { offer, ...data }) {
+    create(actorId, { offer, receivingWallets, ...data }) {
       return serializable(db, async (tx) => {
         const id = randomUUID(),
           row = await tx.partner.create({
             data: { ...data, id, slug: `partner-${id}` },
           });
         const account = await merchant(tx, row);
+        if (receivingWallets) await tx.merchant.update({ where: { id: account.id }, data: { asaasSandboxWalletId: receivingWallets.sandbox, asaasProductionWalletId: receivingWallets.production } });
         await offerSave(tx, account.id, offer);
-        await audit(tx, actorId, "PARTNER_CREATED", id);
+        await audit(tx, actorId, "PARTNER_CREATED", id, { receivingWallets: receivingWallets || null, offer: offer || null });
         return tx.partner.findUnique({ where: { id }, include });
       });
     },
-    update(actorId, { id, updatedAt, offer, ...data }) {
+    update(actorId, { id, updatedAt, offer, receivingWallets, ...data }) {
       return serializable(db, async (tx) => {
         const row = await current(tx, id, updatedAt),
           account = await merchant(tx, row);
@@ -114,10 +115,13 @@ export function createPartnerStore(db, tenantSlug) {
           where: { id: account.id },
           data: { name: data.name, active: data.active },
         });
+        if (receivingWallets) await tx.merchant.update({ where: { id: account.id }, data: { asaasSandboxWalletId: receivingWallets.sandbox, asaasProductionWalletId: receivingWallets.production } });
         await offerSave(tx, account.id, offer);
         await audit(tx, actorId, "PARTNER_UPDATED", id, {
           fields: Object.keys(data),
           offerChanged: Boolean(offer),
+          offer: offer ? { before: account.offers?.[0] || null, after: offer } : null,
+          receivingWallets: receivingWallets ? { before: { sandbox: account.asaasSandboxWalletId, production: account.asaasProductionWalletId }, after: receivingWallets } : null,
         });
         return tx.partner.findUnique({ where: { id }, include });
       });

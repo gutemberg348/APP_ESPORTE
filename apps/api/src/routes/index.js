@@ -1,3 +1,4 @@
+import { settingsController } from '../controllers/settings.controller.js';
 import { authController } from '../controllers/auth.controller.js';
 import { memberController } from '../controllers/member.controller.js';
 import { clubController } from '../controllers/club.controller.js';
@@ -12,6 +13,11 @@ import { financeController } from '../controllers/finance.controller.js';
 import { passwordRecoveryController } from '../controllers/password-recovery.controller.js';
 import { partnerController } from '../controllers/partner.controller.js';
 export const routes = [
+  { method: 'GET', path: '/v1/admin/settings', handler: settingsController.settings, private: true, admin: true },
+  { method: 'PUT', path: '/v1/admin/settings', handler: settingsController.saveSettings, private: true, admin: true },
+  { method: 'GET', path: '/v1/admin/rewards', handler: settingsController.rewards, private: true, admin: true },
+  { method: 'POST', path: '/v1/admin/rewards', handler: settingsController.createReward, private: true, admin: true },
+  { method: 'PATCH', path: '/v1/admin/rewards', handler: settingsController.updateReward, private: true, admin: true },
   { method: 'GET', path: '/v1/admin/withdrawals/summary', handler: withdrawalController.summary, private: true, admin: true },
   { method: 'GET', path: '/v1/admin/withdrawals', handler: withdrawalController.list, private: true, admin: true },
   { method: 'POST', path: '/v1/admin/withdrawals', handler: withdrawalController.create, private: true, admin: true },

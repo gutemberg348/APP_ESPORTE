@@ -1,3 +1,4 @@
+import { AdminSettingsPanel } from '../components/admin/AdminSettingsPanel';
 import React, { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { Plus, ScanLine } from 'lucide-react-native';
@@ -107,6 +108,7 @@ function AdminWorkspace({ onBack }: { onBack: () => void }) {
     {tab === 'Financeiro' && <AdminFinancePanel refreshKey={reportRefresh} onOpenWithdrawals={() => select('Saques')} />}
     {tab === 'Saques' && <AdminWithdrawalsPanel refreshKey={reportRefresh} />}
     {tab === 'Parceiros' && <AdminPartnersPanel refreshKey={reportRefresh} />}
+    {tab === 'Configurações' && <AdminSettingsPanel refreshKey={reportRefresh} onSelect={select} />}
     {tab === 'Email e acesso' && <AdminEmailPanel refreshKey={reportRefresh} users={users} />}
     {accountEdit && <AdminAccountForm userId={accountEdit.id} onClose={() => setAccountEdit(null)} onSaved={async (signedOut) => { setAccountEdit(null); setNotice('Conta atualizada.'); if (!signedOut) await refresh(); }} />}
     {matchEdit !== undefined && <MatchForm match={matchEdit} onClose={() => setMatchEdit(undefined)} onSaved={async () => { setMatchEdit(undefined); await refresh(); }} />}

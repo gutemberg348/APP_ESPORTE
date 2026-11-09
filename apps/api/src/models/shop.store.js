@@ -1,3 +1,4 @@
+import { readBusinessSettings } from '../lib/business-settings.js';
 import { createHash } from 'node:crypto';
 import { serializable } from '../lib/business-rules.js';
 import { AppError } from '../lib/errors.js';
@@ -22,6 +23,7 @@ export function createShopStore(client, { now = () => new Date(), shipping, sett
   }
   async function cart(tx, input) {
     const settings = await config(tx);
+    const business = await readBusinessSettings(tx);
     if (!settings.enabled || settings.mode !== 'INTERNAL') throw shopError('SHOP_CLOSED', 'A compra pelo aplicativo não está disponível.');
     const userItems = [...input.items].sort((a, b) => a.variantId.localeCompare(b.variantId));
     const variants = await tx.productVariant.findMany({ where: { id: { in: userItems.map((item) => item.variantId) } }, include: { product: true } });
@@ -34,8 +36,8 @@ export function createShopStore(client, { now = () => new Date(), shipping, sett
     });
     const subtotalCents = maxAmount(items.reduce((sum, { variant, quantity }) => sum + variant.product.priceCents * quantity, 0));
     const rules = await tx.shippingRule.findMany({ where: { active: true }, orderBy: { id: 'asc' } });
-    const cartHash = hash([settings.updatedAt, runtime.MELHOR_ENVIO_ENVIRONMENT || 'sandbox', rules.map((rule) => [rule.id, rule.version]), items.map(({ variant, quantity }) => [variant.id, quantity, variant.active, variant.product.version, variant.product.priceCents, variant.product.weightGrams, variant.product.widthCm, variant.product.heightCm, variant.product.lengthCm])]);
-    return { settings, rules, items, subtotalCents, cartHash };
+    const cartHash = hash([business.version, settings.updatedAt, runtime.MELHOR_ENVIO_ENVIRONMENT || 'sandbox', rules.map((rule) => [rule.id, rule.version]), items.map(({ variant, quantity }) => [variant.id, quantity, variant.active, variant.product.version, variant.product.priceCents, variant.product.weightGrams, variant.product.widthCm, variant.product.heightCm, variant.product.lengthCm])]);
+    return { settings, business, rules, items, subtotalCents, cartHash };
   }
   async function liveBuyer(tx, userId) {
     const user = await tx.user.findUnique({ where: { id: userId } });
@@ -118,8 +120,8 @@ export function createShopStore(client, { now = () => new Date(), shipping, sett
       }
       if (!options.length) throw shopError('SHOP_NO_SHIPPING', 'Não há entrega disponível para esse CEP. Escolha retirada ou consulte a loja.');
       options.sort((a, b) => a.amountCents - b.amountCents);
-      const quote = await client.shopShippingQuote.create({ data: { userId, cartHash: value.cartHash, postalCode: input.postalCode, deliveryMethod: input.deliveryMethod, options, expiresAt: new Date(now().getTime() + 10 * 60000) } });
-      return { id: quote.id, subtotalCents: value.subtotalCents, options: options.map(({ packages, ...option }) => ({ ...option, totalCents: maxAmount(value.subtotalCents + option.amountCents) })), expiresAt: quote.expiresAt, serverTime: now() };
+      const quote = await client.shopShippingQuote.create({ data: { userId, cartHash: value.cartHash, postalCode: input.postalCode, deliveryMethod: input.deliveryMethod, options, expiresAt: new Date(now().getTime() + value.business.shopQuoteMinutes * 60000) } });
+      return { id: quote.id, reservationMinutes: value.business.shopReservationMinutes, subtotalCents: value.subtotalCents, options: options.map(({ packages, ...option }) => ({ ...option, totalCents: maxAmount(value.subtotalCents + option.amountCents) })), expiresAt: quote.expiresAt, serverTime: now() };
     },
     reserve(userId, input) {
       return serializable(client, async (tx) => {
@@ -133,9 +135,9 @@ export function createShopStore(client, { now = () => new Date(), shipping, sett
         if (choice.testMode && runtime.NODE_ENV === 'production' && runtime.ASAAS_ENVIRONMENT === 'production') throw shopError('SHOP_TEST_SHIPPING', 'Configure o Melhor Envio em produção antes de aceitar pagamentos reais com entrega.');
         const totalCents = maxAmount(value.subtotalCents + choice.amountCents);
         if (totalCents !== input.expectedTotalCents) throw shopError('SHOP_PRICE_CHANGED', 'O total mudou. Revise o pedido.');
-        if (await tx.shopOrder.count({ where: { userId, status: 'PENDING', expiresAt: { gt: now() } } }) >= 3) throw shopError('SHOP_PENDING_LIMIT', 'Conclua ou cancele seus pedidos pendentes antes de reservar mais produtos.');
+        if (await tx.shopOrder.count({ where: { userId, status: 'PENDING', expiresAt: { gt: now() } } }) >= value.business.shopPendingOrderLimit) throw shopError('SHOP_PENDING_LIMIT', 'Conclua ou cancele seus pedidos pendentes antes de reservar mais produtos.');
         if (quote.expiresAt <= now()) throw shopError('SHOP_QUOTE_EXPIRED', 'A cotação venceu. Calcule novamente.');
-        let order = await tx.shopOrder.create({ data: { userId, requestKey: input.requestKey, requestHash, recipient: input.recipient, phone: input.phone, address: input.deliveryMethod === 'DELIVERY' ? input.address : { pickupAddress: value.settings.pickupAddress }, deliveryMethod: input.deliveryMethod, shippingName: choice.name, shippingService: choice.id, shippingDays: choice.maxDays, shippingSnapshot: { option: choice, originPostalCode: value.settings.originPostalCode, environment: runtime.MELHOR_ENVIO_ENVIRONMENT || null }, subtotalCents: value.subtotalCents, shippingCents: choice.amountCents, totalCents, expiresAt: new Date(now().getTime() + 30 * 60000), items: { create: value.items.map(({ variant, quantity }) => ({ variantId: variant.id, quantity, productName: variant.product.name, variantLabel: variant.label, sku: variant.sku, image: variant.product.images[0] || '', unitPriceCents: variant.product.priceCents, costCents: variant.product.costCents })) } }, include: shopOrderInclude });
+        let order = await tx.shopOrder.create({ data: { userId, requestKey: input.requestKey, requestHash, recipient: input.recipient, phone: input.phone, address: input.deliveryMethod === 'DELIVERY' ? input.address : { pickupAddress: value.settings.pickupAddress }, deliveryMethod: input.deliveryMethod, shippingName: choice.name, shippingService: choice.id, shippingDays: choice.maxDays, shippingSnapshot: { option: choice, originPostalCode: value.settings.originPostalCode, environment: runtime.MELHOR_ENVIO_ENVIRONMENT || null }, subtotalCents: value.subtotalCents, shippingCents: choice.amountCents, totalCents, expiresAt: new Date(now().getTime() + value.business.shopReservationMinutes * 60000), items: { create: value.items.map(({ variant, quantity }) => ({ variantId: variant.id, quantity, productName: variant.product.name, variantLabel: variant.label, sku: variant.sku, image: variant.product.images[0] || '', unitPriceCents: variant.product.priceCents, costCents: variant.product.costCents })) } }, include: shopOrderInclude });
         if (totalCents === 0) { await settleShopOrder(tx, order, { method: 'FREE', reference: `FREE:${order.id}`, actorId: userId, amountCents: 0, now }); order = await tx.shopOrder.findUnique({ where: { id: order.id }, include: shopOrderInclude }); }
         await audit(tx, userId, 'SHOP_ORDER_RESERVED', order.id, { totalCents, shippingService: choice.id, items: value.items.length }); return publicShopOrder(order, now());
       });

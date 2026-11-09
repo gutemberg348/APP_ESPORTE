@@ -7,7 +7,7 @@ import { errorHandler } from './middleware/errors.js';
 import { createApiRouter } from './router.js';
 import { AppError } from '../lib/errors.js';
 
-export function createApp({ routes, authenticate, corsOrigins = [], readiness = async () => {}, logger = console }) {
+export function createApp({ routes, authenticate, corsOrigins = [], allowDevelopmentOrigin, readiness = async () => {}, logger = console }) {
   const app = express();
   app.disable('x-powered-by');
   app.disable('etag');
@@ -23,7 +23,7 @@ export function createApp({ routes, authenticate, corsOrigins = [], readiness = 
     dotfiles: 'deny', index: false, immutable: true, maxAge: '365d',
     setHeaders: (res) => res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'),
   }));
-  app.use(cors(corsOrigins));
+  app.use(cors(corsOrigins, allowDevelopmentOrigin));
   app.use(access.general);
   // Keep HEAD from falling through to Express's implicit GET support.
   app.all(['/health', '/ready'], (req, res, next) => {
