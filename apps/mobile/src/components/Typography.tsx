@@ -1,5 +1,6 @@
 import React, { createContext, useContext } from 'react';
 import { Text as NativeText, TextInput as NativeInput, StyleSheet, type TextProps, type TextInputProps } from 'react-native';
+import { maskInput, type InputMask } from '@nacional/shared/forms';
 export const fonts = {
   body: { regular: 'DMSans_400Regular', medium: 'DMSans_500Medium', semibold: 'DMSans_600SemiBold', bold: 'DMSans_700Bold' },
   heading: { regular: 'Manrope_400Regular', medium: 'Manrope_500Medium', semibold: 'Manrope_600SemiBold', bold: 'Manrope_700Bold', extra: 'Manrope_800ExtraBold' },
@@ -17,7 +18,9 @@ export function Text({ style, heading = false, ...props }: TextProps & { heading
   const fontFamily = weight >= 800 && family.extra ? family.extra : weight >= 700 ? family.bold : weight >= 600 ? family.semibold : weight >= 500 ? family.medium : family.regular;
   return <NativeText {...props} style={[{ fontSize: compact ? 14 : 16, lineHeight: compact ? 22 : 24 }, style, { fontFamily, fontWeight: 'normal' }]} />;
 }
-export function TextInput({ style, ...props }: TextInputProps) {
+export function TextInput({ style, mask, onChangeText, value, ...props }: TextInputProps & { mask?: InputMask }) {
   const { families, compact } = useContext(TypographyContext);
-  return <NativeInput {...props} style={[{ fontFamily: families.body.regular, fontSize: compact ? 14 : 16 }, style]} />;
+  const label = `${props.accessibilityLabel || ''} ${props.placeholder || ''}`;
+  const kind = mask || (/CPF|CNPJ/i.test(label) ? 'document' : /\bCEP\b/i.test(label) ? 'postalCode' : props.keyboardType === 'phone-pad' ? 'phone' : undefined);
+  return <NativeInput {...props} value={value === undefined ? undefined : kind ? maskInput(value, kind) : value} onChangeText={(text) => onChangeText?.(maskInput(text, kind))} style={[{ fontFamily: families.body.regular, fontSize: compact ? 14 : 16 }, style]} />;
 }

@@ -1,0 +1,19 @@
+import React from 'react';
+import { View, Linking } from 'react-native';
+import type { ShopOrder } from '@nacional/shared/shop';
+import { formatPhone, formatPostalCode } from '@nacional/shared/forms';
+import { useTheme } from '../../theme/ThemeProvider';
+import { Text } from '../Typography';
+import { Button } from '../ui';
+import { money } from '../../utils/format';
+import { shopStatus, shopDate, safeShopUrl } from '../../utils/shop';
+export function ShopOrderDetails({ order, onError }: { order: ShopOrder; onError?: (message: string) => void }) {
+  const { colors } = useTheme(), url = safeShopUrl(order.trackingUrl);
+  const row = (label: string, value: string, strong = false) => <View key={label} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}><Text style={{ color: colors.muted, fontSize: 13 }}>{label}</Text><Text style={{ color: colors.text, fontSize: strong ? 17 : 13, fontWeight: strong ? '700' : '400', flexShrink: 1, textAlign: 'right' }}>{value}</Text></View>;
+  return <View style={{ gap: 16 }}><Text style={{ color: colors.primary, fontWeight: '700' }}>{shopStatus[order.status]}</Text><Text style={{ color: colors.muted, fontSize: 12 }}>Pedido #{String(order.number).padStart(6, '0')} · {shopDate(order.createdAt)}</Text>{order.items.map((item) => <View key={item.id} style={{ borderBottomWidth: 1, borderColor: colors.border, paddingBottom: 12, gap: 4 }}><Text style={{ color: colors.text, fontWeight: '500' }}>{item.productName}</Text><Text style={{ color: colors.muted, fontSize: 12 }}>{item.variantLabel} · {item.quantity} unidade(s) × {money(item.unitPriceCents)}</Text><Text style={{ color: colors.text, fontSize: 13 }}>{money(item.quantity * item.unitPriceCents)}</Text></View>)}{row('Produtos', money(order.subtotalCents))}{row(order.deliveryMethod === 'PICKUP' ? 'Retirada' : 'Frete', order.shippingCents ? money(order.shippingCents) : 'Grátis')}{row('Total', money(order.totalCents), true)}
+    <View style={{ gap: 5, paddingTop: 8 }}><Text style={{ color: colors.text, fontWeight: '600' }}>{order.deliveryMethod === 'PICKUP' ? 'Retirada na loja' : 'Endereço de entrega'}</Text><Text style={{ color: colors.muted, fontSize: 13 }}>{order.recipient} · {formatPhone(order.phone)}</Text><Text style={{ color: colors.muted, fontSize: 13 }}>{order.deliveryMethod === 'PICKUP' ? order.address.pickupAddress : `${order.address.street}, ${order.address.number}${order.address.complement ? ` · ${order.address.complement}` : ''}\n${order.address.district} · ${order.address.city}/${order.address.state}\nCEP ${formatPostalCode(order.address.postalCode || '')}`}</Text><Text style={{ color: colors.muted, fontSize: 12 }}>{order.shippingName}{order.deliveryMethod === 'DELIVERY' ? ` · estimativa de até ${order.shippingDays} dias úteis após postagem` : ''}</Text></View>
+    {order.status === 'PENDING' && <Text style={{ color: colors.gold, fontSize: 12 }}>Pague até {shopDate(order.expiresAt)} (Patos). Depois desse prazo, a reserva do estoque é liberada.</Text>}
+    {order.payment && <View style={{ gap: 5 }}><Text style={{ color: colors.text, fontSize: 13 }}>Recebimento: {money(order.payment.amountCents)} · {shopDate(order.payment.confirmedAt)}</Text>{order.payment.refundedCents > 0 && <Text style={{ color: colors.gold, fontSize: 13 }}>Devolução confirmada: {money(order.payment.refundedCents)}</Text>}</View>}
+    {!!order.trackingCode && <Text selectable style={{ color: colors.text, fontSize: 13 }}>Rastreio: {order.trackingCode}</Text>}{url && <Button secondary label="Acompanhar entrega" onPress={() => void Linking.openURL(url).catch(() => onError?.('Não foi possível abrir o rastreio.'))} />}{!!order.notes && <Text style={{ color: colors.muted, fontSize: 13 }}>{order.notes}</Text>}<Text selectable style={{ color: colors.subtle, fontSize: 10 }}>Identificação: {order.id}</Text>
+  </View>;
+}

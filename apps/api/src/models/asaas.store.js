@@ -4,6 +4,7 @@ import { serializable } from '../lib/business-rules.js';
 import { inventoryWhere, occupiedQuantity } from '../lib/ticket-rules.js';
 import { AppError } from '../lib/errors.js';
 import { authenticateAsaasWebhook, protectDocument, validTaxId, cents } from '../payments/asaas-client.js';
+import { settleShopOrder, reverseShopOrder, shopOrderInclude } from '../lib/shop-inventory.js';
 
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 const providerId = z.string().regex(/^[A-Za-z0-9_-]{3,100}$/);
@@ -16,7 +17,7 @@ const dateInPatos = (instant) => new Intl.DateTimeFormat('en-CA', { timeZone: 'A
 const error = (code, message) => new AppError(409, code, message);
 export function publicIntent(intent, now = new Date()) {
   const payable = intent.state === 'PENDING' && !intent.cancelRequestedAt && !intent.refundRequestedAt && intent.expiresAt > now;
-  return { id: intent.id, ticketId: intent.ticketId, chargeId: intent.chargeId, environment: intent.environment, state: intent.state, amountCents: intent.amountCents, refundedCents: intent.refundedCents, pixPayload: payable ? intent.pixPayload : null, expiresAt: intent.expiresAt, failureCode: intent.failureCode, serverTime: now.toISOString() };
+  return { id: intent.id, ticketId: intent.ticketId, chargeId: intent.chargeId, shopOrderId: intent.shopOrderId || null, environment: intent.environment, state: intent.state, amountCents: intent.amountCents, refundedCents: intent.refundedCents, pixPayload: payable ? intent.pixPayload : null, expiresAt: intent.expiresAt, failureCode: intent.failureCode, serverTime: now.toISOString() };
 }
 export function createAsaasStore(client, { settings, api, now = () => new Date() }) {
   const environment = settings.ASAAS_ENVIRONMENT, docs = protectDocument(settings.ASAAS_DATA_SECRET || 'disabled');
@@ -102,6 +103,17 @@ export function createAsaasStore(client, { settings, api, now = () => new Date()
     await tx.ticket.update({ where: { id: ticket.id }, data: { status: 'ISSUED', expiresAt: null, entryToken: null, entryVersion: { increment: 1 } } });
     await audit(tx, ticket.userId, 'TICKET_ASAAS_RECEIVED', ticket.id, { intentId: intent.id, providerReference: remote.id, amountCents: intent.amountCents });
   }
+  async function syncShop(tx, intent, remote, refunded) {
+    if (refunded > 0) { await reverseShopOrder(tx, intent, refunded, now); return; }
+    if (remote.status !== 'RECEIVED' || remote.deleted) return;
+    const order = await tx.shopOrder.findUnique({ where: { id: intent.shopOrderId }, include: shopOrderInclude });
+    if (order?.payment?.reference === `ASAAS:${remote.id}`) return;
+    if (order && !intent.cancelRequestedAt && !intent.refundRequestedAt && intent.expiresAt > now()) {
+      try { await settleShopOrder(tx, order, { method: 'ASAAS', reference: `ASAAS:${remote.id}`, amountCents: intent.amountCents, actorId: order.userId, now }); return; }
+      catch (err) { if (!['SHOP_NOT_PAYABLE', 'SHOP_OUT_OF_STOCK'].includes(err.code)) throw err; }
+    }
+    await tx.gatewayIntent.update({ where: { id: intent.id }, data: { refundRequestedAt: intent.refundRequestedAt || now(), state: 'REFUNDING', failureCode: 'SHOP_NO_LONGER_PAYABLE' } });
+  }
   async function syncCash(tx, intent, remote, refunded) {
     const charge = await tx.paymentCharge.findUnique({ where: { id: intent.chargeId } });
     if (!charge) return;
@@ -153,6 +165,9 @@ export function createAsaasStore(client, { settings, api, now = () => new Date()
       if (intent.ticketId) {
         if (unsafe) await invalidateTicket(tx, intent, refunded);
         else await syncTicket(tx, intent, remote, refunded);
+      } else if (intent.shopOrderId) {
+        if (unsafe) await reverseShopOrder(tx, intent, refunded, now);
+        else await syncShop(tx, intent, remote, refunded);
       } else if (!unsafe) await syncCash(tx, intent, remote, refunded);
       assertLease(intent, token);
     });
@@ -199,8 +214,26 @@ export function createAsaasStore(client, { settings, api, now = () => new Date()
         return publicIntent(intent, now());
       });
     },
+    async shopPix(userId, orderId) {
+      enabled(); const customer = await billing(userId);
+      return serializable(client, async (tx) => {
+        const order = await tx.shopOrder.findFirst({ where: { id: orderId, userId }, include: { payment: true } });
+        if (!order) throw new AppError(404, 'SHOP_NOT_FOUND', 'Pedido não encontrado.');
+        if (order.status !== 'PENDING' || order.payment || order.expiresAt <= now() || order.totalCents <= 0) throw error('SHOP_NOT_PAYABLE', 'Este pedido não está disponível para pagamento.');
+        const previous = await tx.gatewayIntent.findUnique({ where: { shopOrderId: orderId } });
+        if (previous && previous.environment !== environment) throw error('ASAAS_ENVIRONMENT_MISMATCH', 'Este pedido pertence a outro ambiente.');
+        const intent = await tx.gatewayIntent.upsert({ where: { shopOrderId: orderId }, update: {}, create: { environment, generation: `${environment}:shop:${orderId}`, shopOrderId: orderId, customerId: customer.id, amountCents: order.totalCents, expiresAt: order.expiresAt, snapshot: { userId } } });
+        return publicIntent(intent, now());
+      });
+    },
+    async shopIntent(userId, orderId) {
+      const order = await client.shopOrder.findFirst({ where: { id: orderId, userId } });
+      if (!order) throw new AppError(404, 'SHOP_NOT_FOUND', 'Pedido não encontrado.');
+      const intent = await client.gatewayIntent.findFirst({ where: { shopOrderId: orderId, environment } });
+      return intent ? publicIntent(intent, now()) : null;
+    },
     async ownIntent(userId, id) {
-      const intent = await client.gatewayIntent.findFirst({ where: { id, environment, OR: [{ ticket: { userId } }, { charge: { wallet: { userId } } }] } });
+      const intent = await client.gatewayIntent.findFirst({ where: { id, environment, OR: [{ ticket: { userId } }, { charge: { wallet: { userId } } }, { shopOrder: { userId } }] } });
       if (!intent) throw new AppError(404, 'PAYMENT_NOT_FOUND', 'Pagamento não encontrado na sua conta.');
       return publicIntent(intent, now());
     },
@@ -236,7 +269,8 @@ export function createAsaasStore(client, { settings, api, now = () => new Date()
         if (!intent) throw new AppError(404, 'PAYMENT_NOT_FOUND', 'Pagamento não encontrado.');
         await tx.gatewayIntent.update({ where: { id }, data: { refundRequestedAt: intent.refundRequestedAt || now(), nextAttemptAt: now(), pixPayload: null, wakeVersion: { increment: 1 } } });
         if (intent.ticketId) await invalidateTicket(tx, intent, intent.refundedCents);
-        await audit(tx, actorId, 'ASAAS_REFUND_REQUESTED', id, { reason, amountCents: intent.amountCents, ticketId: intent.ticketId, chargeId: intent.chargeId });
+        if (intent.shopOrderId) await reverseShopOrder(tx, intent, intent.refundedCents, now);
+        await audit(tx, actorId, 'ASAAS_REFUND_REQUESTED', id, { reason, amountCents: intent.amountCents, ticketId: intent.ticketId, chargeId: intent.chargeId, shopOrderId: intent.shopOrderId });
         return { requested: true };
       });
     },
@@ -270,9 +304,10 @@ export function createAsaasStore(client, { settings, api, now = () => new Date()
         wakeVersion = intent.wakeVersion;
         // Even a logically deleted ticket must have its bank charge canceled.
         const ticket = intent.ticketId ? await client.ticket.findUnique({ where: { id: intent.ticketId }, include: { payment: true } }) : null;
-        const received = ticket ? ticket.payment?.reference === `ASAAS:${intent.providerReference}` : (await client.paymentCharge.findUnique({ where: { id: intent.chargeId } }))?.status === 'PAID';
+        const shopOrder = intent.shopOrderId ? await client.shopOrder.findUnique({ where: { id: intent.shopOrderId }, include: { payment: true } }) : null;
+        const received = ticket ? ticket.payment?.reference === `ASAAS:${intent.providerReference}` : intent.shopOrderId ? shopOrder?.payment?.reference === `ASAAS:${intent.providerReference}` : (await client.paymentCharge.findUnique({ where: { id: intent.chargeId } }))?.status === 'PAID';
         // Deleting an already paid administrative sale does not request a refund.
-        const cancel = Boolean(intent.cancelRequestedAt || intent.refundRequestedAt || (!received && (intent.expiresAt <= now() || (ticket && (ticket.deletedAt || ticket.status === 'CANCELED' || `${environment}:${ticketGeneration(ticket)}` !== intent.generation)))));
+        const cancel = Boolean(intent.cancelRequestedAt || intent.refundRequestedAt || (!received && (intent.expiresAt <= now() || (intent.shopOrderId && (!shopOrder || shopOrder.status !== 'PENDING')) || (ticket && (ticket.deletedAt || ticket.status === 'CANCELED' || `${environment}:${ticketGeneration(ticket)}` !== intent.generation)))));
         let remote;
         if (!intent.providerReference) {
           const found = await api.findPayments(reference(intent));
@@ -285,7 +320,7 @@ export function createAsaasStore(client, { settings, api, now = () => new Date()
             const customer = await customerId(intent.customerId);
             // Persist before POST. Never blindly replay an ambiguous monetary request.
             await leaseWrite(client.gatewayIntent, id, token, { creationStartedAt: now(), state: 'CREATING' }, { creationStartedAt: null });
-            try { remote = await api.createPayment({ customer, billingType: 'PIX', value: intent.amountCents / 100, dueDate: dateInPatos(intent.expiresAt), externalReference: reference(intent), description: intent.ticketId ? `Ingresso ${intent.ticketId}` : `Compra ${intent.chargeId}`, interest: { value: 0 }, fine: { value: 0 }, discount: { value: 0 } }); }
+            try { remote = await api.createPayment({ customer, billingType: 'PIX', value: intent.amountCents / 100, dueDate: dateInPatos(intent.expiresAt), externalReference: reference(intent), description: intent.ticketId ? `Ingresso ${intent.ticketId}` : intent.shopOrderId ? `Pedido loja ${shopOrder.number}` : `Compra ${intent.chargeId}`, interest: { value: 0 }, fine: { value: 0 }, discount: { value: 0 } }); }
             catch (err) { if (['ASAAS_REJECTED', 'ASAAS_ACCESS_DENIED'].includes(err.code)) await leaseWrite(client.gatewayIntent, id, token, { creationStartedAt: null }); throw err; }
           }
           providerId.parse(remote.id);

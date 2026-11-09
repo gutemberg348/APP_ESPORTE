@@ -26,7 +26,7 @@ export function ReferralSheet({ kind, onClose }: { kind: 'FRIEND' | 'BUSINESS' |
   const inputStyle = { padding: 14, borderRadius: 12, color: colors.text, backgroundColor: colors.soft, borderWidth: 1, borderColor: colors.border };
   return <Sheet visible title={title} onClose={busy ? () => {} : onClose}>{done ? <><Text style={{ color: colors.primary }}>{demoMode ? 'Indicação simulada. Nenhum contato foi enviado.' : 'Indicação registrada! Nossa equipe poderá analisar a solicitação.'}</Text><Button label="Concluir" onPress={onClose} /></> : <>
     <TextInput value={name} onChangeText={setName} placeholder={kind === 'FRIEND' ? 'Nome do amigo' : 'Nome do comércio'} placeholderTextColor={colors.muted} maxLength={100} style={inputStyle} accessibilityLabel="Nome da indicação" />
-    <TextInput value={contact} onChangeText={setContact} placeholder="E-mail ou telefone de contato" placeholderTextColor={colors.muted} maxLength={254} autoCapitalize="none" style={inputStyle} accessibilityLabel="Contato da indicação" />
+    <TextInput value={contact} onChangeText={setContact} mask="contact" placeholder="E-mail ou telefone de contato" placeholderTextColor={colors.muted} maxLength={254} autoCapitalize="none" style={inputStyle} accessibilityLabel="Contato da indicação" />
     {kind === 'FRIEND' && <Text style={{ color: colors.muted, fontSize: 12 }}>Os Zezitos serão creditados após a confirmação da associação, quando a campanha estiver ativa.</Text>}
     {error ? <Text style={{ color: colors.danger }} accessibilityRole="alert">{error}</Text> : null}
     <Button label="Enviar indicação" loading={busy} onPress={() => void submit()} />

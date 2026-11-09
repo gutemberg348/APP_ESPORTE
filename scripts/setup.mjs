@@ -50,5 +50,8 @@ for (const path of ['.env', 'apps/api/.env']) {
     if (!existing.test(nextSettings)) nextSettings = `${nextSettings.trimEnd()}\n${name}=${value}\n`;
     else if (value && ['ASAAS_WEBHOOK_TOKEN', 'ASAAS_DATA_SECRET'].includes(name) && new RegExp(`^${name}=$`, 'm').test(nextSettings)) nextSettings = nextSettings.replace(new RegExp(`^${name}=$`, 'm'), `${name}=${value}`);
   }
-  if (nextSettings !== paymentSettings) { await writeFile(target, nextSettings); console.log(`Configuração Asaas preparada sem ativar cobranças: ${path}`); }
+  for (const [name, value] of Object.entries({ MELHOR_ENVIO_ENVIRONMENT: 'sandbox', MELHOR_ENVIO_TOKEN: '', MELHOR_ENVIO_CONTACT_EMAIL: '', MELHOR_ENVIO_SERVICES: '1,2' })) {
+    if (!new RegExp(`^${name}=`, 'm').test(nextSettings)) nextSettings = `${nextSettings.trimEnd()}\n${name}=${value}\n`;
+  }
+  if (nextSettings !== paymentSettings) { await writeFile(target, nextSettings); console.log(`Configurações de pagamento e frete preparadas sem ativar cobranças: ${path}`); }
 }

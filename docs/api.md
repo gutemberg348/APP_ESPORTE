@@ -1,5 +1,7 @@
 # API v1
 
+Loja oficial: catálogo, variações, estoque, checkout e frete estão descritos no [guia da loja](loja.md). A migration `20261106020000_shop` precisa ser aplicada antes de utilizar essas rotas.
+
 Pix automático e webhook Asaas: veja [rotas financeiras e configuração](asaas.md). O endpoint `/payments/webhook` está ativo quando `PAYMENT_MODE=asaas`, com autenticação por `asaas-access-token`, inbox persistente e conciliação assíncrona. O modo desabilitado continua usando recebimento manual.
 
 Base local: `http://localhost:3333/v1`.

@@ -175,6 +175,23 @@ test('ticket throttling follows the authenticated account across IPs and shares 
   assert.equal((await client('/quote', { method: 'POST', headers })).status, 429);
 });
 
+test('shop limits follow the buyer and remain separate from ticket checkout', async (t) => {
+  const client = await app(t, {
+    authenticate: async () => ({ user: { id: 'shop-buyer', role: 'USER', active: true } }),
+    routes: [
+      { method: 'POST', path: '/shop', private: true, body: false, shopLimit: 'checkout', handler: async () => ({ data: true }) },
+      { method: 'POST', path: '/ticket', private: true, body: false, ticketLimit: 'checkout', handler: async () => ({ data: true }) },
+      { method: 'GET', path: '/shipping', private: true, shopLimit: 'quote', handler: async () => ({ data: true }) },
+    ],
+  });
+  const headers = { Authorization: 'Bearer test.header.signature' };
+  for (let index = 0; index < 10; index++) assert.equal((await client('/shop', { method: 'POST', headers, ip: `10.10.0.${index}` })).status, 200);
+  const denied = await client('/shop', { method: 'POST', headers }); assert.equal(denied.status, 429); assert.equal((await denied.json()).error.code, 'SHOP_RATE_LIMIT');
+  assert.equal((await client('/ticket', { method: 'POST', headers })).status, 200);
+  for (let index = 0; index < 20; index++) assert.equal((await client('/shipping', { headers })).status, 200);
+  assert.equal((await client('/shipping', { headers })).status, 429);
+});
+
 test('Prisma conflicts keep their public error codes without leaking database messages', async (t) => {
   for (const [code, status, expected] of [['P2002', 409, 'CONFLICT'], ['P2034', 409, 'CONCURRENT_UPDATE'], ['P2025', 404, 'RECORD_NOT_FOUND'], ['P2021', 503, 'DATABASE_SCHEMA_OUTDATED'], ['P2022', 503, 'DATABASE_SCHEMA_OUTDATED'], ['P1001', 503, 'DATABASE_UNAVAILABLE'], ['ECONNREFUSED', 503, 'DATABASE_UNAVAILABLE']]) {
     const client = await app(t, { routes: [{ method: 'GET', path: '/database-error', handler: async () => { throw Object.assign(new Error('secret SQL details'), { code }); } }] });

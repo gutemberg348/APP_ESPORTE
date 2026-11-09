@@ -4,6 +4,7 @@ import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOf
 import { Text, TextInput } from '../Typography';
 import { useTheme } from '../../theme/ThemeProvider';
 import { calendarMonth, calendarToday, calendarValue, displayCalendarValue, readCalendarValue, shiftCalendarMonth, type CalendarDate } from '../../utils/admin-calendar';
+import type { InputMask } from '@nacional/shared/forms';
 
 export interface AdminButtonProps {
   label: string; onPress: () => void; disabled?: boolean; loading?: boolean; primary?: boolean;
@@ -28,14 +29,14 @@ function FieldShell({ label, hint, error, required, grow, children }: FieldShell
   return <View style={[{ gap: 7, minWidth: 0 }, grow && { flexGrow: 1, flexBasis: 200 }]}><Text style={{ color: colors.text, fontSize: 12, lineHeight: 18, fontWeight: '500' }}>{label}{required && <Text style={{ color: colors.primary }}> *</Text>}</Text>{children}{(error || hint) && <Text accessibilityRole={error ? 'alert' : undefined} style={{ color: error ? colors.danger : colors.subtle, fontSize: 11, lineHeight: 17 }}>{error || hint}</Text>}</View>;
 }
 export interface AdminFieldProps extends Omit<TextInputProps, 'value' | 'onChange' | 'onChangeText' | 'style'> {
-  label: string; value: string; onChange: (value: string) => void; numeric?: boolean; hint?: string; error?: string; required?: boolean; grow?: boolean; icon?: LucideIcon; prefix?: string;
+  label: string; value: string; onChange: (value: string) => void; numeric?: boolean; hint?: string; error?: string; required?: boolean; grow?: boolean; icon?: LucideIcon; prefix?: string; mask?: InputMask;
 }
-export function AdminField({ label, value, onChange, numeric = false, hint, error, required, grow, icon: Icon, prefix, secureTextEntry, editable = true, multiline, onFocus, onBlur, ...inputProps }: AdminFieldProps) {
+export function AdminField({ label, value, onChange, numeric = false, hint, error, required, grow, icon: Icon, prefix, mask, secureTextEntry, editable = true, multiline, onFocus, onBlur, ...inputProps }: AdminFieldProps) {
   const { colors } = useTheme();
   const [focused, setFocused] = useState(false), [visible, setVisible] = useState(false);
   return <FieldShell {...{ label, hint, error, required, grow }}><View style={{ flexDirection: 'row', alignItems: multiline ? 'flex-start' : 'center', gap: 9, borderWidth: 1, borderColor: error ? colors.danger : focused ? colors.primary : colors.border, backgroundColor: editable ? colors.surface : colors.soft, borderRadius: 8, paddingHorizontal: 12, opacity: editable ? 1 : 0.65, ...(Platform.OS === 'web' ? { boxShadow: focused ? `0 0 0 3px ${colors.primary}12` : 'none', transitionDuration: '140ms' } : {}) }}>
     {Icon && <Icon size={16} color={focused ? colors.primary : colors.subtle} style={{ marginTop: multiline ? 13 : 0 }} />}{prefix && <Text style={{ color: colors.subtle, fontSize: 13 }}>{prefix}</Text>}
-    <TextInput {...inputProps} accessibilityLabel={label} accessibilityState={{ disabled: !editable }} value={value} onChangeText={onChange} editable={editable} multiline={multiline} keyboardType={numeric ? 'decimal-pad' : inputProps.keyboardType} secureTextEntry={secureTextEntry && !visible} onFocus={(event) => { setFocused(true); onFocus?.(event); }} onBlur={(event) => { setFocused(false); onBlur?.(event); }} placeholderTextColor={colors.subtle} style={{ flex: 1, minWidth: 0, minHeight: multiline ? 88 : 43, paddingVertical: 11, color: colors.text, fontSize: 13, lineHeight: 20, textAlignVertical: multiline ? 'top' : 'center', ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as object : {}) }} />
+    <TextInput {...inputProps} mask={mask || (prefix === 'R$' ? 'money' : inputProps.keyboardType === 'number-pad' ? 'integer' : undefined)} accessibilityLabel={label} accessibilityState={{ disabled: !editable }} value={value} onChangeText={onChange} editable={editable} multiline={multiline} keyboardType={numeric || mask === 'money' || prefix === 'R$' ? 'decimal-pad' : inputProps.keyboardType} secureTextEntry={secureTextEntry && !visible} onFocus={(event) => { setFocused(true); onFocus?.(event); }} onBlur={(event) => { setFocused(false); onBlur?.(event); }} placeholderTextColor={colors.subtle} style={{ flex: 1, minWidth: 0, minHeight: multiline ? 88 : 43, paddingVertical: 11, color: colors.text, fontSize: 13, lineHeight: 20, textAlignVertical: multiline ? 'top' : 'center', ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as object : {}) }} />
     {secureTextEntry && <Pressable accessibilityRole="button" accessibilityLabel={visible ? 'Ocultar senha' : 'Mostrar senha'} disabled={!editable} onPress={() => setVisible((value) => !value)} style={{ alignItems: 'center', justifyContent: 'center', minWidth: 36, minHeight: 42 }}>{visible ? <EyeOff size={17} color={colors.muted} /> : <Eye size={17} color={colors.muted} />}</Pressable>}
   </View></FieldShell>;
 }

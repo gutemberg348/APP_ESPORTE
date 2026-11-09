@@ -26,6 +26,10 @@ const schema = z.object({
   ASAAS_MERCHANT_WALLETS: z.string().default('{}'),
   ASAAS_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30000).default(10000),
   PAYMENT_WORKER_INTERVAL_MS: z.coerce.number().int().min(1000).max(60000).default(3000),
+  MELHOR_ENVIO_ENVIRONMENT: z.enum(['sandbox', 'production']).default('sandbox'),
+  MELHOR_ENVIO_TOKEN: z.string().max(6000).default(''),
+  MELHOR_ENVIO_CONTACT_EMAIL: z.union([z.literal(''), z.email()]).default(''),
+  MELHOR_ENVIO_SERVICES: z.string().regex(/^(\d+(,\d+)*)?$/).max(100).default('1,2'),
   TENANT_SLUG: z.string().regex(/^[a-z0-9-]{2,60}$/).default('nacional-patos'),
   TICKET_PAYMENT_INSTRUCTIONS: z.string().min(10).max(1000).default('Após reservar, apresente o número da reserva no atendimento do clube. O ingresso é emitido quando o administrador confirmar o pagamento recebido.'),
 });

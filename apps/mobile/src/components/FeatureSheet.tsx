@@ -40,7 +40,7 @@ export function FeatureSheet({ feature, onClose, onNavigate }: { feature: string
   if (feature === 'Meus Dados') content = <>
     <Text style={muted}>Nome completo</Text><TextInput value={name} onChangeText={setName} maxLength={100} style={input} accessibilityLabel="Nome completo" />
     <Text style={muted}>Cidade</Text><TextInput value={city} onChangeText={setCity} maxLength={60} style={input} accessibilityLabel="Cidade" />
-    <Text style={muted}>Contato</Text><TextInput value={contact} onChangeText={setContact} maxLength={80} style={input} accessibilityLabel="Contato" />
+    <Text style={muted}>Contato</Text><TextInput value={contact} onChangeText={setContact} mask="contact" maxLength={80} style={input} accessibilityLabel="Contato" />
     <Text style={muted}>{member?.email}</Text>{error ? <Text style={{ color: colors.danger }} accessibilityRole="alert">{error}</Text> : null}<Button label="Salvar dados" loading={busy} onPress={() => void save()} />
   </>;
   else if (feature === 'Opções da carteira') content = <>{['Cashback', 'Meus ingressos', 'Meus cupons', 'Extrato', 'Minhas experiências', 'Meu plano'].map((target) => <Pressable key={target} onPress={() => navigate(target)} style={{ paddingVertical: 16, flexDirection: 'row', alignItems: 'center', gap: 14, borderBottomWidth: 1, borderBottomColor: colors.border }}><Text style={[ink, { flex: 1 }]}>{target}</Text><ChevronRight size={20} color={colors.muted} /></Pressable>)}</>;

@@ -27,6 +27,7 @@ import { GateScreen } from '../screens/GateScreen';
 import { AdminScreen } from '../screens/AdminScreen';
 import { TicketsScreen } from '../screens/TicketsScreen';
 import { SecurityScreen } from '../screens/SecurityScreen';
+import { ShopScreen } from '../screens/ShopScreen';
 import { Crest } from '../components/Crest';
 import { Text } from '../components/Typography';
 import { ReferralSheet } from '../components/ReferralSheet';
@@ -53,7 +54,7 @@ function MainNavigator() {
   const [tab, setTab] = useState<Tab>('home');
   const [school, setSchool] = useState(false);
   const [admin, setAdmin] = useState(member?.role === 'ADMIN');
-  const [paymentPage, setPaymentPage] = useState<'cashback' | 'merchant' | 'tickets' | 'security' | null>(null);
+  const [paymentPage, setPaymentPage] = useState<'cashback' | 'merchant' | 'tickets' | 'security' | 'shop' | null>(null);
   const [initialQr, setInitialQr] = useState('');
   const [fanTab, setFanTab] = useState('Jogar');
   const [ticketSection, setTicketSection] = useState<TicketSection>('catalog');
@@ -69,6 +70,7 @@ function MainNavigator() {
     return () => subscription.remove();
   }, []);
   function open(name: string) {
+    if (name === 'Loja') { setPaymentPage('shop'); setSchool(false); return; }
     if (name === 'Segurança') { setPaymentPage('security'); setSchool(false); return; }
     if (name === 'Administração') { setAdmin(true); return; }
     if (['Meus ingressos', 'Ingressos', 'Tabela'].includes(name)) { setTicketSection(name === 'Meus ingressos' ? 'orders' : 'catalog'); setPaymentPage('tickets'); setSchool(false); setAdmin(false); return; }
@@ -93,7 +95,7 @@ function MainNavigator() {
       <View style={{ flexDirection: 'row', gap: 6 }}><Pressable onPress={toggle} accessibilityRole="button" accessibilityLabel={isDark ? 'Ativar tema claro' : 'Ativar tema escuro'} style={roundButton}>{isDark ? <Sun size={21} color={colors.gold} strokeWidth={1.6} /> : <Moon size={21} color={colors.muted} strokeWidth={1.6} />}</Pressable><Pressable onPress={() => open(tab === 'card' ? 'Opções da carteira' : 'Notificações')} accessibilityRole="button" accessibilityLabel={tab === 'card' ? 'Opções da carteira' : 'Notificações'} style={roundButton}>{tab === 'card' ? <Ellipsis size={21} color={colors.muted} /> : <Bell size={21} color={colors.muted} strokeWidth={1.6} />}</Pressable></View>
     </View>
     {error && data ? <Pressable onPress={() => void refresh()}><Text style={{ color: colors.danger, padding: 12, fontSize: 12 }}>{error} Toque para tentar novamente.</Text></Pressable> : null}
-    <View style={{ flex: 1, minHeight: 0 }}>{!data ? <View style={[layout.center, { padding: 24, gap: 16 }]}>{loading ? <ActivityIndicator color={colors.primary} /> : <><Text style={{ color: colors.danger, textAlign: 'center' }}>{error}</Text><Button label="Tentar novamente" onPress={() => void refresh()} /></>}</View> : paymentPage === 'security' ? <SecurityScreen onBack={() => setPaymentPage(null)} /> : paymentPage === 'tickets' ? <TicketsScreen initialSection={ticketSection} onBack={() => setPaymentPage(null)} /> : paymentPage === 'cashback' ? <CashbackScreen key={initialQr || 'wallet'} initialQr={initialQr} onBack={() => setPaymentPage(null)} /> : paymentPage === 'merchant' ? <MerchantScreen onBack={() => setPaymentPage(null)} onOpenSale={openSale} /> : school ? <SchoolScreen onBack={() => setSchool(false)} /> : tab === 'home' ? <HomeScreen onTicket={() => open('Ingressos')} onStadium={() => setStadium(true)} onFeature={open} /> : tab === 'benefits' ? <BenefitsScreen onRefer={setReferral} onFeature={open} onPartner={setPartner} /> : tab === 'card' ? <CardScreen /> : tab === 'fanzone' ? <FanZoneScreen key={fanTab} initialTab={fanTab} onStadium={() => setStadium(true)} onFeature={open} /> : <ProfileScreen onFeature={open} />}</View>
+    <View style={{ flex: 1, minHeight: 0 }}>{!data ? <View style={[layout.center, { padding: 24, gap: 16 }]}>{loading ? <ActivityIndicator color={colors.primary} /> : <><Text style={{ color: colors.danger, textAlign: 'center' }}>{error}</Text><Button label="Tentar novamente" onPress={() => void refresh()} /></>}</View> : paymentPage === 'shop' ? <ShopScreen onBack={() => setPaymentPage(null)} /> : paymentPage === 'security' ? <SecurityScreen onBack={() => setPaymentPage(null)} /> : paymentPage === 'tickets' ? <TicketsScreen initialSection={ticketSection} onBack={() => setPaymentPage(null)} /> : paymentPage === 'cashback' ? <CashbackScreen key={initialQr || 'wallet'} initialQr={initialQr} onBack={() => setPaymentPage(null)} /> : paymentPage === 'merchant' ? <MerchantScreen onBack={() => setPaymentPage(null)} onOpenSale={openSale} /> : school ? <SchoolScreen onBack={() => setSchool(false)} /> : tab === 'home' ? <HomeScreen onTicket={() => open('Ingressos')} onStadium={() => setStadium(true)} onFeature={open} /> : tab === 'benefits' ? <BenefitsScreen onRefer={setReferral} onFeature={open} onPartner={setPartner} /> : tab === 'card' ? <CardScreen /> : tab === 'fanzone' ? <FanZoneScreen key={fanTab} initialTab={fanTab} onStadium={() => setStadium(true)} onFeature={open} /> : <ProfileScreen onFeature={open} />}</View>
     <View style={{ marginHorizontal: 12, marginBottom: Math.max(insets.bottom, 10), padding: 7, borderRadius: 40, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.nav, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 18, elevation: 5 }}>
       {nav.map(({ id, icon: Icon, label }) => <Pressable key={id} onPress={() => { setTab(id); setSchool(false); setPaymentPage(null); setAdmin(false); if (id === 'fanzone') setFanTab('Jogar'); }} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: tab === id }} style={{ flex: 1, minHeight: compact ? 56 : 60, justifyContent: 'center', alignItems: 'center', paddingVertical: 5, gap: 4, borderRadius: 30, borderWidth: 1, borderColor: tab === id ? colors.brandBorder : 'transparent', backgroundColor: tab === id ? colors.navActive : 'transparent' }}>
         <Icon size={24} color={tab === id ? colors.primary : colors.muted} fill={id === 'home' && tab === id ? colors.primary : 'none'} strokeWidth={1.7} />

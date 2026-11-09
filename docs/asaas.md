@@ -1,6 +1,6 @@
 # Asaas: Pix, webhook e atualização automática
 
-Integração implementada para ingressos e compras com cashback. API e app usam o mesmo banco e processam o pagamento sem conferência manual quando `PAYMENT_MODE=asaas`. Os testes executados usam um provedor controlado e PostgreSQL descartável; o teste autenticado no sandbox precisa das credenciais da conta.
+Integração implementada para ingressos, compras com cashback e pedidos da loja oficial. API e app usam o mesmo banco e processam o pagamento sem conferência manual quando `PAYMENT_MODE=asaas`. Os testes executados usam um provedor controlado e PostgreSQL descartável; o teste autenticado no sandbox precisa das credenciais da conta. Consulte o [fluxo da loja, reserva de estoque e reposição em estornos](loja.md).
 
 ## Configurar no desenvolvimento
 

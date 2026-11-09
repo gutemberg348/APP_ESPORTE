@@ -1,13 +1,13 @@
 ﻿import express from 'express';
 import { AppError } from '../lib/errors.js';
 
-export const jsonBody = [
+export function createJsonBody(limit = 16384) { return [
   (req, res, next) => {
     if (req.headers['content-type']?.split(';')[0].trim().toLowerCase() !== 'application/json') throw new AppError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Envie o corpo como application/json.');
     next();
   },
   express.json({
-    limit: 16384,
+    limit,
     strict: false,
     inflate: false,
     // Retain exact bytes for a future provider's authenticated webhook.
@@ -17,4 +17,5 @@ export const jsonBody = [
     if (!req.rawBody?.length) throw new AppError(400, 'INVALID_JSON', 'JSON inválido.');
     next();
   },
-];
+]; }
+export const jsonBody = createJsonBody();

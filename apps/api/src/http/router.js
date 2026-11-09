@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { jsonBody } from './body.js';
+import { jsonBody, createJsonBody } from './body.js';
 import { AppError } from '../lib/errors.js';
 
 export function createApiRouter(routes, access) {
@@ -23,7 +23,8 @@ export function createApiRouter(routes, access) {
     });
     for (const route of entries) {
       const parseBody = ['POST', 'PATCH', 'PUT', 'DELETE'].includes(route.method) && route.body !== false;
-      endpoint[route.method.toLowerCase()](access.route(route), ...(parseBody ? jsonBody : []), async (req, res) => {
+      const bodyParser = route.bodyLimit ? createJsonBody(route.bodyLimit) : jsonBody;
+      endpoint[route.method.toLowerCase()](access.route(route), ...(parseBody ? bodyParser : []), async (req, res) => {
         const result = await route.handler({ req, url: res.locals.url, body: parseBody ? req.body : undefined, ...res.locals.auth });
         const status = result.status ?? 200;
         if (status === 204) return res.status(status).end();

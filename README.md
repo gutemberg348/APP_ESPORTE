@@ -50,7 +50,7 @@ EXPO_PUBLIC_DEMO_MODE=false
 EXPO_PUBLIC_API_URL=http://localhost:3333/v1
 ```
 
-Celular físico: use o IP LAN do computador. Em desenvolvimento, uma URL localhost também é resolvida automaticamente para o host do Expo no app nativo; URLs explícitas de outra API são preservadas. O ambiente local foi ajustado para `http://192.168.0.100:3333/v1` em 03/11/2026. Emulador Android: `http://10.0.2.2:3333/v1`. Recarregue o Expo após editar o ambiente. Para outra origem web, ajuste `CORS_ORIGINS` da API.
+No navegador do próprio computador, mantenha `http://localhost:3333/v1` para não depender do IP atribuído pelo Wi-Fi. No Expo Go nativo em desenvolvimento, localhost é resolvido automaticamente para o host do Expo; URLs explícitas de outra API são preservadas. Para builds instalados ou navegador em outro aparelho, configure o endereço acessível da API. Emulador Android: `http://10.0.2.2:3333/v1`. Recarregue o Expo após editar o ambiente; se ainda aparecer o endereço antigo, reinicie-o com o cache limpo. Para outra origem web, ajuste `CORS_ORIGINS` da API.
 
 **Estado desta máquina — 03/11/2026:** com API e PostgreSQL já iniciados pelo responsável, `npm run db:prepare` aplicou as seis migrations pendentes (sete no total) e configurou o administrador. Cadastro, perfil autenticado, login e rejeição de e-mail duplicado foram verificados pela API na rede local; somente a conta temporária dessa verificação foi removida. O agente não iniciou serviços. As verificações anteriores de 14/10 e 30/10 encontraram o banco indisponível; essa pendência foi resolvida.
 
@@ -131,6 +131,8 @@ Administração: [gestão de vendas por partida, receita, disponibilidade e hist
 Interface administrativa: [componentes reutilizáveis, calendário, selects e organização das páginas](docs/admin-design.md).
 
 Pagamento Pix automático: [configuração Asaas, webhook, emissão de ingresso e conciliação/estorno](docs/asaas.md). O processamento começa junto da API em modo Asaas. Configure o sandbox em `apps/api/.env` antes de habilitar; o webhook público é `/v1/payments/webhook`.
+
+Loja oficial: [produtos, variações, estoque, pedidos, checkout, Pix, Melhor Envio e modo de loja externa](docs/loja.md). Aplique a migration `20261106020000_shop` com `npm run db:deploy` e configure **Loja** no admin. CPF/CNPJ, telefone, CEP e valores em reais usam máscaras compartilhadas em `packages/shared/forms.js`.
 
 Banco de dados: [TXT completo de tabelas, campos, relações, chaves e índices](docs/banco/estrutura-completa.txt), conferido com o schema Prisma e os metadados do PostgreSQL.
 

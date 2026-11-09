@@ -23,6 +23,7 @@ import { AdminGateHistory } from '../components/admin/AdminGateHistory';
 import { AdminPaymentsPanel } from '../components/admin/AdminPaymentsPanel';
 import { AdminThemeProvider } from '../theme/AdminThemeProvider';
 import { AdminSaleForm } from '../components/admin/AdminSaleForm';
+import { AdminShopPanel } from '../components/admin/shop/AdminShopPanel';
 export function AdminScreen({ onBack }: { onBack: () => void }) {
   return <AdminThemeProvider><AdminWorkspace onBack={onBack} /></AdminThemeProvider>;
 }
@@ -93,6 +94,7 @@ function AdminWorkspace({ onBack }: { onBack: () => void }) {
     {tab === 'Auditoria' && <AdminAuditPanel audit={audit} loading={loading} />}
     {tab === 'Histórico de portaria' && <AdminGateHistory matches={matches} refreshKey={reportRefresh} />}
     {tab === 'Pagamentos' && <AdminPaymentsPanel refreshKey={reportRefresh} />}
+    {tab === 'Loja' && <AdminShopPanel refreshKey={reportRefresh} onPayments={() => select('Pagamentos')} />}
     {matchEdit !== undefined && <MatchForm match={matchEdit} onClose={() => setMatchEdit(undefined)} onSaved={async () => { setMatchEdit(undefined); await refresh(); }} />}
     {sectorEdit && <SectorForm {...sectorEdit} onClose={() => setSectorEdit(null)} onSaved={async () => { setSectorEdit(null); await refresh(); }} />}
     {planEdit !== undefined && <PlanForm plan={planEdit} onClose={() => setPlanEdit(undefined)} onSaved={async () => { setPlanEdit(undefined); await refresh(); }} />}

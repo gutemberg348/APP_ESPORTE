@@ -1,3 +1,5 @@
+ATUALIZACAO LOJA 06/11/2026: nove tabelas novas e GatewayIntent.shopOrderId estao detalhados em docs/banco/loja.txt, com todos os campos, FKs, indices e CHECKs. A migration 20261106020000_shop precisa ser aplicada ao banco de execucao. O levantamento abaixo e historico e deve ser lido junto aos complementos Asaas e Loja.
+
 ATUALIZACAO 06/11/2026: a integracao Asaas acrescenta BillingCustomer, GatewayIntent, GatewayWebhook, TicketPayment.refundedCents e o metodo ASAAS. O detalhamento de todos os campos, relacoes, chaves, indices e constraints novos esta em docs/banco/asaas.txt. Abaixo permanece o levantamento anterior dos metadados locais; aplique a nova migration para atualizar esse banco.
 
 NACIONAL / SÓCIO CANÁRIO — DICIONÁRIO COMPLETO DO BANCO DE DADOS

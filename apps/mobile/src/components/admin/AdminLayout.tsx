@@ -2,7 +2,7 @@
 import { View, ScrollView, Pressable, Modal, useWindowDimensions, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { LayoutDashboard, CalendarDays, Ticket, Users, BadgeCheck, UserRoundCog, ScanLine, History, ArrowUpRight, LogOut, RefreshCw, Sun, Moon, ChevronRight, Building2, Menu, X, PanelLeftClose, PanelLeftOpen } from 'lucide-react-native';
+import { LayoutDashboard, CalendarDays, Ticket, Users, BadgeCheck, UserRoundCog, ScanLine, History, ArrowUpRight, LogOut, RefreshCw, Sun, Moon, ChevronRight, Building2, Menu, X, PanelLeftClose, PanelLeftOpen, ShoppingBag } from 'lucide-react-native';
 import { Text } from '../Typography';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useSession } from '../../providers/SessionProvider';
@@ -14,6 +14,7 @@ export const adminSections = [
   { name: 'Visão geral', icon: LayoutDashboard, group: 'Operação', description: 'Os números e as próximas ações do clube.' },
   { name: 'Jogos', icon: CalendarDays, group: 'Operação', description: 'Partidas, setores e disponibilidade de ingressos.' },
   { name: 'Vendas', icon: Ticket, group: 'Operação', description: 'Encontre pedidos e acompanhe os resultados.' },
+  { name: 'Loja', icon: ShoppingBag, group: 'Operação', description: 'Produtos, pedidos, estoque e opções de entrega.' },
   { name: 'Pagamentos', icon: BadgeCheck, group: 'Operação', description: 'Pix, conciliação e devoluções.' },
   { name: 'Torcedores', icon: Users, group: 'Gestão', description: 'Contas e associações da sua torcida.' },
   { name: 'Planos', icon: BadgeCheck, group: 'Gestão', description: 'Mensalidades e benefícios de cada plano.' },

@@ -10,7 +10,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { pixApi } from '../services/pix';
 import { messageOf, money } from '../utils/format';
 export const pixStates: Record<PixIntent['state'], string> = { QUEUED: 'Preparando seu Pix…', CREATING: 'Gerando cobrança…', PENDING: 'Aguardando pagamento', PROCESSING: 'Pagamento em análise pelo Asaas', RECEIVED: 'Pagamento confirmado', REFUNDING: 'Estorno solicitado · aguardando confirmação', REFUNDED: 'Pagamento estornado', CANCELED: 'Cobrança cancelada', REVIEW: 'Pagamento em conciliação', PARTIAL_REFUND: 'Pagamento parcialmente estornado' };
-export function PixCheckout({ ticketId, chargeId, initialIntentId, onChanged }: { ticketId?: string; chargeId?: string; initialIntentId?: string | null; onChanged: () => Promise<unknown> }) {
+export function PixCheckout({ ticketId, chargeId, shopOrderId, initialIntentId, onChanged }: { ticketId?: string; chargeId?: string; shopOrderId?: string; initialIntentId?: string | null; onChanged: () => Promise<unknown> }) {
   const { token, demoMode } = useSession(), { colors } = useTheme();
   const [profile, setProfile] = useState<BillingProfile | null>(null), [intent, setIntent] = useState<PixIntent | null>(null), [document, setDocument] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [copied, setCopied] = useState(false);
   const current = useRef(0), lock = useRef(false), lastState = useRef(''), callback = useRef(onChanged);
@@ -24,9 +24,9 @@ export function PixCheckout({ ticketId, chargeId, initialIntentId, onChanged }: 
     const version = ++current.current;
     if (!token || demoMode) return;
     setError('');
-    void Promise.all([pixApi.profile(token), ticketId ? pixApi.ticket(token, ticketId) : initialIntentId ? pixApi.intent(token, initialIntentId) : Promise.resolve(null)]).then(([fresh, payment]) => { if (current.current === version) { setProfile(fresh); accept(payment); } }).catch((err) => { if (current.current === version) setError(messageOf(err)); });
+    void Promise.all([pixApi.profile(token), ticketId ? pixApi.ticket(token, ticketId) : shopOrderId ? pixApi.shop(token, shopOrderId) : initialIntentId ? pixApi.intent(token, initialIntentId) : Promise.resolve(null)]).then(([fresh, payment]) => { if (current.current === version) { setProfile(fresh); accept(payment); } }).catch((err) => { if (current.current === version) setError(messageOf(err)); });
     return () => { current.current++; };
-  }, [token, demoMode, ticketId, initialIntentId]);
+  }, [token, demoMode, ticketId, shopOrderId, initialIntentId]);
   useEffect(() => {
     if (!token || !intent || ['REFUNDED', 'CANCELED'].includes(intent.state)) return;
     let alive = true, polling = false;
@@ -48,7 +48,7 @@ export function PixCheckout({ ticketId, chargeId, initialIntentId, onChanged }: 
     const version = current.current;
     try {
       if (!profile?.configured) { const fresh = await pixApi.saveProfile(token, document); if (version !== current.current) return; setProfile(fresh); setDocument(''); }
-      const value = ticketId ? await pixApi.createTicket(token, ticketId) : await pixApi.createCash(token, chargeId!);
+      const value = ticketId ? await pixApi.createTicket(token, ticketId) : shopOrderId ? await pixApi.createShop(token, shopOrderId) : await pixApi.createCash(token, chargeId!);
       if (version === current.current) accept(value);
     } catch (err) { if (version === current.current) setError(messageOf(err)); }
     finally { lock.current = false; setBusy(false); }
@@ -66,7 +66,7 @@ export function PixCheckout({ ticketId, chargeId, initialIntentId, onChanged }: 
       <Text accessibilityRole="alert" style={{ color: intent.state === 'RECEIVED' ? colors.primary : colors.gold, fontWeight: '700' }}>{pixStates[intent.state]}</Text>
       <Text style={{ color: colors.text }}>{money(intent.amountCents)}</Text>
       {intent.pixPayload && <><View style={{ alignSelf: 'center', padding: 16, backgroundColor: '#fff', borderRadius: 12 }}><QRCode value={intent.pixPayload} size={190} color="#111111" backgroundColor="#ffffff" /></View><Text style={{ color: colors.muted, fontSize: 13 }}>Leia com o app do seu banco ou use Pix Copia e Cola.</Text><Button label={copied ? 'Pix copiado' : 'Copiar Pix'} onPress={() => void Clipboard.setStringAsync(intent.pixPayload!).then(() => setCopied(true)).catch(() => setError('Não foi possível copiar o Pix.'))} /><Text selectable numberOfLines={3} style={{ color: colors.muted, fontSize: 10 }}>{intent.pixPayload}</Text></>}
-      {intent.state === 'RECEIVED' ? <Text style={{ color: colors.primary, fontSize: 13 }}>{ticketId ? 'Seu ingresso foi emitido automaticamente. Ele está em Meus ingressos.' : 'Recebimento e divisão confirmados. Confira o cashback no extrato.'}</Text> : <Text style={{ color: colors.muted, fontSize: 12 }}>A tela consulta a confirmação automaticamente. Prazo da reserva: {new Date(intent.expiresAt).toLocaleString('pt-BR', { timeZone: 'America/Fortaleza' })} (Patos). Não pague após esse horário.</Text>}
+      {intent.state === 'RECEIVED' ? <Text style={{ color: colors.primary, fontSize: 13 }}>{ticketId ? 'Seu ingresso foi emitido automaticamente. Ele está em Meus ingressos.' : shopOrderId ? 'Pagamento confirmado. Acompanhe a preparação e entrega em Meus pedidos.' : 'Recebimento e divisão confirmados. Confira o cashback no extrato.'}</Text> : <Text style={{ color: colors.muted, fontSize: 12 }}>A tela consulta a confirmação automaticamente. Prazo da reserva: {new Date(intent.expiresAt).toLocaleString('pt-BR', { timeZone: 'America/Fortaleza' })} (Patos). Não pague após esse horário.</Text>}
       {intent.refundedCents > 0 && <Text style={{ color: colors.muted, fontSize: 13 }}>Estorno confirmado: {money(intent.refundedCents)}</Text>}
       {intent.state === 'REVIEW' && <Text style={{ color: colors.muted, fontSize: 12 }}>Estamos conferindo a cobrança no provedor. Não gere outro pagamento. Se persistir, informe o protocolo ao atendimento.</Text>}
       <Text selectable style={{ color: colors.muted, fontSize: 10 }}>Protocolo do pagamento: {intent.id}</Text>

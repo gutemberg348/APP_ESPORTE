@@ -1,8 +1,7 @@
+import { moneyToCents } from '@nacional/shared/forms';
 export const requestKey = () => `${Date.now()}_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}`;
 export function parseAmount(value: string, allowZero = false) {
-  const normalized = value.trim().replace(',', '.');
-  if (!/^\d{1,7}(\.\d{1,2})?$/.test(normalized)) throw new Error('Informe um valor como 100,00.');
-  const cents = Math.round(Number(normalized) * 100);
+  const cents = moneyToCents(value);
   if (cents < (allowZero ? 0 : 1) || cents > 100000000) throw new Error('Valor fora do limite permitido.');
   return cents;
 }

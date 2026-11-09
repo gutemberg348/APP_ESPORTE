@@ -1,0 +1,489 @@
+LOJA OFICIAL — TABELAS, RELACOES E REGRAS
+Revisao: 06/11/2026 | Fontes: schema Prisma e migration 20261106020000_shop.
+Este arquivo descreve a estrutura versionada. A migration nao foi aplicada ao banco local nesta implementacao.
+Nenhuma credencial, documento ou registro de cliente foi exportado.
+
+9 novas tabelas. User recebe relacoes virtuais com pedidos, pagamentos confirmados, movimentacoes e cotacoes.
+GatewayIntent recebe shopOrderId UUID opcional e UNIQUE; a CHECK exige exatamente um destino entre ticketId, chargeId e shopOrderId.
+O recebimento da loja usa ShopPayment; a compra com cashback dos parceiros continua em PaymentCharge.
+
+RELACOES
+User 1:N ShopOrder (comprador), ShopShippingQuote (cotacao), StockMovement (responsavel).
+User 1:N ShopPayment (confirmador administrativo opcional).
+Product 1:N ProductVariant. ProductVariant 1:N ShopOrderItem e StockMovement.
+ShopOrder 1:N ShopOrderItem e StockMovement; ShopOrder 0..1 ShopPayment e GatewayIntent.
+ShopSettings tem uma linha de configuracao da instancia (id main).
+ShippingRule guarda tabela propria; ShopShippingQuote guarda opcoes cotadas e hash de carrinho.
+
+CONVENCOES
+UUIDs sao gerados pelo Prisma. Valores de moeda sao INTEGER em centavos BRL. Peso em gramas, medidas em cm.
+CEPs e telefones sao normalizados; mascaras sao de apresentacao. Datas armazenam instantes, apresentacao em America/Fortaleza.
+@updatedAt e mantido pelo Prisma. Campos relacionais/listas do schema sao virtuais, exceto arrays explicitamente persistidos (Product.images).
+
+REGRAS DE ESTOQUE E IDENTIFICACAO
+ProductVariant.stock = saldo fisico; disponivel = fisico menos PENDING nao expirados.
+Reserva dura 30 minutos; cotacao dura 10 minutos e nao reserva estoque. EXPIRED e calculado para exibicao.
+ShopOrder.number e sequencial para atendimento; id UUID e identificador interno, nao uma credencial.
+ShopOrder.userId + requestKey e UNIQUE; requestHash impede repetir a mesma chave com outros dados.
+Itens guardam snapshot de nome, SKU, variacao, imagem, custo e preco. shippingSnapshot preserva a opcao tecnica cotada.
+Recebimento baixa estoque e grava SALE/recibo/auditoria na mesma transacao Serializable.
+RefundReference e referencia unica do estorno manual registrado; nao envia transferencia.
+Estorno integral antes de envio/entrega repoe estoque uma vez. Apos envio ou entrega requer retorno fisico e ajuste manual.
+Arquivar produto nao remove seus pedidos, recibos, variacoes ou movimentacoes.
+
+MODELOS PRISMA (CAMPOS, DEFAULTS, RELACOES, INDICES)
+
+model ShopSettings {
+  id String @id @default("main")
+  mode String @default("INTERNAL") @db.VarChar(20)
+  enabled Boolean @default(false)
+  externalUrl String @default("") @db.VarChar(1000)
+  name String @default("Loja oficial") @db.VarChar(100)
+  pickupEnabled Boolean @default(true)
+  pickupAddress String @default("") @db.VarChar(500)
+  shippingProvider String @default("RULES") @db.VarChar(20)
+  originPostalCode String @default("") @db.VarChar(8)
+  paymentInstructions String @default("") @db.VarChar(1000)
+  supportPhone String @default("") @db.VarChar(11)
+  updatedAt DateTime @updatedAt
+}
+
+model Product {
+  id String @id @default(uuid()) @db.Uuid
+  name String @db.VarChar(150)
+  description String @default("") @db.VarChar(4000)
+  category String @default("Geral") @db.VarChar(80)
+  images String[] @default([])
+  priceCents Int
+  compareAtCents Int?
+  costCents Int @default(0)
+  weightGrams Int @default(300)
+  widthCm Int @default(20)
+  heightCm Int @default(5)
+  lengthCm Int @default(25)
+  active Boolean @default(false)
+  featured Boolean @default(false)
+  archivedAt DateTime?
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  variants ProductVariant[]
+  @@index([active, archivedAt, category])
+}
+
+model ProductVariant {
+  id String @id @default(uuid()) @db.Uuid
+  productId String @db.Uuid
+  sku String @unique @db.VarChar(80)
+  label String @default("Único") @db.VarChar(100)
+  stock Int @default(0)
+  lowStock Int @default(5)
+  active Boolean @default(true)
+  version Int @default(0)
+  product Product @relation(fields: [productId], references: [id])
+  items ShopOrderItem[]
+  movements StockMovement[]
+  @@index([productId])
+}
+
+model StockMovement {
+  id String @id @default(uuid()) @db.Uuid
+  variantId String @db.Uuid
+  actorId String @db.Uuid
+  orderId String? @db.Uuid
+  requestKey String @unique @db.VarChar(100)
+  kind String @db.VarChar(20)
+  quantity Int
+  balanceAfter Int
+  reason String @db.VarChar(500)
+  createdAt DateTime @default(now())
+  variant ProductVariant @relation(fields: [variantId], references: [id])
+  actor User @relation(fields: [actorId], references: [id])
+  order ShopOrder? @relation(fields: [orderId], references: [id])
+  @@index([variantId, createdAt])
+}
+
+model ShippingRule {
+  id String @id @default(uuid()) @db.Uuid
+  name String @db.VarChar(100)
+  postalCodeFrom String @db.VarChar(8)
+  postalCodeTo String @db.VarChar(8)
+  baseCents Int
+  perKgCents Int @default(0)
+  freeAboveCents Int?
+  minDays Int @default(1)
+  maxDays Int @default(5)
+  active Boolean @default(true)
+  version Int @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model ShopShippingQuote {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  cartHash String @db.VarChar(64)
+  postalCode String @db.VarChar(8)
+  deliveryMethod String @db.VarChar(20)
+  options Json
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id])
+  @@index([expiresAt])
+}
+
+model ShopOrder {
+  id String @id @default(uuid()) @db.Uuid
+  number Int @unique @default(autoincrement())
+  userId String @db.Uuid
+  requestKey String @db.VarChar(80)
+  requestHash String @db.VarChar(64)
+  status String @default("PENDING") @db.VarChar(20)
+  recipient String @db.VarChar(100)
+  phone String @db.VarChar(11)
+  address Json
+  deliveryMethod String @db.VarChar(20)
+  shippingName String @db.VarChar(150)
+  shippingService String @db.VarChar(80)
+  shippingDays Int
+  shippingSnapshot Json @default("{}")
+  subtotalCents Int
+  shippingCents Int
+  totalCents Int
+  expiresAt DateTime
+  inventoryConsumedAt DateTime?
+  stockRestoredAt DateTime?
+  shippedAt DateTime?
+  deliveredAt DateTime?
+  trackingCode String @default("") @db.VarChar(100)
+  trackingUrl String @default("") @db.VarChar(1000)
+  notes String @default("") @db.VarChar(1000)
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user User @relation(fields: [userId], references: [id])
+  items ShopOrderItem[]
+  payment ShopPayment?
+  paymentIntent GatewayIntent?
+  movements StockMovement[]
+  @@unique([userId, requestKey])
+  @@index([status, expiresAt])
+  @@index([userId, createdAt])
+}
+
+model ShopOrderItem {
+  id String @id @default(uuid()) @db.Uuid
+  orderId String @db.Uuid
+  variantId String @db.Uuid
+  productName String @db.VarChar(150)
+  variantLabel String @db.VarChar(100)
+  sku String @db.VarChar(80)
+  image String @default("")
+  quantity Int
+  unitPriceCents Int
+  costCents Int
+  order ShopOrder @relation(fields: [orderId], references: [id])
+  variant ProductVariant @relation(fields: [variantId], references: [id])
+  @@unique([orderId, variantId])
+  @@index([variantId])
+}
+
+model ShopPayment {
+  id String @id @default(uuid()) @db.Uuid
+  orderId String @unique @db.Uuid
+  method TicketPaymentMethod
+  amountCents Int
+  reference String @unique @db.VarChar(100)
+  refundedCents Int @default(0)
+  refundReference String? @unique @db.VarChar(100)
+  confirmedById String? @db.Uuid
+  confirmedAt DateTime @default(now())
+  order ShopOrder @relation(fields: [orderId], references: [id])
+  confirmedBy User? @relation(fields: [confirmedById], references: [id])
+}
+
+MIGRATION SQL COMPLETA (COLUNAS, FKS, INDICES E CHECKS)
+
+-- AlterTable
+ALTER TABLE "GatewayIntent" ADD COLUMN     "shopOrderId" UUID;
+
+-- CreateTable
+CREATE TABLE "ShopSettings" (
+    "id" TEXT NOT NULL DEFAULT 'main',
+    "mode" VARCHAR(20) NOT NULL DEFAULT 'INTERNAL',
+    "enabled" BOOLEAN NOT NULL DEFAULT false,
+    "externalUrl" VARCHAR(1000) NOT NULL DEFAULT '',
+    "name" VARCHAR(100) NOT NULL DEFAULT 'Loja oficial',
+    "pickupEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "pickupAddress" VARCHAR(500) NOT NULL DEFAULT '',
+    "shippingProvider" VARCHAR(20) NOT NULL DEFAULT 'RULES',
+    "originPostalCode" VARCHAR(8) NOT NULL DEFAULT '',
+    "paymentInstructions" VARCHAR(1000) NOT NULL DEFAULT '',
+    "supportPhone" VARCHAR(11) NOT NULL DEFAULT '',
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ShopSettings_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Product" (
+    "id" UUID NOT NULL,
+    "name" VARCHAR(150) NOT NULL,
+    "description" VARCHAR(4000) NOT NULL DEFAULT '',
+    "category" VARCHAR(80) NOT NULL DEFAULT 'Geral',
+    "images" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "priceCents" INTEGER NOT NULL,
+    "compareAtCents" INTEGER,
+    "costCents" INTEGER NOT NULL DEFAULT 0,
+    "weightGrams" INTEGER NOT NULL DEFAULT 300,
+    "widthCm" INTEGER NOT NULL DEFAULT 20,
+    "heightCm" INTEGER NOT NULL DEFAULT 5,
+    "lengthCm" INTEGER NOT NULL DEFAULT 25,
+    "active" BOOLEAN NOT NULL DEFAULT false,
+    "featured" BOOLEAN NOT NULL DEFAULT false,
+    "archivedAt" TIMESTAMP(3),
+    "version" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Product_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ProductVariant" (
+    "id" UUID NOT NULL,
+    "productId" UUID NOT NULL,
+    "sku" VARCHAR(80) NOT NULL,
+    "label" VARCHAR(100) NOT NULL DEFAULT 'Único',
+    "stock" INTEGER NOT NULL DEFAULT 0,
+    "lowStock" INTEGER NOT NULL DEFAULT 5,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "version" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "ProductVariant_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "StockMovement" (
+    "id" UUID NOT NULL,
+    "variantId" UUID NOT NULL,
+    "actorId" UUID NOT NULL,
+    "orderId" UUID,
+    "requestKey" VARCHAR(100) NOT NULL,
+    "kind" VARCHAR(20) NOT NULL,
+    "quantity" INTEGER NOT NULL,
+    "balanceAfter" INTEGER NOT NULL,
+    "reason" VARCHAR(500) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "StockMovement_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ShippingRule" (
+    "id" UUID NOT NULL,
+    "name" VARCHAR(100) NOT NULL,
+    "postalCodeFrom" VARCHAR(8) NOT NULL,
+    "postalCodeTo" VARCHAR(8) NOT NULL,
+    "baseCents" INTEGER NOT NULL,
+    "perKgCents" INTEGER NOT NULL DEFAULT 0,
+    "freeAboveCents" INTEGER,
+    "minDays" INTEGER NOT NULL DEFAULT 1,
+    "maxDays" INTEGER NOT NULL DEFAULT 5,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "version" INTEGER NOT NULL DEFAULT 0,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ShippingRule_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ShopShippingQuote" (
+    "id" UUID NOT NULL,
+    "userId" UUID NOT NULL,
+    "cartHash" VARCHAR(64) NOT NULL,
+    "postalCode" VARCHAR(8) NOT NULL,
+    "deliveryMethod" VARCHAR(20) NOT NULL,
+    "options" JSONB NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ShopShippingQuote_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ShopOrder" (
+    "id" UUID NOT NULL,
+    "number" SERIAL NOT NULL,
+    "userId" UUID NOT NULL,
+    "requestKey" VARCHAR(80) NOT NULL,
+    "requestHash" VARCHAR(64) NOT NULL,
+    "status" VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    "recipient" VARCHAR(100) NOT NULL,
+    "phone" VARCHAR(11) NOT NULL,
+    "address" JSONB NOT NULL,
+    "deliveryMethod" VARCHAR(20) NOT NULL,
+    "shippingName" VARCHAR(150) NOT NULL,
+    "shippingService" VARCHAR(80) NOT NULL,
+    "shippingDays" INTEGER NOT NULL,
+    "shippingSnapshot" JSONB NOT NULL DEFAULT '{}',
+    "subtotalCents" INTEGER NOT NULL,
+    "shippingCents" INTEGER NOT NULL,
+    "totalCents" INTEGER NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "inventoryConsumedAt" TIMESTAMP(3),
+    "stockRestoredAt" TIMESTAMP(3),
+    "shippedAt" TIMESTAMP(3),
+    "deliveredAt" TIMESTAMP(3),
+    "trackingCode" VARCHAR(100) NOT NULL DEFAULT '',
+    "trackingUrl" VARCHAR(1000) NOT NULL DEFAULT '',
+    "notes" VARCHAR(1000) NOT NULL DEFAULT '',
+    "version" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ShopOrder_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ShopOrderItem" (
+    "id" UUID NOT NULL,
+    "orderId" UUID NOT NULL,
+    "variantId" UUID NOT NULL,
+    "productName" VARCHAR(150) NOT NULL,
+    "variantLabel" VARCHAR(100) NOT NULL,
+    "sku" VARCHAR(80) NOT NULL,
+    "image" TEXT NOT NULL DEFAULT '',
+    "quantity" INTEGER NOT NULL,
+    "unitPriceCents" INTEGER NOT NULL,
+    "costCents" INTEGER NOT NULL,
+
+    CONSTRAINT "ShopOrderItem_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ShopPayment" (
+    "id" UUID NOT NULL,
+    "orderId" UUID NOT NULL,
+    "method" "TicketPaymentMethod" NOT NULL,
+    "amountCents" INTEGER NOT NULL,
+    "reference" VARCHAR(100) NOT NULL,
+    "refundedCents" INTEGER NOT NULL DEFAULT 0,
+    "refundReference" VARCHAR(100),
+    "confirmedById" UUID,
+    "confirmedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ShopPayment_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE INDEX "Product_active_archivedAt_category_idx" ON "Product"("active", "archivedAt", "category");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ProductVariant_sku_key" ON "ProductVariant"("sku");
+
+-- CreateIndex
+CREATE INDEX "ProductVariant_productId_idx" ON "ProductVariant"("productId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "StockMovement_requestKey_key" ON "StockMovement"("requestKey");
+
+-- CreateIndex
+CREATE INDEX "StockMovement_variantId_createdAt_idx" ON "StockMovement"("variantId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "ShopShippingQuote_expiresAt_idx" ON "ShopShippingQuote"("expiresAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ShopOrder_number_key" ON "ShopOrder"("number");
+
+-- CreateIndex
+CREATE INDEX "ShopOrder_status_expiresAt_idx" ON "ShopOrder"("status", "expiresAt");
+
+-- CreateIndex
+CREATE INDEX "ShopOrder_userId_createdAt_idx" ON "ShopOrder"("userId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ShopOrder_userId_requestKey_key" ON "ShopOrder"("userId", "requestKey");
+
+-- CreateIndex
+CREATE INDEX "ShopOrderItem_variantId_idx" ON "ShopOrderItem"("variantId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ShopOrderItem_orderId_variantId_key" ON "ShopOrderItem"("orderId", "variantId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ShopPayment_orderId_key" ON "ShopPayment"("orderId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ShopPayment_reference_key" ON "ShopPayment"("reference");
+CREATE UNIQUE INDEX "ShopPayment_refundReference_key" ON "ShopPayment"("refundReference");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GatewayIntent_shopOrderId_key" ON "GatewayIntent"("shopOrderId");
+
+-- AddForeignKey
+ALTER TABLE "GatewayIntent" ADD CONSTRAINT "GatewayIntent_shopOrderId_fkey" FOREIGN KEY ("shopOrderId") REFERENCES "ShopOrder"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProductVariant" ADD CONSTRAINT "ProductVariant_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StockMovement" ADD CONSTRAINT "StockMovement_variantId_fkey" FOREIGN KEY ("variantId") REFERENCES "ProductVariant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StockMovement" ADD CONSTRAINT "StockMovement_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StockMovement" ADD CONSTRAINT "StockMovement_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "ShopOrder"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ShopShippingQuote" ADD CONSTRAINT "ShopShippingQuote_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ShopOrder" ADD CONSTRAINT "ShopOrder_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ShopOrderItem" ADD CONSTRAINT "ShopOrderItem_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "ShopOrder"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ShopOrderItem" ADD CONSTRAINT "ShopOrderItem_variantId_fkey" FOREIGN KEY ("variantId") REFERENCES "ProductVariant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ShopPayment" ADD CONSTRAINT "ShopPayment_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "ShopOrder"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ShopPayment" ADD CONSTRAINT "ShopPayment_confirmedById_fkey" FOREIGN KEY ("confirmedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- Financial intents have exactly one immutable business target.
+ALTER TABLE "GatewayIntent" DROP CONSTRAINT "GatewayIntent_target_valid";
+ALTER TABLE "GatewayIntent" ADD CONSTRAINT "GatewayIntent_target_valid"
+  CHECK (num_nonnulls("ticketId", "chargeId", "shopOrderId") = 1);
+ALTER TABLE "ShopSettings" ADD CONSTRAINT "ShopSettings_modes_valid" CHECK ("mode" IN ('INTERNAL','EXTERNAL') AND "shippingProvider" IN ('RULES','MELHOR_ENVIO'));
+ALTER TABLE "Product" ADD CONSTRAINT "Product_values_valid" CHECK (
+  "priceCents" BETWEEN 0 AND 100000000 AND "costCents" BETWEEN 0 AND 100000000
+  AND ("compareAtCents" IS NULL OR "compareAtCents" > "priceCents") AND "version" >= 0
+  AND "weightGrams" BETWEEN 1 AND 100000 AND "widthCm" BETWEEN 1 AND 200 AND "heightCm" BETWEEN 1 AND 200 AND "lengthCm" BETWEEN 1 AND 200
+);
+ALTER TABLE "ProductVariant" ADD CONSTRAINT "ProductVariant_stock_valid" CHECK ("stock" BETWEEN 0 AND 1000000 AND "lowStock" BETWEEN 0 AND 100000 AND "version" >= 0);
+ALTER TABLE "StockMovement" ADD CONSTRAINT "StockMovement_valid" CHECK ("quantity" <> 0 AND "balanceAfter" >= 0 AND "kind" IN ('INITIAL','ADJUSTMENT','SALE','RETURN'));
+ALTER TABLE "ShippingRule" ADD CONSTRAINT "ShippingRule_values_valid" CHECK (
+  "postalCodeFrom" ~ '^\d{8}$' AND "postalCodeTo" ~ '^\d{8}$' AND "postalCodeFrom" <= "postalCodeTo"
+  AND "baseCents" BETWEEN 0 AND 100000000 AND "perKgCents" BETWEEN 0 AND 100000000
+  AND ("freeAboveCents" IS NULL OR "freeAboveCents" BETWEEN 0 AND 100000000)
+  AND "minDays" BETWEEN 0 AND 120 AND "maxDays" BETWEEN "minDays" AND 120 AND "version" >= 0
+);
+ALTER TABLE "ShopShippingQuote" ADD CONSTRAINT "ShopShippingQuote_method_valid" CHECK ("deliveryMethod" IN ('PICKUP','DELIVERY'));
+ALTER TABLE "ShopOrder" ADD CONSTRAINT "ShopOrder_values_valid" CHECK (
+  "subtotalCents" BETWEEN 0 AND 100000000 AND "shippingCents" BETWEEN 0 AND 100000000
+  AND "totalCents" BETWEEN 0 AND 100000000 AND "totalCents"::bigint = "subtotalCents"::bigint + "shippingCents"::bigint
+  AND "deliveryMethod" IN ('PICKUP','DELIVERY') AND "version" >= 0
+  AND "status" IN ('PENDING','PAID','PREPARING','READY','SHIPPED','DELIVERED','CANCELED','REFUNDED','REFUND_REVIEW')
+);
+ALTER TABLE "ShopOrderItem" ADD CONSTRAINT "ShopOrderItem_values_valid" CHECK ("quantity" BETWEEN 1 AND 20 AND "unitPriceCents" BETWEEN 0 AND 100000000 AND "costCents" BETWEEN 0 AND 100000000);
+ALTER TABLE "ShopPayment" ADD CONSTRAINT "ShopPayment_values_valid" CHECK ("amountCents" BETWEEN 0 AND 100000000 AND "refundedCents" BETWEEN 0 AND "amountCents");
+
+
+MANUTENCAO
+npm run db:generate; npm run db:deploy (com seu banco disponivel).
+npm run shop:cleanup --workspace @nacional/api remove somente cotacoes vencidas ha mais de 24h.
+Configuracao e limites: docs/loja.md.

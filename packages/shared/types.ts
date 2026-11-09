@@ -113,6 +113,7 @@ export interface CashCharge {
   expiresAt: string; createdAt: string; paidAt: string | null;
 }
 export interface PixIntent {
+  shopOrderId?: string | null;
   id: string; ticketId: string | null; chargeId: string | null; environment: 'sandbox' | 'production';
   state: 'QUEUED' | 'CREATING' | 'PENDING' | 'PROCESSING' | 'RECEIVED' | 'REFUNDING' | 'REFUNDED' | 'CANCELED' | 'REVIEW' | 'PARTIAL_REFUND';
   amountCents: number; refundedCents: number; pixPayload: string | null; expiresAt: string; failureCode: string | null; serverTime: string;
