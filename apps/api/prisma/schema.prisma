@@ -40,86 +40,89 @@ enum TicketPaymentMethod {
 }
 
 model User {
-  id           String      @id @default(uuid()) @db.Uuid
-  name         String      @db.VarChar(100)
-  email        String      @unique @db.VarChar(254)
-  passwordHash String
-  role         UserRole    @default(USER)
-  active       Boolean     @default(true)
-  avatar       String?
-  points       Int         @default(0)
-  city         String      @default("") @db.VarChar(60)
-  contact      String      @default("") @db.VarChar(80)
-  preferences  Json        @default("{\"family\":true,\"personalize\":true,\"notifications\":false,\"ranking\":false}")
-  schoolInterested Boolean @default(false)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  membership   Membership?
-  sessions     Session[]
-  tickets      Ticket[]
-  predictions  Prediction[]
-  referrals    Referral[]
-  pointEntries PointEntry[]
-  redemptions  Redemption[]
-  cashWallets CashWallet[]
-  merchantOperators MerchantOperator[]
-  createdCharges PaymentCharge[]
+  id                      String               @id @default(uuid()) @db.Uuid
+  name                    String               @db.VarChar(100)
+  email                   String               @unique @db.VarChar(254)
+  passwordHash            String
+  role                    UserRole             @default(USER)
+  active                  Boolean              @default(true)
+  avatar                  String?
+  points                  Int                  @default(0)
+  city                    String               @default("") @db.VarChar(60)
+  contact                 String               @default("") @db.VarChar(80)
+  preferences             Json                 @default("{\"family\":true,\"personalize\":true,\"notifications\":false,\"ranking\":false}")
+  schoolInterested        Boolean              @default(false)
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+  membership              Membership?
+  sessions                Session[]
+  tickets                 Ticket[]
+  predictions             Prediction[]
+  referrals               Referral[]
+  pointEntries            PointEntry[]
+  redemptions             Redemption[]
+  cashWallets             CashWallet[]
+  merchantOperators       MerchantOperator[]
+  createdCharges          PaymentCharge[]
   confirmedTicketPayments TicketPayment[]
-  ticketAdmissions TicketAdmission[]
-  auditLogs AuditLog[]
-  gateAssignments GateAssignment[]
-  billingCustomers BillingCustomer[]
-  shopOrders ShopOrder[]
-  shopPayments ShopPayment[]
-  stockMovements StockMovement[]
-  shippingQuotes ShopShippingQuote[]
-  clubPayouts ClubPayout[]
-  withdrawalRequests WithdrawalRequest[]
-  payoutAttachments PayoutAttachment[]
-  passwordResets PasswordResetToken[]
+  ticketAdmissions        TicketAdmission[]
+  auditLogs               AuditLog[]
+  gateAssignments         GateAssignment[]
+  billingCustomers        BillingCustomer[]
+  shopOrders              ShopOrder[]
+  shopPayments            ShopPayment[]
+  stockMovements          StockMovement[]
+  shippingQuotes          ShopShippingQuote[]
+  clubPayouts             ClubPayout[]
+  withdrawalRequests      WithdrawalRequest[]
+  payoutAttachments       PayoutAttachment[]
+  passwordResets          PasswordResetToken[]
+  pedidosIngressoV1       PedidoIngressoV1[]
 }
 
 model PasswordResetToken {
-  id String @id @default(uuid()) @db.Uuid
-  userId String @db.Uuid
-  tokenHash String @unique
+  id             String        @id @default(uuid()) @db.Uuid
+  userId         String        @db.Uuid
+  tokenHash      String        @unique
   credentialHash String
-  emailAtIssue String @db.VarChar(254)
-  expiresAt DateTime
-  usedAt DateTime?
-  createdAt DateTime @default(now())
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  delivery MailDelivery?
+  emailAtIssue   String        @db.VarChar(254)
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdAt      DateTime      @default(now())
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  delivery       MailDelivery?
+
   @@index([userId, createdAt])
   @@index([expiresAt])
 }
 
 model MailDelivery {
-  id String @id @default(uuid()) @db.Uuid
-  resetId String @unique @db.Uuid
-  payload String?
-  status String @default("QUEUED") @db.VarChar(16)
-  attempts Int @default(0)
-  nextAttemptAt DateTime @default(now())
-  lockedUntil DateTime?
-  lockToken String? @db.Uuid
-  sentAt DateTime?
-  errorCode String? @db.VarChar(40)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  reset PasswordResetToken @relation(fields: [resetId], references: [id], onDelete: Cascade)
+  id            String             @id @default(uuid()) @db.Uuid
+  resetId       String             @unique @db.Uuid
+  payload       String?
+  status        String             @default("QUEUED") @db.VarChar(16)
+  attempts      Int                @default(0)
+  nextAttemptAt DateTime           @default(now())
+  lockedUntil   DateTime?
+  lockToken     String?            @db.Uuid
+  sentAt        DateTime?
+  errorCode     String?            @db.VarChar(40)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  reset         PasswordResetToken @relation(fields: [resetId], references: [id], onDelete: Cascade)
+
   @@index([status, nextAttemptAt])
 }
 
 model Session {
-  id        String   @id @default(uuid()) @db.Uuid
-  tokenHash String   @unique
-  userId    String   @db.Uuid
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  revokedAt DateTime?
-  lastUsedAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String         @id @default(uuid()) @db.Uuid
+  tokenHash     String         @unique
+  userId        String         @db.Uuid
+  expiresAt     DateTime
+  createdAt     DateTime       @default(now())
+  revokedAt     DateTime?
+  lastUsedAt    DateTime       @default(now())
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   refreshTokens RefreshToken[]
 
   @@index([userId])
@@ -128,13 +131,14 @@ model Session {
 }
 
 model RefreshToken {
-  id String @id @default(uuid()) @db.Uuid
-  tokenHash String @unique
-  sessionId String @db.Uuid
+  id        String    @id @default(uuid()) @db.Uuid
+  tokenHash String    @unique
+  sessionId String    @db.Uuid
   expiresAt DateTime
-  usedAt DateTime?
-  createdAt DateTime @default(now())
-  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  session   Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
   @@index([sessionId])
   @@index([expiresAt])
 }
@@ -159,65 +163,65 @@ model Membership {
 }
 
 model Match {
-  id          String       @id @default(uuid()) @db.Uuid
-  slug        String       @unique
-  homeTeam    String
-  awayTeam    String
-  startsAt    DateTime
-  stadium     String
-  competition String
-  isHome      Boolean      @default(true)
-  published   Boolean      @default(false)
-  salesEnabled Boolean     @default(true)
-  salesOpenAt DateTime?
+  id           String       @id @default(uuid()) @db.Uuid
+  slug         String       @unique
+  homeTeam     String
+  awayTeam     String
+  startsAt     DateTime
+  stadium      String
+  competition  String
+  isHome       Boolean      @default(true)
+  published    Boolean      @default(false)
+  salesEnabled Boolean      @default(true)
+  salesOpenAt  DateTime?
   salesCloseAt DateTime?
-  entryEnabled Boolean     @default(false)
-  gateOpenAt DateTime?
-  gateCloseAt DateTime?
-  sectors     Sector[]
-  tickets     Ticket[]
-  predictions Prediction[]
+  entryEnabled Boolean      @default(false)
+  gateOpenAt   DateTime?
+  gateCloseAt  DateTime?
+  sectors      Sector[]
+  tickets      Ticket[]
+  predictions  Prediction[]
 
   @@index([startsAt])
 }
 
 model Sector {
-  id         String   @id @default(uuid()) @db.Uuid
-  matchId    String   @db.Uuid
-  name       String
-  priceCents Int
-  capacity   Int      @default(500)
-  salesEnabled Boolean @default(true)
-  match      Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  tickets    Ticket[]
+  id              String           @id @default(uuid()) @db.Uuid
+  matchId         String           @db.Uuid
+  name            String
+  priceCents      Int
+  capacity        Int              @default(500)
+  salesEnabled    Boolean          @default(true)
+  match           Match            @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  tickets         Ticket[]
   gateAssignments GateAssignment[]
 
   @@unique([matchId, name])
 }
 
 model Ticket {
-  id         String       @id @default(uuid()) @db.Uuid
-  userId     String       @db.Uuid
-  matchId    String       @db.Uuid
-  sectorId   String       @db.Uuid
-  status     TicketStatus @default(PENDING)
-  priceCents Int
-  quantity   Int          @default(1)
-  usedQuantity Int        @default(0)
-  entryVersion Int        @default(0)
-  entryToken String?      @unique
-  expiresAt  DateTime?
-  createdAt  DateTime     @default(now())
-  deletedAt  DateTime?
-  voidedQuantity Int     @default(0)
+  id              String             @id @default(uuid()) @db.Uuid
+  userId          String             @db.Uuid
+  matchId         String             @db.Uuid
+  sectorId        String             @db.Uuid
+  status          TicketStatus       @default(PENDING)
+  priceCents      Int
+  quantity        Int                @default(1)
+  usedQuantity    Int                @default(0)
+  entryVersion    Int                @default(0)
+  entryToken      String?            @unique
+  expiresAt       DateTime?
+  createdAt       DateTime           @default(now())
+  deletedAt       DateTime?
+  voidedQuantity  Int                @default(0)
   financialPolicy Json?
-  user       User         @relation(fields: [userId], references: [id])
-  match      Match        @relation(fields: [matchId], references: [id])
-  sector     Sector       @relation(fields: [sectorId], references: [id])
-  payment    TicketPayment?
-  admissions TicketAdmission[]
-  accessCodes TicketAccessCode[]
-  paymentIntents GatewayIntent[]
+  user            User               @relation(fields: [userId], references: [id])
+  match           Match              @relation(fields: [matchId], references: [id])
+  sector          Sector             @relation(fields: [sectorId], references: [id])
+  payment         TicketPayment?
+  admissions      TicketAdmission[]
+  accessCodes     TicketAccessCode[]
+  paymentIntents  GatewayIntent[]
 
   // Active-only uniqueness is enforced by a partial index in the migration.
   @@index([userId, matchId])
@@ -225,39 +229,40 @@ model Ticket {
 }
 
 model Partner {
-  id       String  @id @default(uuid()) @db.Uuid
-  slug     String  @unique
-  name     String
-  discount String
-  category String
-  active   Boolean @default(true)
-  icon     String  @default("gift")
-  description String @default("")
-  conditions  String @default("")
-  location    String @default("")
-  contact String @default("") @db.VarChar(30)
-  website String @default("") @db.VarChar(500)
-  archivedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-  benefits PartnerBenefit[]
-  merchant Merchant?
+  id          String           @id @default(uuid()) @db.Uuid
+  slug        String           @unique
+  name        String
+  discount    String
+  category    String
+  active      Boolean          @default(true)
+  icon        String           @default("gift")
+  description String           @default("")
+  conditions  String           @default("")
+  location    String           @default("")
+  contact     String           @default("") @db.VarChar(30)
+  website     String           @default("") @db.VarChar(500)
+  archivedAt  DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @default(now()) @updatedAt
+  benefits    PartnerBenefit[]
+  merchant    Merchant?
 
   @@index([active, category])
 }
 
 model PartnerBenefit {
-  id String @id @default(uuid()) @db.Uuid
-  partnerId String @db.Uuid
-  title String @db.VarChar(100)
-  description String @default("") @db.VarChar(2000)
-  conditions String @default("") @db.VarChar(2000)
-  active Boolean @default(true)
-  startsAt DateTime?
-  endsAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  id          String    @id @default(uuid()) @db.Uuid
+  partnerId   String    @db.Uuid
+  title       String    @db.VarChar(100)
+  description String    @default("") @db.VarChar(2000)
+  conditions  String    @default("") @db.VarChar(2000)
+  active      Boolean   @default(true)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  partner     Partner   @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+
   @@index([partnerId, active])
 }
 
@@ -302,14 +307,14 @@ model PointEntry {
 }
 
 model Reward {
-  id          String @id @default(uuid()) @db.Uuid
-  slug        String @unique
+  id          String       @id @default(uuid()) @db.Uuid
+  slug        String       @unique
   title       String
   description String
   cost        Int
   stock       Int
-  icon        String @default("gift")
-  active      Boolean @default(true)
+  icon        String       @default("gift")
+  active      Boolean      @default(true)
   redemptions Redemption[]
 }
 
@@ -345,203 +350,213 @@ enum CashEntryKind {
 }
 
 model Tenant {
-  id String @id @default(uuid()) @db.Uuid
-  slug String @unique @db.VarChar(60)
-  name String
-  active Boolean @default(true)
-  offers MerchantOffer[]
-  wallets CashWallet[]
+  id                 String              @id @default(uuid()) @db.Uuid
+  slug               String              @unique @db.VarChar(60)
+  name               String
+  active             Boolean             @default(true)
+  offers             MerchantOffer[]
+  wallets            CashWallet[]
+  estadiosIngressoV1 EstadioIngressoV1[]
 }
 
 model Merchant {
-  id String @id @default(uuid()) @db.Uuid
-  slug String @unique
-  name String
-  publicCode String @unique @default(uuid()) @db.Uuid
-  active Boolean @default(true)
-  partnerId String? @unique @db.Uuid
-  partner Partner? @relation(fields: [partnerId], references: [id])
-  offers MerchantOffer[]
-  operators MerchantOperator[]
+  id         String             @id @default(uuid()) @db.Uuid
+  slug       String             @unique
+  name       String
+  publicCode String             @unique @default(uuid()) @db.Uuid
+  active     Boolean            @default(true)
+  partnerId  String?            @unique @db.Uuid
+  partner    Partner?           @relation(fields: [partnerId], references: [id])
+  offers     MerchantOffer[]
+  operators  MerchantOperator[]
 }
 
 model MerchantOffer {
-  id String @id @default(uuid()) @db.Uuid
-  tenantId String @db.Uuid
-  merchantId String @db.Uuid
-  cashbackBps Int
-  commissionBps Int
-  active Boolean @default(true)
-  customerQrEnabled Boolean @default(false)
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-  merchant Merchant @relation(fields: [merchantId], references: [id])
-  charges PaymentCharge[]
+  id                String          @id @default(uuid()) @db.Uuid
+  tenantId          String          @db.Uuid
+  merchantId        String          @db.Uuid
+  cashbackBps       Int
+  commissionBps     Int
+  active            Boolean         @default(true)
+  customerQrEnabled Boolean         @default(false)
+  tenant            Tenant          @relation(fields: [tenantId], references: [id])
+  merchant          Merchant        @relation(fields: [merchantId], references: [id])
+  charges           PaymentCharge[]
+
   @@unique([tenantId, merchantId])
 }
 
 model MerchantOperator {
-  id String @id @default(uuid()) @db.Uuid
-  userId String @db.Uuid
-  merchantId String @db.Uuid
-  active Boolean @default(true)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  merchant Merchant @relation(fields: [merchantId], references: [id])
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  merchantId String   @db.Uuid
+  active     Boolean  @default(true)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  merchant   Merchant @relation(fields: [merchantId], references: [id])
+
   @@unique([userId, merchantId])
 }
 
 model CashWallet {
-  id String @id @default(uuid()) @db.Uuid
-  tenantId String @db.Uuid
-  userId String @db.Uuid
-  customerCode String @unique
-  balanceCents Int @default(0)
-  createdAt DateTime @default(now())
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-  user User @relation(fields: [userId], references: [id])
-  entries CashEntry[]
-  charges PaymentCharge[]
+  id           String          @id @default(uuid()) @db.Uuid
+  tenantId     String          @db.Uuid
+  userId       String          @db.Uuid
+  customerCode String          @unique
+  balanceCents Int             @default(0)
+  createdAt    DateTime        @default(now())
+  tenant       Tenant          @relation(fields: [tenantId], references: [id])
+  user         User            @relation(fields: [userId], references: [id])
+  entries      CashEntry[]
+  charges      PaymentCharge[]
+
   @@unique([tenantId, userId])
 }
 
 model PaymentCharge {
-  id String @id @default(uuid()) @db.Uuid
-  offerId String @db.Uuid
-  creatorId String @db.Uuid
-  walletId String? @db.Uuid
-  channel PaymentChannel
-  status PaymentStatus @default(PENDING)
-  requestKey String @db.VarChar(80)
-  claimCode String @unique
-  grossCents Int
-  merchantCents Int
-  cashbackCents Int
-  commissionCents Int
-  gatewayFeeCents Int @default(0)
-  provider String
-  providerReference String? @unique
-  pixPayload String?
-  expiresAt DateTime
-  paidAt DateTime?
-  refundedAt DateTime?
-  createdAt DateTime @default(now())
-  offer MerchantOffer @relation(fields: [offerId], references: [id])
-  creator User @relation(fields: [creatorId], references: [id])
-  wallet CashWallet? @relation(fields: [walletId], references: [id], onDelete: Restrict)
-  entries CashEntry[]
-  events PaymentEvent[]
-  paymentIntent GatewayIntent?
+  id                String         @id @default(uuid()) @db.Uuid
+  offerId           String         @db.Uuid
+  creatorId         String         @db.Uuid
+  walletId          String?        @db.Uuid
+  channel           PaymentChannel
+  status            PaymentStatus  @default(PENDING)
+  requestKey        String         @db.VarChar(80)
+  claimCode         String         @unique
+  grossCents        Int
+  merchantCents     Int
+  cashbackCents     Int
+  commissionCents   Int
+  gatewayFeeCents   Int            @default(0)
+  provider          String
+  providerReference String?        @unique
+  pixPayload        String?
+  expiresAt         DateTime
+  paidAt            DateTime?
+  refundedAt        DateTime?
+  createdAt         DateTime       @default(now())
+  offer             MerchantOffer  @relation(fields: [offerId], references: [id])
+  creator           User           @relation(fields: [creatorId], references: [id])
+  wallet            CashWallet?    @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  entries           CashEntry[]
+  events            PaymentEvent[]
+  paymentIntent     GatewayIntent?
+
   @@unique([creatorId, requestKey])
   @@index([offerId, createdAt])
   @@index([walletId, createdAt])
 }
 
 model CashEntry {
-  id String @id @default(uuid()) @db.Uuid
-  walletId String @db.Uuid
-  chargeId String @db.Uuid
-  kind CashEntryKind
-  amountCents Int
+  id                String        @id @default(uuid()) @db.Uuid
+  walletId          String        @db.Uuid
+  chargeId          String        @db.Uuid
+  kind              CashEntryKind
+  amountCents       Int
   balanceAfterCents Int
-  createdAt DateTime @default(now())
-  wallet CashWallet @relation(fields: [walletId], references: [id])
-  charge PaymentCharge @relation(fields: [chargeId], references: [id])
+  createdAt         DateTime      @default(now())
+  wallet            CashWallet    @relation(fields: [walletId], references: [id])
+  charge            PaymentCharge @relation(fields: [chargeId], references: [id])
+
   @@unique([chargeId, kind])
   @@index([walletId, createdAt])
 }
 
 model PaymentEvent {
-  id String @id @default(uuid()) @db.Uuid
-  chargeId String @db.Uuid
-  provider String
-  externalId String
+  id          String        @id @default(uuid()) @db.Uuid
+  chargeId    String        @db.Uuid
+  provider    String
+  externalId  String
   fingerprint String
-  type String
-  occurredAt DateTime
-  createdAt DateTime @default(now())
-  charge PaymentCharge @relation(fields: [chargeId], references: [id])
+  type        String
+  occurredAt  DateTime
+  createdAt   DateTime      @default(now())
+  charge      PaymentCharge @relation(fields: [chargeId], references: [id])
+
   @@unique([provider, externalId])
 }
 
 model TicketPayment {
-  id String @id @default(uuid()) @db.Uuid
-  ticketId String @unique @db.Uuid
-  method TicketPaymentMethod
-  amountCents Int
-  reference String @unique @db.VarChar(100)
-  confirmedById String? @db.Uuid
-  confirmedAt DateTime @default(now())
-  refundedCents Int @default(0)
-  ticket Ticket @relation(fields: [ticketId], references: [id])
-  confirmedBy User? @relation(fields: [confirmedById], references: [id], onDelete: Restrict)
-  financial TicketFinancial?
+  id            String              @id @default(uuid()) @db.Uuid
+  ticketId      String              @unique @db.Uuid
+  method        TicketPaymentMethod
+  amountCents   Int
+  reference     String              @unique @db.VarChar(100)
+  confirmedById String?             @db.Uuid
+  confirmedAt   DateTime            @default(now())
+  refundedCents Int                 @default(0)
+  ticket        Ticket              @relation(fields: [ticketId], references: [id])
+  confirmedBy   User?               @relation(fields: [confirmedById], references: [id], onDelete: Restrict)
+  financial     TicketFinancial?
 }
 
 model FinancialSettings {
-  id String @id @default("main")
-  companyName String @default("Empresa operadora") @db.VarChar(100)
-  companyBps Int @default(1000)
-  commissionBase String @default("NET") @db.VarChar(10)
-  gatewayBps Int @default(0)
-  gatewayFixedCents Int @default(0)
-  payoutWeekday Int @default(5)
-  clubRecipient String @default("") @db.VarChar(200)
-  clubPixKey String @default("") @db.VarChar(200)
-  version Int @default(0)
-  updatedAt DateTime @updatedAt
+  id                String   @id @default("main")
+  companyName       String   @default("Empresa operadora") @db.VarChar(100)
+  companyBps        Int      @default(1000)
+  commissionBase    String   @default("NET") @db.VarChar(10)
+  gatewayBps        Int      @default(0)
+  gatewayFixedCents Int      @default(0)
+  payoutWeekday     Int      @default(5)
+  clubRecipient     String   @default("") @db.VarChar(200)
+  clubPixKey        String   @default("") @db.VarChar(200)
+  version           Int      @default(0)
+  updatedAt         DateTime @updatedAt
 }
 
 model TicketFinancial {
-  id String @id @default(uuid()) @db.Uuid
-  paymentId String @unique @db.Uuid
-  policy Json
-  grossCents Int
-  refundedCents Int @default(0)
+  id              String                 @id @default(uuid()) @db.Uuid
+  paymentId       String                 @unique @db.Uuid
+  policy          Json
+  grossCents      Int
+  refundedCents   Int                    @default(0)
   gatewayFeeCents Int
-  feeSource String @db.VarChar(20)
-  companyCents Int
-  clubCents Int
-  blocked Boolean @default(false)
-  version Int @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  payment TicketPayment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
-  entries TicketFinancialEntry[]
+  feeSource       String                 @db.VarChar(20)
+  companyCents    Int
+  clubCents       Int
+  blocked         Boolean                @default(false)
+  version         Int                    @default(0)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  payment         TicketPayment          @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  entries         TicketFinancialEntry[]
+
   @@index([blocked, feeSource])
 }
 
 model TicketFinancialEntry {
-  id String @id @default(uuid()) @db.Uuid
-  financialId String @db.Uuid
-  revision Int
-  grossDeltaCents Int
+  id                 String          @id @default(uuid()) @db.Uuid
+  financialId        String          @db.Uuid
+  revision           Int
+  grossDeltaCents    Int
   refundedDeltaCents Int
-  gatewayDeltaCents Int
-  companyDeltaCents Int
-  clubDeltaCents Int
-  reason String @db.VarChar(200)
-  createdAt DateTime @default(now())
-  financial TicketFinancial @relation(fields: [financialId], references: [id], onDelete: Restrict)
+  gatewayDeltaCents  Int
+  companyDeltaCents  Int
+  clubDeltaCents     Int
+  reason             String          @db.VarChar(200)
+  createdAt          DateTime        @default(now())
+  financial          TicketFinancial @relation(fields: [financialId], references: [id], onDelete: Restrict)
+
   @@unique([financialId, revision])
   @@index([createdAt])
 }
 
 model ClubPayout {
-  id String @id @default(uuid()) @db.Uuid
-  actorId String @db.Uuid
-  requestKey String @unique @db.VarChar(80)
-  requestHash String @db.VarChar(64)
-  amountCents Int
+  id                 String             @id @default(uuid()) @db.Uuid
+  actorId            String             @db.Uuid
+  requestKey         String             @unique @db.VarChar(80)
+  requestHash        String             @db.VarChar(64)
+  amountCents        Int
   balanceBeforeCents BigInt
-  reference String @unique @db.VarChar(100)
-  recipient String @db.VarChar(200)
-  transferredAt DateTime
-  notes String @default("") @db.VarChar(1000)
-  voidedAt DateTime?
-  voidReason String? @db.VarChar(500)
-  createdAt DateTime @default(now())
-  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
-  withdrawal WithdrawalRequest?
-  attachments PayoutAttachment[]
+  reference          String             @unique @db.VarChar(100)
+  recipient          String             @db.VarChar(200)
+  transferredAt      DateTime
+  notes              String             @default("") @db.VarChar(1000)
+  voidedAt           DateTime?
+  voidReason         String?            @db.VarChar(500)
+  createdAt          DateTime           @default(now())
+  actor              User               @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  withdrawal         WithdrawalRequest?
+  attachments        PayoutAttachment[]
+
   @@index([createdAt])
 }
 
@@ -553,98 +568,102 @@ enum WithdrawalStatus {
 }
 
 model WithdrawalRequest {
-  id String @id @default(uuid()) @db.Uuid
-  actorId String @db.Uuid
-  requestKey String @unique @db.VarChar(80)
-  requestHash String @db.VarChar(64)
-  amountCents Int
-  recipient String @db.VarChar(200)
-  pixKey String @default("") @db.VarChar(200)
-  notes String @default("") @db.VarChar(1000)
-  status WithdrawalStatus @default(PENDING)
-  version Int @default(0)
-  payoutId String? @unique @db.Uuid
-  resolvedAt DateTime?
-  resolutionReason String? @db.VarChar(500)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
-  payout ClubPayout? @relation(fields: [payoutId], references: [id], onDelete: Restrict)
-  attachments PayoutAttachment[]
+  id               String             @id @default(uuid()) @db.Uuid
+  actorId          String             @db.Uuid
+  requestKey       String             @unique @db.VarChar(80)
+  requestHash      String             @db.VarChar(64)
+  amountCents      Int
+  recipient        String             @db.VarChar(200)
+  pixKey           String             @default("") @db.VarChar(200)
+  notes            String             @default("") @db.VarChar(1000)
+  status           WithdrawalStatus   @default(PENDING)
+  version          Int                @default(0)
+  payoutId         String?            @unique @db.Uuid
+  resolvedAt       DateTime?
+  resolutionReason String?            @db.VarChar(500)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  actor            User               @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  payout           ClubPayout?        @relation(fields: [payoutId], references: [id], onDelete: Restrict)
+  attachments      PayoutAttachment[]
+
   @@index([status, createdAt])
 }
 
 model PayoutAttachment {
-  id String @id @default(uuid()) @db.Uuid
-  withdrawalId String? @db.Uuid
-  payoutId String? @db.Uuid
-  actorId String @db.Uuid
-  name String @db.VarChar(180)
-  mimeType String @db.VarChar(40)
-  byteLength Int
-  sha256 String @db.VarChar(64)
-  content Bytes
-  createdAt DateTime @default(now())
-  removedAt DateTime?
-  removalReason String? @db.VarChar(500)
-  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
-  withdrawal WithdrawalRequest? @relation(fields: [withdrawalId], references: [id], onDelete: Restrict)
-  payout ClubPayout? @relation(fields: [payoutId], references: [id], onDelete: Restrict)
+  id            String             @id @default(uuid()) @db.Uuid
+  withdrawalId  String?            @db.Uuid
+  payoutId      String?            @db.Uuid
+  actorId       String             @db.Uuid
+  name          String             @db.VarChar(180)
+  mimeType      String             @db.VarChar(40)
+  byteLength    Int
+  sha256        String             @db.VarChar(64)
+  content       Bytes
+  createdAt     DateTime           @default(now())
+  removedAt     DateTime?
+  removalReason String?            @db.VarChar(500)
+  actor         User               @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  withdrawal    WithdrawalRequest? @relation(fields: [withdrawalId], references: [id], onDelete: Restrict)
+  payout        ClubPayout?        @relation(fields: [payoutId], references: [id], onDelete: Restrict)
+
   @@index([withdrawalId, createdAt])
   @@index([payoutId, createdAt])
 }
 
 // Provider resources are scoped by environment: sandbox IDs never become live IDs.
 model BillingCustomer {
-  id String @id @default(uuid()) @db.Uuid
-  userId String @db.Uuid
-  environment String @db.VarChar(20)
+  id                String          @id @default(uuid()) @db.Uuid
+  userId            String          @db.Uuid
+  environment       String          @db.VarChar(20)
   documentEncrypted String
-  documentLast4 String @db.VarChar(4)
+  documentLast4     String          @db.VarChar(4)
   providerReference String?
   creationStartedAt DateTime?
-  lockedUntil DateTime?
-  lockToken String? @db.Uuid
-  createdAt DateTime @default(now())
-  user User @relation(fields: [userId], references: [id])
-  intents GatewayIntent[]
+  lockedUntil       DateTime?
+  lockToken         String?         @db.Uuid
+  createdAt         DateTime        @default(now())
+  user              User            @relation(fields: [userId], references: [id])
+  intents           GatewayIntent[]
+
   @@unique([userId, environment])
 }
 
 model GatewayIntent {
-  id String @id @default(uuid()) @db.Uuid
-  environment String @db.VarChar(20)
-  ticketId String? @db.Uuid
-  chargeId String? @unique @db.Uuid
-  shopOrderId String? @unique @db.Uuid
-  customerId String @db.Uuid
-  generation String @unique
-  snapshot Json
-  amountCents Int
-  netCents Int?
-  refundedCents Int @default(0)
-  state String @default("QUEUED") @db.VarChar(24)
+  id                String            @id @default(uuid()) @db.Uuid
+  environment       String            @db.VarChar(20)
+  ticketId          String?           @db.Uuid
+  chargeId          String?           @unique @db.Uuid
+  shopOrderId       String?           @unique @db.Uuid
+  customerId        String            @db.Uuid
+  generation        String            @unique
+  snapshot          Json
+  amountCents       Int
+  netCents          Int?
+  refundedCents     Int               @default(0)
+  state             String            @default("QUEUED") @db.VarChar(24)
   providerReference String?
-  pixPayload String?
-  pixImage String?
-  expiresAt DateTime
+  pixPayload        String?
+  pixImage          String?
+  expiresAt         DateTime
   creationStartedAt DateTime?
   cancelRequestedAt DateTime?
   refundRequestedAt DateTime?
-  refundStartedAt DateTime?
-  failureCode String?
-  attempts Int @default(0)
-  wakeVersion Int @default(0)
-  nextAttemptAt DateTime @default(now())
-  lockedUntil DateTime?
-  lockToken String? @db.Uuid
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  ticket Ticket? @relation(fields: [ticketId], references: [id])
-  charge PaymentCharge? @relation(fields: [chargeId], references: [id])
-  shopOrder ShopOrder? @relation(fields: [shopOrderId], references: [id])
-  customer BillingCustomer @relation(fields: [customerId], references: [id])
-  ticketRefundCost TicketRefundCost?
+  refundStartedAt   DateTime?
+  failureCode       String?
+  attempts          Int               @default(0)
+  wakeVersion       Int               @default(0)
+  nextAttemptAt     DateTime          @default(now())
+  lockedUntil       DateTime?
+  lockToken         String?           @db.Uuid
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  ticket            Ticket?           @relation(fields: [ticketId], references: [id])
+  charge            PaymentCharge?    @relation(fields: [chargeId], references: [id])
+  shopOrder         ShopOrder?        @relation(fields: [shopOrderId], references: [id])
+  customer          BillingCustomer   @relation(fields: [customerId], references: [id])
+  ticketRefundCost  TicketRefundCost?
+
   @@unique([environment, providerReference])
   @@index([environment, nextAttemptAt])
   @@index([ticketId, createdAt])
@@ -653,243 +672,504 @@ model GatewayIntent {
 // A late payment can be refunded without ever issuing a TicketPayment receipt.
 // Its provider fee still belongs in the reconciliation and team balance.
 model TicketRefundCost {
-  id String @id @default(uuid()) @db.Uuid
-  intentId String @unique @db.Uuid
-  grossCents Int
-  refundedCents Int
+  id              String        @id @default(uuid()) @db.Uuid
+  intentId        String        @unique @db.Uuid
+  grossCents      Int
+  refundedCents   Int
   gatewayFeeCents Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  intent GatewayIntent @relation(fields: [intentId], references: [id], onDelete: Restrict)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  intent          GatewayIntent @relation(fields: [intentId], references: [id], onDelete: Restrict)
 }
 
 model ShopSettings {
-  id String @id @default("main")
-  mode String @default("INTERNAL") @db.VarChar(20)
-  enabled Boolean @default(false)
-  externalUrl String @default("") @db.VarChar(1000)
-  name String @default("Loja oficial") @db.VarChar(100)
-  pickupEnabled Boolean @default(true)
-  pickupAddress String @default("") @db.VarChar(500)
-  shippingProvider String @default("RULES") @db.VarChar(20)
-  originPostalCode String @default("") @db.VarChar(8)
-  paymentInstructions String @default("") @db.VarChar(1000)
-  supportPhone String @default("") @db.VarChar(11)
-  updatedAt DateTime @updatedAt
+  id                  String   @id @default("main")
+  mode                String   @default("INTERNAL") @db.VarChar(20)
+  enabled             Boolean  @default(false)
+  externalUrl         String   @default("") @db.VarChar(1000)
+  name                String   @default("Loja oficial") @db.VarChar(100)
+  pickupEnabled       Boolean  @default(true)
+  pickupAddress       String   @default("") @db.VarChar(500)
+  shippingProvider    String   @default("RULES") @db.VarChar(20)
+  originPostalCode    String   @default("") @db.VarChar(8)
+  paymentInstructions String   @default("") @db.VarChar(1000)
+  supportPhone        String   @default("") @db.VarChar(11)
+  updatedAt           DateTime @updatedAt
 }
 
 model Product {
-  id String @id @default(uuid()) @db.Uuid
-  name String @db.VarChar(150)
-  description String @default("") @db.VarChar(4000)
-  category String @default("Geral") @db.VarChar(80)
-  images String[] @default([])
-  priceCents Int
+  id             String           @id @default(uuid()) @db.Uuid
+  name           String           @db.VarChar(150)
+  description    String           @default("") @db.VarChar(4000)
+  category       String           @default("Geral") @db.VarChar(80)
+  images         String[]         @default([])
+  priceCents     Int
   compareAtCents Int?
-  costCents Int @default(0)
-  weightGrams Int @default(300)
-  widthCm Int @default(20)
-  heightCm Int @default(5)
-  lengthCm Int @default(25)
-  active Boolean @default(false)
-  featured Boolean @default(false)
-  archivedAt DateTime?
-  version Int @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  variants ProductVariant[]
+  costCents      Int              @default(0)
+  weightGrams    Int              @default(300)
+  widthCm        Int              @default(20)
+  heightCm       Int              @default(5)
+  lengthCm       Int              @default(25)
+  active         Boolean          @default(false)
+  featured       Boolean          @default(false)
+  archivedAt     DateTime?
+  version        Int              @default(0)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  variants       ProductVariant[]
+
   @@index([active, archivedAt, category])
 }
 
 model ProductVariant {
-  id String @id @default(uuid()) @db.Uuid
-  productId String @db.Uuid
-  sku String @unique @db.VarChar(80)
-  label String @default("Único") @db.VarChar(100)
-  stock Int @default(0)
-  lowStock Int @default(5)
-  active Boolean @default(true)
-  version Int @default(0)
-  product Product @relation(fields: [productId], references: [id])
-  items ShopOrderItem[]
+  id        String          @id @default(uuid()) @db.Uuid
+  productId String          @db.Uuid
+  sku       String          @unique @db.VarChar(80)
+  label     String          @default("Único") @db.VarChar(100)
+  stock     Int             @default(0)
+  lowStock  Int             @default(5)
+  active    Boolean         @default(true)
+  version   Int             @default(0)
+  product   Product         @relation(fields: [productId], references: [id])
+  items     ShopOrderItem[]
   movements StockMovement[]
+
   @@index([productId])
 }
 
 model StockMovement {
-  id String @id @default(uuid()) @db.Uuid
-  variantId String @db.Uuid
-  actorId String @db.Uuid
-  orderId String? @db.Uuid
-  requestKey String @unique @db.VarChar(100)
-  kind String @db.VarChar(20)
-  quantity Int
+  id           String         @id @default(uuid()) @db.Uuid
+  variantId    String         @db.Uuid
+  actorId      String         @db.Uuid
+  orderId      String?        @db.Uuid
+  requestKey   String         @unique @db.VarChar(100)
+  kind         String         @db.VarChar(20)
+  quantity     Int
   balanceAfter Int
-  reason String @db.VarChar(500)
-  createdAt DateTime @default(now())
-  variant ProductVariant @relation(fields: [variantId], references: [id])
-  actor User @relation(fields: [actorId], references: [id])
-  order ShopOrder? @relation(fields: [orderId], references: [id])
+  reason       String         @db.VarChar(500)
+  createdAt    DateTime       @default(now())
+  variant      ProductVariant @relation(fields: [variantId], references: [id])
+  actor        User           @relation(fields: [actorId], references: [id])
+  order        ShopOrder?     @relation(fields: [orderId], references: [id])
+
   @@index([variantId, createdAt])
 }
 
 model ShippingRule {
-  id String @id @default(uuid()) @db.Uuid
-  name String @db.VarChar(100)
-  postalCodeFrom String @db.VarChar(8)
-  postalCodeTo String @db.VarChar(8)
-  baseCents Int
-  perKgCents Int @default(0)
+  id             String   @id @default(uuid()) @db.Uuid
+  name           String   @db.VarChar(100)
+  postalCodeFrom String   @db.VarChar(8)
+  postalCodeTo   String   @db.VarChar(8)
+  baseCents      Int
+  perKgCents     Int      @default(0)
   freeAboveCents Int?
-  minDays Int @default(1)
-  maxDays Int @default(5)
-  active Boolean @default(true)
-  version Int @default(0)
-  updatedAt DateTime @updatedAt
+  minDays        Int      @default(1)
+  maxDays        Int      @default(5)
+  active         Boolean  @default(true)
+  version        Int      @default(0)
+  updatedAt      DateTime @updatedAt
 }
 
 model ShopShippingQuote {
-  id String @id @default(uuid()) @db.Uuid
-  userId String @db.Uuid
-  cartHash String @db.VarChar(64)
-  postalCode String @db.VarChar(8)
-  deliveryMethod String @db.VarChar(20)
-  options Json
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  user User @relation(fields: [userId], references: [id])
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @db.Uuid
+  cartHash       String   @db.VarChar(64)
+  postalCode     String   @db.VarChar(8)
+  deliveryMethod String   @db.VarChar(20)
+  options        Json
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id])
+
   @@index([expiresAt])
 }
 
 model ShopOrder {
-  id String @id @default(uuid()) @db.Uuid
-  number Int @unique @default(autoincrement())
-  userId String @db.Uuid
-  requestKey String @db.VarChar(80)
-  requestHash String @db.VarChar(64)
-  status String @default("PENDING") @db.VarChar(20)
-  recipient String @db.VarChar(100)
-  phone String @db.VarChar(11)
-  address Json
-  deliveryMethod String @db.VarChar(20)
-  shippingName String @db.VarChar(150)
-  shippingService String @db.VarChar(80)
-  shippingDays Int
-  shippingSnapshot Json @default("{}")
-  subtotalCents Int
-  shippingCents Int
-  totalCents Int
-  expiresAt DateTime
+  id                  String          @id @default(uuid()) @db.Uuid
+  number              Int             @unique @default(autoincrement())
+  userId              String          @db.Uuid
+  requestKey          String          @db.VarChar(80)
+  requestHash         String          @db.VarChar(64)
+  status              String          @default("PENDING") @db.VarChar(20)
+  recipient           String          @db.VarChar(100)
+  phone               String          @db.VarChar(11)
+  address             Json
+  deliveryMethod      String          @db.VarChar(20)
+  shippingName        String          @db.VarChar(150)
+  shippingService     String          @db.VarChar(80)
+  shippingDays        Int
+  shippingSnapshot    Json            @default("{}")
+  subtotalCents       Int
+  shippingCents       Int
+  totalCents          Int
+  expiresAt           DateTime
   inventoryConsumedAt DateTime?
-  stockRestoredAt DateTime?
-  shippedAt DateTime?
-  deliveredAt DateTime?
-  trackingCode String @default("") @db.VarChar(100)
-  trackingUrl String @default("") @db.VarChar(1000)
-  notes String @default("") @db.VarChar(1000)
-  version Int @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user User @relation(fields: [userId], references: [id])
-  items ShopOrderItem[]
-  payment ShopPayment?
-  paymentIntent GatewayIntent?
-  movements StockMovement[]
+  stockRestoredAt     DateTime?
+  shippedAt           DateTime?
+  deliveredAt         DateTime?
+  trackingCode        String          @default("") @db.VarChar(100)
+  trackingUrl         String          @default("") @db.VarChar(1000)
+  notes               String          @default("") @db.VarChar(1000)
+  version             Int             @default(0)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  user                User            @relation(fields: [userId], references: [id])
+  items               ShopOrderItem[]
+  payment             ShopPayment?
+  paymentIntent       GatewayIntent?
+  movements           StockMovement[]
+
   @@unique([userId, requestKey])
   @@index([status, expiresAt])
   @@index([userId, createdAt])
 }
 
 model ShopOrderItem {
-  id String @id @default(uuid()) @db.Uuid
-  orderId String @db.Uuid
-  variantId String @db.Uuid
-  productName String @db.VarChar(150)
-  variantLabel String @db.VarChar(100)
-  sku String @db.VarChar(80)
-  image String @default("")
-  quantity Int
+  id             String         @id @default(uuid()) @db.Uuid
+  orderId        String         @db.Uuid
+  variantId      String         @db.Uuid
+  productName    String         @db.VarChar(150)
+  variantLabel   String         @db.VarChar(100)
+  sku            String         @db.VarChar(80)
+  image          String         @default("")
+  quantity       Int
   unitPriceCents Int
-  costCents Int
-  order ShopOrder @relation(fields: [orderId], references: [id])
-  variant ProductVariant @relation(fields: [variantId], references: [id])
+  costCents      Int
+  order          ShopOrder      @relation(fields: [orderId], references: [id])
+  variant        ProductVariant @relation(fields: [variantId], references: [id])
+
   @@unique([orderId, variantId])
   @@index([variantId])
 }
 
 model ShopPayment {
-  id String @id @default(uuid()) @db.Uuid
-  orderId String @unique @db.Uuid
-  method TicketPaymentMethod
-  amountCents Int
-  reference String @unique @db.VarChar(100)
-  refundedCents Int @default(0)
-  refundReference String? @unique @db.VarChar(100)
-  confirmedById String? @db.Uuid
-  confirmedAt DateTime @default(now())
-  order ShopOrder @relation(fields: [orderId], references: [id])
-  confirmedBy User? @relation(fields: [confirmedById], references: [id])
+  id              String              @id @default(uuid()) @db.Uuid
+  orderId         String              @unique @db.Uuid
+  method          TicketPaymentMethod
+  amountCents     Int
+  reference       String              @unique @db.VarChar(100)
+  refundedCents   Int                 @default(0)
+  refundReference String?             @unique @db.VarChar(100)
+  confirmedById   String?             @db.Uuid
+  confirmedAt     DateTime            @default(now())
+  order           ShopOrder           @relation(fields: [orderId], references: [id])
+  confirmedBy     User?               @relation(fields: [confirmedById], references: [id])
 }
 
 model GatewayWebhook {
-  id String @id @default(uuid()) @db.Uuid
-  environment String @db.VarChar(20)
-  externalId String @db.VarChar(200)
-  event String @db.VarChar(100)
-  paymentId String? @db.VarChar(100)
-  externalReference String? @db.VarChar(200)
-  fingerprint String @db.VarChar(64)
-  processedAt DateTime?
-  createdAt DateTime @default(now())
+  id                String    @id @default(uuid()) @db.Uuid
+  environment       String    @db.VarChar(20)
+  externalId        String    @db.VarChar(200)
+  event             String    @db.VarChar(100)
+  paymentId         String?   @db.VarChar(100)
+  externalReference String?   @db.VarChar(200)
+  fingerprint       String    @db.VarChar(64)
+  processedAt       DateTime?
+  createdAt         DateTime  @default(now())
+
   @@unique([environment, externalId])
   @@index([environment, processedAt, createdAt])
 }
 
 model TicketAdmission {
-  id String @id @default(uuid()) @db.Uuid
-  ticketId String @db.Uuid
-  actorId String @db.Uuid
-  quantity Int
-  requestKey String @db.VarChar(80)
-  scanId String? @unique @db.Uuid
-  qrVersion Int?
-  createdAt DateTime @default(now())
-  ticket Ticket @relation(fields: [ticketId], references: [id])
-  actor User @relation(fields: [actorId], references: [id])
+  id         String   @id @default(uuid()) @db.Uuid
+  ticketId   String   @db.Uuid
+  actorId    String   @db.Uuid
+  quantity   Int
+  requestKey String   @db.VarChar(80)
+  scanId     String?  @unique @db.Uuid
+  qrVersion  Int?
+  createdAt  DateTime @default(now())
+  ticket     Ticket   @relation(fields: [ticketId], references: [id])
+  actor      User     @relation(fields: [actorId], references: [id])
+
   @@unique([ticketId, requestKey])
 }
 
 model AuditLog {
-  id String @id @default(uuid()) @db.Uuid
-  actorId String @db.Uuid
-  action String
-  entityId String
-  details Json
+  id        String   @id @default(uuid()) @db.Uuid
+  actorId   String   @db.Uuid
+  action    String
+  entityId  String
+  details   Json
   createdAt DateTime @default(now())
-  actor User @relation(fields: [actorId], references: [id])
+  actor     User     @relation(fields: [actorId], references: [id])
+
   @@index([createdAt])
 }
 
 model GateAssignment {
-  id String @id @default(uuid()) @db.Uuid
-  userId String @db.Uuid
-  sectorId String @db.Uuid
-  active Boolean @default(true)
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  sectorId  String   @db.Uuid
+  active    Boolean  @default(true)
   createdAt DateTime @default(now())
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sector Sector @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sector    Sector   @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+
   @@unique([userId, sectorId])
   @@index([userId, active])
 }
 
 model TicketAccessCode {
-  id String @id @default(uuid()) @db.Uuid
-  ticketId String @db.Uuid
-  codeHash String @unique
-  scanId String @unique @db.Uuid
+  id           String   @id @default(uuid()) @db.Uuid
+  ticketId     String   @db.Uuid
+  codeHash     String   @unique
+  scanId       String   @unique @db.Uuid
   entryVersion Int
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
   @@index([expiresAt])
+}
+
+enum TipoCategoriaIngressoV1 {
+  INTEIRA
+  MEIA
+  SOCIO
+  CORTESIA
+}
+
+enum StatusPartidaIngressoV1 {
+  RASCUNHO
+  PUBLICADA
+  ESGOTADA
+  ENCERRADA
+  CANCELADA
+}
+
+enum StatusPagamentoIngressoV1 {
+  PENDENTE
+  PAGO
+  EXPIRADO
+  CANCELADO
+  ESTORNADO
+  ESTORNADO_PARCIALMENTE
+}
+
+enum StatusIngressoV1 {
+  DISPONIVEL
+  RESERVADO
+  VENDIDO
+  UTILIZADO
+  CANCELADO
+  INVALIDADO
+}
+
+model EstadioIngressoV1 {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  nome             String   @db.VarChar(150)
+  cidade           String   @db.VarChar(100)
+  capacidadeMaxima Int
+  ativo            Boolean  @default(true)
+  criadoEm         DateTime @default(now())
+  atualizadoEm     DateTime @updatedAt
+
+  tenant         Tenant                    @relation(fields: [tenantId], references: [id])
+  setores        SetorEstadioIngressoV1[]
+  templatesVenda TemplateVendaIngressoV1[]
+  partidas       PartidaIngressoV1[]
+
+  @@unique([tenantId, nome])
+  @@index([tenantId, ativo])
+  @@map("ingresso_v1_estadios")
+}
+
+model SetorEstadioIngressoV1 {
+  id               String   @id @default(uuid()) @db.Uuid
+  estadioId        String   @db.Uuid
+  nome             String   @db.VarChar(100)
+  capacidadeFisica Int
+  numerado         Boolean  @default(false)
+  portoesAcesso    Json     @default("[]")
+  ativo            Boolean  @default(true)
+  criadoEm         DateTime @default(now())
+  atualizadoEm     DateTime @updatedAt
+
+  estadio          EstadioIngressoV1                @relation(fields: [estadioId], references: [id], onDelete: Cascade)
+  assentos         AssentoIngressoV1[]
+  regrasTemplate   RegraSetorTemplateIngressoV1[]
+  alocacoesPartida AlocacaoSetorPartidaIngressoV1[]
+
+  @@unique([estadioId, nome])
+  @@index([estadioId, ativo])
+  @@map("ingresso_v1_setores_estadio")
+}
+
+model AssentoIngressoV1 {
+  id       String   @id @default(uuid()) @db.Uuid
+  setorId  String   @db.Uuid
+  fileira  String   @db.VarChar(10)
+  numero   Int
+  ativo    Boolean  @default(true)
+  criadoEm DateTime @default(now())
+
+  setor     SetorEstadioIngressoV1 @relation(fields: [setorId], references: [id], onDelete: Cascade)
+  ingressos IngressoV1[]
+
+  @@unique([setorId, fileira, numero])
+  @@index([setorId, ativo])
+  @@map("ingresso_v1_assentos")
+}
+
+model TemplateVendaIngressoV1 {
+  id           String   @id @default(uuid()) @db.Uuid
+  estadioId    String   @db.Uuid
+  nome         String   @db.VarChar(120)
+  descricao    String   @default("")
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  estadio     EstadioIngressoV1              @relation(fields: [estadioId], references: [id], onDelete: Cascade)
+  regrasSetor RegraSetorTemplateIngressoV1[]
+  partidas    PartidaIngressoV1[]
+
+  @@unique([estadioId, nome])
+  @@index([estadioId, ativo])
+  @@map("ingresso_v1_templates_venda")
+}
+
+model RegraSetorTemplateIngressoV1 {
+  id                       String  @id @default(uuid()) @db.Uuid
+  templateId               String  @db.Uuid
+  setorId                  String  @db.Uuid
+  capacidadeLiberadaPadrao Int
+  precoBaseCentavos        Int
+  ativo                    Boolean @default(true)
+
+  template   TemplateVendaIngressoV1       @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  setor      SetorEstadioIngressoV1        @relation(fields: [setorId], references: [id], onDelete: Restrict)
+  categorias CategoriaIngressoTemplateV1[]
+
+  @@unique([templateId, setorId])
+  @@index([setorId])
+  @@map("ingresso_v1_regras_setor_template")
+}
+
+model CategoriaIngressoTemplateV1 {
+  id                 String                  @id @default(uuid()) @db.Uuid
+  regraSetorId       String                  @db.Uuid
+  nome               String                  @db.VarChar(100)
+  tipoCategoria      TipoCategoriaIngressoV1
+  percentualDesconto Int                     @default(0)
+  limiteCota         Int?
+  ativo              Boolean                 @default(true)
+
+  regraSetor RegraSetorTemplateIngressoV1 @relation(fields: [regraSetorId], references: [id], onDelete: Cascade)
+
+  @@unique([regraSetorId, tipoCategoria, nome])
+  @@map("ingresso_v1_categorias_template")
+}
+
+model PartidaIngressoV1 {
+  id              String                  @id @default(uuid()) @db.Uuid
+  estadioId       String                  @db.Uuid
+  templateVendaId String?                 @db.Uuid
+  timeMandante    String                  @db.VarChar(120)
+  timeVisitante   String                  @db.VarChar(120)
+  dataPartida     DateTime
+  inicioVendas    DateTime?
+  fimVendas       DateTime?
+  status          StatusPartidaIngressoV1 @default(RASCUNHO)
+  vendasAtivas    Boolean                 @default(false)
+  criadoEm        DateTime                @default(now())
+  atualizadoEm    DateTime                @updatedAt
+
+  estadio        EstadioIngressoV1                @relation(fields: [estadioId], references: [id], onDelete: Restrict)
+  templateVenda  TemplateVendaIngressoV1?         @relation(fields: [templateVendaId], references: [id], onDelete: Restrict)
+  alocacoesSetor AlocacaoSetorPartidaIngressoV1[]
+  pedidos        PedidoIngressoV1[]
+  ingressos      IngressoV1[]
+
+  @@index([estadioId, dataPartida])
+  @@index([status, dataPartida])
+  @@map("ingresso_v1_partidas")
+}
+
+model AlocacaoSetorPartidaIngressoV1 {
+  id                  String @id @default(uuid()) @db.Uuid
+  partidaId           String @db.Uuid
+  setorId             String @db.Uuid
+  capacidadeLiberada  Int
+  quantidadeVendida   Int    @default(0)
+  quantidadeReservada Int    @default(0)
+  versao              Int    @default(0)
+
+  partida   PartidaIngressoV1       @relation(fields: [partidaId], references: [id], onDelete: Cascade)
+  setor     SetorEstadioIngressoV1  @relation(fields: [setorId], references: [id], onDelete: Restrict)
+  lotes     LoteIngressoPartidaV1[]
+  ingressos IngressoV1[]
+
+  @@unique([partidaId, setorId])
+  @@index([setorId])
+  @@map("ingresso_v1_alocacoes_setor_partida")
+}
+
+model LoteIngressoPartidaV1 {
+  id                String                  @id @default(uuid()) @db.Uuid
+  alocacaoId        String                  @db.Uuid
+  nome              String                  @db.VarChar(100)
+  tipoCategoria     TipoCategoriaIngressoV1
+  precoCentavos     Int
+  quantidadeMaxima  Int
+  quantidadeVendida Int                     @default(0)
+  ativo             Boolean                 @default(true)
+  criadoEm          DateTime                @default(now())
+
+  alocacao  AlocacaoSetorPartidaIngressoV1 @relation(fields: [alocacaoId], references: [id], onDelete: Cascade)
+  ingressos IngressoV1[]
+
+  @@index([alocacaoId, ativo])
+  @@map("ingresso_v1_lotes")
+}
+
+model PedidoIngressoV1 {
+  id                 String                    @id @default(uuid()) @db.Uuid
+  usuarioId          String                    @db.Uuid
+  partidaId          String                    @db.Uuid
+  valorTotalCentavos Int
+  statusPagamento    StatusPagamentoIngressoV1 @default(PENDENTE)
+  transacaoGatewayId String?                   @db.VarChar(150)
+  expiraEm           DateTime?
+  criadoEm           DateTime                  @default(now())
+  atualizadoEm       DateTime                  @updatedAt
+
+  usuario   User              @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+  partida   PartidaIngressoV1 @relation(fields: [partidaId], references: [id], onDelete: Restrict)
+  ingressos IngressoV1[]
+
+  @@index([usuarioId, criadoEm])
+  @@index([partidaId, statusPagamento])
+  @@map("ingresso_v1_pedidos")
+}
+
+model IngressoV1 {
+  id           String           @id @default(uuid()) @db.Uuid
+  partidaId    String           @db.Uuid
+  alocacaoId   String           @db.Uuid
+  loteId       String?          @db.Uuid
+  pedidoId     String?          @db.Uuid
+  assentoId    String?          @db.Uuid
+  nomeTitular  String?          @db.VarChar(150)
+  cpfTitular   String?          @db.VarChar(14)
+  status       StatusIngressoV1 @default(DISPONIVEL)
+  chaveQr      String           @unique @db.VarChar(150)
+  utilizadoEm  DateTime?
+  catracaId    String?          @db.VarChar(50)
+  criadoEm     DateTime         @default(now())
+  atualizadoEm DateTime         @updatedAt
+
+  partida  PartidaIngressoV1              @relation(fields: [partidaId], references: [id], onDelete: Restrict)
+  alocacao AlocacaoSetorPartidaIngressoV1 @relation(fields: [alocacaoId], references: [id], onDelete: Restrict)
+  lote     LoteIngressoPartidaV1?         @relation(fields: [loteId], references: [id], onDelete: Restrict)
+  pedido   PedidoIngressoV1?              @relation(fields: [pedidoId], references: [id], onDelete: Restrict)
+  assento  AssentoIngressoV1?             @relation(fields: [assentoId], references: [id], onDelete: Restrict)
+
+  @@unique([partidaId, assentoId])
+  @@index([partidaId, status])
+  @@index([alocacaoId, status])
+  @@map("ingresso_v1_ingressos")
 }
