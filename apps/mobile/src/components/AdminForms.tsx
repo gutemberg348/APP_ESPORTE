@@ -25,10 +25,10 @@ function useFormAction(onSaved: () => Promise<void>) {
 export function MatchForm({ match, onClose, onSaved }: { match: Match | null; onClose: () => void; onSaved: () => Promise<void> }) {
   const { token } = useSession();
   const { colors } = useTheme();
-  const [home, setHome] = useState(match?.homeTeam || club.upperName);
+  const [home, setHome] = useState(match?.homeTeam || '');
   const [away, setAway] = useState(match?.awayTeam || '');
   const [starts, setStarts] = useState(match ? formDate(match.startsAt) : '');
-  const [stadium, setStadium] = useState(match?.stadium || 'José Cavalcanti');
+  const [stadium, setStadium] = useState(match?.stadium || '');
   const [competition, setCompetition] = useState(match?.competition || '');
   const [salesOpen, setSalesOpen] = useState(match?.salesOpenAt ? formDate(match.salesOpenAt) : '');
   const [salesClose, setSalesClose] = useState(match?.salesCloseAt ? formDate(match.salesCloseAt) : '');
