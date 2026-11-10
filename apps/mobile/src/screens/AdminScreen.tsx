@@ -31,6 +31,12 @@ import { AdminPartnersPanel } from '../components/admin/AdminPartnersPanel';
 import { AdminEmailPanel } from '../components/admin/AdminEmailPanel';
 import { AdminAccountForm } from '../components/admin/AdminAccountForm';
 import { recoveryApi } from '../services/recovery';
+import { EstadiosIngressoV1Panel } from '../components/admin/ingresso-v1/EstadiosIngressoV1Panel';
+import { TemplatesSetorIngressoV1Panel } from '../components/admin/ingresso-v1/TemplatesSetorIngressoV1Panel';
+import { TemplatesVendaIngressoV1Panel } from '../components/admin/ingresso-v1/TemplatesVendaIngressoV1Panel';
+import { PartidasIngressoV1Panel } from '../components/admin/ingresso-v1/PartidasIngressoV1Panel';
+import { IngressosEmitidosV1Panel } from '../components/admin/ingresso-v1/IngressosEmitidosV1Panel';
+import { PortariaIngressoV1Panel } from '../components/admin/ingresso-v1/PortariaIngressoV1Panel';
 export function AdminScreen({ onBack }: { onBack: () => void }) {
   return <AdminThemeProvider><AdminWorkspace onBack={onBack} /></AdminThemeProvider>;
 }
@@ -65,6 +71,12 @@ function AdminWorkspace({ onBack }: { onBack: () => void }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [reportRefresh, setReportRefresh] = useState(0);
+  const [estadioCreateOpen, setEstadioCreateOpen] = useState(false);
+  const [templateCreateOpen, setTemplateCreateOpen] = useState(false);
+  const [templateVendaCreateOpen, setTemplateVendaCreateOpen] = useState(false);
+  const [partidaV1CreateOpen, setPartidaV1CreateOpen] = useState(false);
+  const [ingressoV1CreateOpen, setIngressoV1CreateOpen] = useState(false);
+  const [selectedPartidaV1Id, setSelectedPartidaV1Id] = useState<string | undefined>(undefined);
   const revision = useRef(0);
   const lock = useRef(false);
   async function refresh() {
@@ -86,10 +98,19 @@ function AdminWorkspace({ onBack }: { onBack: () => void }) {
     try { await work(); if (refreshAfter) await refresh(); } catch (err) { setError(messageOf(err)); } finally { setBusy(false); lock.current = false; }
   }
   if (member?.role !== 'ADMIN') return <Page><Text style={{ color: colors.danger }}>Acesso administrativo necessário.</Text></Page>;
-  function select(section: string) { setTab(section); setError(''); setNotice(''); }
+  function select(section: string) {
+    setTab(section);
+    setError('');
+    setNotice('');
+    setEstadioCreateOpen(false);
+    setTemplateCreateOpen(false);
+    setTemplateVendaCreateOpen(false);
+    setPartidaV1CreateOpen(false);
+    setIngressoV1CreateOpen(false);
+  }
   function openPayment(ticket: AdminTicket) { setPayment(ticket); setGatewayFee('0,00'); setReference(''); setVerified(false); setReceived((ticket.priceCents / 100).toFixed(2).replace('.', ',')); }
   function openMembership(user: Member) { setAssociate(user); setPlanId(plans.find((plan) => plan.name === user.membership?.plan.name)?.id || plans[0]?.id || ''); setMembershipStatus(user.membership?.status || 'ACTIVE'); setValidUntil(user.membership ? formDate(user.membership.validUntil) : ''); }
-  const action = ['Visão geral', 'Jogos'].includes(tab) ? <AdminAction primary label="Cadastrar jogo" icon={Plus} disabled={busy} onPress={() => setMatchEdit(null)} /> : tab === 'Planos' ? <AdminAction primary label="Criar plano" icon={Plus} disabled={busy} onPress={() => setPlanEdit(null)} /> : undefined;
+  const action = ['Visão geral', 'Jogos'].includes(tab) ? <AdminAction primary label="Cadastrar jogo" icon={Plus} disabled={busy} onPress={() => setMatchEdit(null)} /> : tab === 'Planos' ? <AdminAction primary label="Criar plano" icon={Plus} disabled={busy} onPress={() => setPlanEdit(null)} /> : tab === 'Estádios' ? <AdminAction primary label="Cadastrar estádio" icon={Plus} disabled={busy} onPress={() => setEstadioCreateOpen(true)} /> : tab === 'Templates de setores' ? <AdminAction primary label="Criar template" icon={Plus} disabled={busy} onPress={() => setTemplateCreateOpen(true)} /> : tab === 'Templates de venda' ? <AdminAction primary label="Criar template de venda" icon={Plus} disabled={busy} onPress={() => setTemplateVendaCreateOpen(true)} /> : tab === 'Partidas V1' ? <AdminAction primary label="Cadastrar partida" icon={Plus} disabled={busy} onPress={() => setPartidaV1CreateOpen(true)} /> : tab === 'Pedidos e ingressos V1' ? <AdminAction primary label="Emitir ingresso" icon={Plus} disabled={busy} onPress={() => setIngressoV1CreateOpen(true)} /> : undefined;
   return <AdminLayout active={tab} onSelect={select} onBack={onBack} onSignOut={() => void perform(signOut, false)} refreshing={loading} onRefresh={() => void refresh()} busy={busy} action={action}>
     {!!error && <Panel style={{ borderColor: colors.danger, borderRadius: 12, padding: 16 }}><Text accessibilityRole="alert" style={{ color: colors.danger, fontSize: 13 }}>{error}</Text></Panel>}
     {!!notice && <Text accessibilityRole="alert" style={{ color: colors.primary, fontSize: 13 }}>{notice}</Text>}
@@ -110,6 +131,12 @@ function AdminWorkspace({ onBack }: { onBack: () => void }) {
     {tab === 'Parceiros' && <AdminPartnersPanel refreshKey={reportRefresh} />}
     {tab === 'Configurações' && <AdminSettingsPanel refreshKey={reportRefresh} onSelect={select} />}
     {tab === 'Email e acesso' && <AdminEmailPanel refreshKey={reportRefresh} users={users} />}
+    {tab === 'Estádios' && <EstadiosIngressoV1Panel token={token!} busy={busy} onBusy={setBusy} onNotice={setNotice} onError={setError} createOpen={estadioCreateOpen} onConsumeCreate={() => setEstadioCreateOpen(false)} />}
+    {tab === 'Templates de setores' && <TemplatesSetorIngressoV1Panel token={token!} busy={busy} onBusy={setBusy} onNotice={setNotice} onError={setError} createOpen={templateCreateOpen} onConsumeCreate={() => setTemplateCreateOpen(false)} />}
+    {tab === 'Templates de venda' && <TemplatesVendaIngressoV1Panel token={token!} busy={busy} onBusy={setBusy} onNotice={setNotice} onError={setError} createOpen={templateVendaCreateOpen} onConsumeCreate={() => setTemplateVendaCreateOpen(false)} />}
+    {tab === 'Partidas V1' && <PartidasIngressoV1Panel token={token!} busy={busy} onBusy={setBusy} onNotice={setNotice} onError={setError} createOpen={partidaV1CreateOpen} onConsumeCreate={() => setPartidaV1CreateOpen(false)} onOpenIngressos={() => { setSelectedPartidaV1Id(undefined); select('Pedidos e ingressos V1'); setIngressoV1CreateOpen(true); }} />}
+    {tab === 'Pedidos e ingressos V1' && <IngressosEmitidosV1Panel token={token!} busy={busy} onBusy={setBusy} onNotice={setNotice} onError={setError} createOpen={ingressoV1CreateOpen} onConsumeCreate={() => setIngressoV1CreateOpen(false)} initialPartidaId={selectedPartidaV1Id} />}
+    {tab === 'Portaria V1' && <PortariaIngressoV1Panel token={token!} busy={busy} onBusy={setBusy} onNotice={setNotice} onError={setError} />}
     {accountEdit && <AdminAccountForm userId={accountEdit.id} onClose={() => setAccountEdit(null)} onSaved={async (signedOut) => { setAccountEdit(null); setNotice('Conta atualizada.'); if (!signedOut) await refresh(); }} />}
     {matchEdit !== undefined && <MatchForm match={matchEdit} onClose={() => setMatchEdit(undefined)} onSaved={async () => { setMatchEdit(undefined); await refresh(); }} />}
     {sectorEdit && <SectorForm {...sectorEdit} onClose={() => setSectorEdit(null)} onSaved={async () => { setSectorEdit(null); await refresh(); }} />}
@@ -118,4 +145,9 @@ function AdminWorkspace({ onBack }: { onBack: () => void }) {
     {payment && <Sheet visible title="Confirmar recebimento" onClose={busy ? () => {} : () => setPayment(null)}><Text style={{ color: colors.text }}>{payment.user.name} · {money(payment.priceCents)}</Text><Text style={{ color: colors.muted, fontSize: 14 }}>Confirme somente depois de conferir o recebimento na conta ou no caixa do clube. Isso emite o ingresso e registra seu nome na auditoria.</Text><AdminField label="Valor recebido" prefix="R$" value={received} onChange={setReceived} numeric /><AdminField label="Taxa efetivamente paga neste recebimento" prefix="R$" value={gatewayFee} onChange={setGatewayFee} numeric hint="Deixe zero para recebimento sem tarifa. Essa taxa será descontada antes da divisão configurada." /><AdminField label="Referência única do recibo ou transação" value={reference} onChange={setReference} /><AdminToggle label="Conferi o recebimento deste pagamento" value={verified} onChange={setVerified} />{!!error && <Text style={{ color: colors.danger }}>{error}</Text>}<Button label="Confirmar pagamento e emitir ingresso" loading={busy} disabled={!verified} onPress={() => void perform(async () => { await adminApi.confirm(token!, payment.id, parseAmount(received, true), reference.trim(), parseAmount(gatewayFee, true)); setPayment(null); setNotice('Pagamento registrado e ingresso emitido.'); })} /></Sheet>}
     {associate && <Sheet visible title={`Associação · ${associate.name}`} onClose={busy ? () => {} : () => setAssociate(null)}><AdminSelect label="Plano" value={planId} onChange={setPlanId} disabled={busy} options={plans.map((plan) => ({ value: plan.id, label: plan.name, description: money(plan.priceCents) + ' / mês' }))} /><AdminDateTimeField label="Validade da associação" value={validUntil} onChange={setValidUntil} disabled={busy} /><AdminSelect label="Situação" value={membershipStatus} onChange={(value) => setMembershipStatus(value as typeof membershipStatus)} options={[{ value: 'ACTIVE', label: 'Ativa' }, { value: 'PENDING', label: 'Pendente' }, { value: 'EXPIRED', label: 'Expirada' }]} />{!!error && <Text style={{ color: colors.danger }}>{error}</Text>}<Button label="Salvar associação" loading={busy} disabled={!planId} onPress={() => void perform(async () => { await adminApi.membership(token!, { userId: associate.id, planId, status: membershipStatus, validUntil: parseClubDate(validUntil) }); setAssociate(null); })} /></Sheet>}
   </AdminLayout>;
+}
+
+function IngressosV1PreparationPanel({ title }: { title: string }) {
+  const { colors } = useTheme();
+  return <Panel style={{ borderRadius: 16, padding: 22, gap: 10 }}><Text heading style={{ color: colors.text, fontSize: 18 }}>{title}</Text><Text style={{ color: colors.muted, fontSize: 13, lineHeight: 21 }}>Esta página faz parte do sistema paralelo Ingresso V1 e será implementada na próxima etapa. O sistema atual de ingressos permanece separado e inalterado.</Text></Panel>;
 }

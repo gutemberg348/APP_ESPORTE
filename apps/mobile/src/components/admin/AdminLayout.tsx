@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, ScrollView, Pressable, Modal, useWindowDimensions, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -24,6 +24,12 @@ export const adminSections = [
   { name: 'Configurações', icon: Settings2, group: 'Gestão', description: 'Regras comerciais, prazos, pontos e recompensas.' },
   { name: 'Email e acesso', icon: UserRoundCog, group: 'Gestão', description: 'Recuperação de senha, configuração SMTP e acompanhamento dos envios.' },
   { name: 'Funcionários', icon: UserRoundCog, group: 'Gestão', description: 'Equipe, acessos e escalas de portaria.' },
+  { name: 'Estádios', icon: Building2, group: 'Gestão de Ingressos', description: 'Estádios e estrutura de setores.' },
+  { name: 'Templates de setores', icon: Building2, group: 'Gestão de Ingressos', description: 'Modelos de setores e assentos.' },
+  { name: 'Templates de venda', icon: Ticket, group: 'Gestão de Ingressos', description: 'Regras comerciais por estádio.' },
+  { name: 'Partidas V1', icon: CalendarDays, group: 'Gestão de Ingressos', description: 'Crie partidas e aplique templates de venda.' },
+  { name: 'Pedidos e ingressos V1', icon: Ticket, group: 'Gestão de Ingressos', description: 'Acompanhe pedidos e ingressos do novo sistema.' },
+  { name: 'Portaria V1', icon: ScanLine, group: 'Gestão de Ingressos', description: 'Valide entradas do sistema paralelo após sua implementação.' },
   { name: 'Portaria', icon: ScanLine, group: 'Controle', description: 'Confira o ingresso e registre a entrada.' },
   { name: 'Histórico de portaria', icon: History, group: 'Controle', description: 'Entradas, recusas e protocolos de validação.' },
   { name: 'Auditoria', icon: History, group: 'Controle', description: 'Consulte as ações realizadas pela administração.' },
@@ -62,5 +68,6 @@ export function AdminBadge({ label, tone = 'neutral' }: { label: string; tone?: 
 }
 export function AdminTable({ columns, rows, empty, loading = false, minWidth = 760 }: { columns: { label: string; flex?: number; width?: number }[]; rows: { id: string; cells: React.ReactNode[] }[]; empty: string; loading?: boolean; minWidth?: number }) {
   const { colors } = useTheme();
-  return <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, overflow: 'hidden', backgroundColor: colors.surface }}><ScrollView horizontal contentContainerStyle={{ flexGrow: 1 }}><View style={{ flex: 1, minWidth }}><View style={{ flexDirection: 'row', gap: 18, paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.soft, borderBottomWidth: 1, borderColor: colors.border }}>{columns.map((column, index) => <Text key={index} style={{ flex: column.width ? undefined : column.flex || 1, width: column.width, color: colors.muted, fontSize: 11, lineHeight: 18, fontWeight: '500' }}>{column.label}</Text>)}</View>{rows.map((row, index) => <View key={row.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 18, paddingHorizontal: 20, paddingVertical: 17, borderBottomWidth: index === rows.length - 1 ? 0 : 1, borderColor: colors.border }}>{row.cells.map((cell, index) => <View key={index} style={{ flex: columns[index]?.width ? undefined : columns[index]?.flex || 1, width: columns[index]?.width, minWidth: 0 }}>{cell}</View>)}</View>)}{!rows.length && <View style={{ padding: 38, alignItems: 'center', gap: 10 }}>{loading && <ActivityIndicator color={colors.primary} />}<Text style={{ color: colors.muted, fontSize: 13 }}>{loading ? 'Carregando registros…' : empty}</Text></View>}</View></ScrollView></View>;
+  const content = <View style={{ flex: 1, width: '100%', minWidth }}><View style={{ flexDirection: 'row', gap: 18, paddingHorizontal: 20, paddingVertical: 12, backgroundColor: colors.soft, borderBottomWidth: 1, borderColor: colors.border }}>{columns.map((column, index) => <Text key={index} style={{ flex: column.width ? undefined : column.flex || 1, width: column.width, color: colors.muted, fontSize: 11, lineHeight: 18, fontWeight: '500' }}>{column.label}</Text>)}</View>{rows.map((row, index) => <View key={row.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 18, paddingHorizontal: 20, paddingVertical: 17, borderBottomWidth: index === rows.length - 1 ? 0 : 1, borderColor: colors.border }}>{row.cells.map((cell, index) => <View key={index} style={{ flex: columns[index]?.width ? undefined : columns[index]?.flex || 1, width: columns[index]?.width, minWidth: 0 }}>{cell}</View>)}</View>)}{!rows.length && <View style={{ padding: 38, alignItems: 'center', gap: 10 }}>{loading && <ActivityIndicator color={colors.primary} />}<Text style={{ color: colors.muted, fontSize: 13 }}>{loading ? 'Carregando registros…' : empty}</Text></View>}</View>;
+  return <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, overflow: 'hidden', backgroundColor: colors.surface }}>{minWidth > 0 ? <ScrollView horizontal contentContainerStyle={{ flexGrow: 1 }}>{content}</ScrollView> : content}</View>;
 }

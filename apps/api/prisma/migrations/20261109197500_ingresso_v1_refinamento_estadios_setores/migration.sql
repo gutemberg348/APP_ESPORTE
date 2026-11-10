@@ -1,0 +1,15 @@
+ALTER TABLE "ingresso_v1_estadios"
+  ADD COLUMN IF NOT EXISTS "localizacao" VARCHAR(500),
+  ADD COLUMN IF NOT EXISTS "fotoUrl" TEXT;
+
+ALTER TABLE "ingresso_v1_templates_setor"
+  ADD COLUMN IF NOT EXISTS "bloco" VARCHAR(40),
+  ADD COLUMN IF NOT EXISTS "nivel" VARCHAR(40),
+  ADD COLUMN IF NOT EXISTS "capacidadeVisitante" INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "permiteVisitante" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS "portoesAcesso" JSONB NOT NULL DEFAULT '[]',
+  ADD COLUMN IF NOT EXISTS "fileiraInicialPadrao" VARCHAR(10),
+  ADD COLUMN IF NOT EXISTS "quantidadeFileirasPadrao" INTEGER,
+  ADD COLUMN IF NOT EXISTS "numeroInicialPadrao" INTEGER,
+  ADD COLUMN IF NOT EXISTS "assentosPorFileiraPadrao" INTEGER;
+

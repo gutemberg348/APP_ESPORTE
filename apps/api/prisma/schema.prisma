@@ -371,6 +371,7 @@ model Tenant {
   offers             MerchantOffer[]
   wallets            CashWallet[]
   estadiosIngressoV1 EstadioIngressoV1[]
+  templatesSetorIngressoV1 TemplateSetorIngressoV1[]
 }
 
 model Merchant {
@@ -974,14 +975,30 @@ enum StatusIngressoV1 {
 }
 
 model EstadioIngressoV1 {
-  id               String   @id @default(uuid()) @db.Uuid
-  tenantId         String   @db.Uuid
-  nome             String   @db.VarChar(150)
-  cidade           String   @db.VarChar(100)
-  capacidadeMaxima Int
-  ativo            Boolean  @default(true)
-  criadoEm         DateTime @default(now())
-  atualizadoEm     DateTime @updatedAt
+  id                           String   @id @default(uuid()) @db.Uuid
+  tenantId                     String   @db.Uuid
+  nome                         String   @db.VarChar(150)
+  nomePopular                  String?  @db.VarChar(150)
+  cidade                       String   @db.VarChar(100)
+  estado                       String?  @db.Char(2)
+  bairro                       String?  @db.VarChar(120)
+  endereco                     String?  @db.VarChar(250)
+  localizacao                  String?  @db.VarChar(500)
+  cep                          String?  @db.VarChar(9)
+  cnpjProprietarioOrganizador  String?  @db.VarChar(20)
+  descricao                    String?  @db.VarChar(2000)
+  fotoUrl                      String?
+  capacidadeMaxima             Int
+  capacidadeOperacionalLaudo   Int?
+  capacidadeSentada            Int?
+  capacidadeArquibancada       Int?
+  quantidadePortoes            Int      @default(0)
+  possuiAcessibilidade         Boolean  @default(false)
+  permiteSetorVisitante        Boolean  @default(false)
+  mapaUrl                      String?  @db.VarChar(500)
+  ativo                        Boolean  @default(true)
+  criadoEm                     DateTime @default(now())
+  atualizadoEm                 DateTime @updatedAt
 
   tenant         Tenant                    @relation(fields: [tenantId], references: [id])
   setores        SetorEstadioIngressoV1[]
@@ -994,17 +1011,45 @@ model EstadioIngressoV1 {
 }
 
 model SetorEstadioIngressoV1 {
-  id               String   @id @default(uuid()) @db.Uuid
-  estadioId        String   @db.Uuid
-  nome             String   @db.VarChar(100)
-  capacidadeFisica Int
-  numerado         Boolean  @default(false)
-  portoesAcesso    Json     @default("[]")
-  ativo            Boolean  @default(true)
-  criadoEm         DateTime @default(now())
-  atualizadoEm     DateTime @updatedAt
+  id                        String   @id @default(uuid()) @db.Uuid
+  estadioId                 String   @db.Uuid
+  templateId                String?  @db.Uuid
+  nome                      String   @db.VarChar(160)
+  corSetorHex               String   @default("#DC2626") @db.VarChar(9)
+  tipoTorcida               String   @default("MANDANTE") @db.VarChar(20)
+  acessoExterno             String?  @db.VarChar(150)
+  portaoEntrada             String?  @db.VarChar(150)
+  localizacao               String?  @db.VarChar(250)
+  fotoUrl                   String?
+  tipo                      String?  @db.VarChar(40)
+  bloco                     String?  @db.VarChar(40)
+  nivel                     String?  @db.VarChar(40)
+  descricao                 String?  @db.VarChar(1000)
+  orientacaoSolar           String   @default("PARCIAL") @db.VarChar(20)
+  possuiCadeiras            Boolean  @default(false)
+  modeloCadeira             String?  @db.VarChar(80)
+  corCadeira                String?  @db.VarChar(40)
+  larguraCadeiraCm          Int?
+  possuiEncosto             Boolean  @default(false)
+  capacidadeFisica          Int
+  capacidadeVendaPadrao     Int?
+  capacidadeVisitante       Int      @default(0)
+  numerado                  Boolean  @default(false)
+  exigeBlocoModulo          Boolean  @default(false)
+  exigeNivelAnel            Boolean  @default(false)
+  acessivel                 Boolean  @default(false)
+  permiteVisitante          Boolean  @default(false)
+  tipoValidacao             String   @default("QR_CODE_ESTATICO") @db.VarChar(30)
+  instrucaoAcomodacao       String?  @db.VarChar(500)
+  avisosObrigatoriosSetor   String?  @db.VarChar(1000)
+  configuracaoMalhaAssentos Json?
+  portoesAcesso             Json     @default("[]")
+  ativo                     Boolean  @default(true)
+  criadoEm                  DateTime @default(now())
+  atualizadoEm              DateTime @updatedAt
 
   estadio          EstadioIngressoV1                @relation(fields: [estadioId], references: [id], onDelete: Cascade)
+  template         TemplateSetorIngressoV1?          @relation(fields: [templateId], references: [id], onDelete: SetNull)
   assentos         AssentoIngressoV1[]
   regrasTemplate   RegraSetorTemplateIngressoV1[]
   alocacoesPartida AlocacaoSetorPartidaIngressoV1[]
@@ -1014,11 +1059,99 @@ model SetorEstadioIngressoV1 {
   @@map("ingresso_v1_setores_estadio")
 }
 
+model TemplateSetorIngressoV1 {
+  id                        String   @id @default(uuid()) @db.Uuid
+  tenantId                  String   @db.Uuid
+  slug                      String?  @db.VarChar(120)
+  nome                      String   @db.VarChar(160)
+  corSetorHex               String   @default("#DC2626") @db.VarChar(9)
+  tipoTorcida               String   @default("MANDANTE") @db.VarChar(20)
+  acessoExterno             String?  @db.VarChar(150)
+  portaoEntrada             String?  @db.VarChar(150)
+  tipo                      String?  @db.VarChar(40)
+  bloco                     String?  @db.VarChar(40)
+  nivel                     String?  @db.VarChar(40)
+  descricao                 String?  @db.VarChar(1000)
+  orientacaoSolar           String   @default("PARCIAL") @db.VarChar(20)
+  possuiCadeiras            Boolean  @default(false)
+  modeloCadeira             String?  @db.VarChar(80)
+  corCadeira                String?  @db.VarChar(40)
+  larguraCadeiraCm          Int?
+  possuiEncosto             Boolean  @default(false)
+  capacidadeFisica          Int
+  capacidadeVendaPadrao     Int?
+  capacidadeVisitante       Int      @default(0)
+  numerado                  Boolean  @default(false)
+  exigeBlocoModulo          Boolean  @default(false)
+  exigeNivelAnel            Boolean  @default(false)
+  acessivel                 Boolean  @default(false)
+  permiteVisitante          Boolean  @default(false)
+  tipoValidacao             String   @default("QR_CODE_ESTATICO") @db.VarChar(30)
+  instrucaoAcomodacao       String?  @db.VarChar(500)
+  avisosObrigatoriosSetor   String?  @db.VarChar(1000)
+  configuracaoMalhaAssentos Json?
+  portoesAcesso             Json     @default("[]")
+  fileiraInicialPadrao      String?  @db.VarChar(10)
+  quantidadeFileirasPadrao  Int?
+  numeroInicialPadrao       Int?
+  assentosPorFileiraPadrao  Int?
+  ativo                     Boolean  @default(true)
+  criadoEm                  DateTime @default(now())
+  atualizadoEm              DateTime @updatedAt
+
+  tenant      Tenant                         @relation(fields: [tenantId], references: [id])
+  setores     SetorEstadioIngressoV1[]
+  nivelRegras TemplateNivelRegraIngressoV1[]
+
+  @@unique([tenantId, nome])
+  @@index([tenantId, ativo])
+  @@map("ingresso_v1_templates_setor")
+}
+
+model TemplateNivelRegraIngressoV1 {
+  id                 String   @id @default(uuid()) @db.Uuid
+  templateId         String   @map("template_id") @db.Uuid
+  nomeNivel          String   @map("nome_nivel") @db.VarChar(120)
+  blocoInicio        Int      @map("bloco_inicio")
+  blocoFim           Int      @map("bloco_fim")
+  fileiraInicio      String   @map("fileira_inicio") @db.VarChar(10)
+  fileiraFim         String   @map("fileira_fim") @db.VarChar(10)
+  cadeirasPorFileira Int      @map("cadeiras_por_fileira")
+  criadoEm           DateTime @default(now()) @map("criado_em")
+  atualizadoEm       DateTime @updatedAt @map("atualizado_em")
+
+  template TemplateSetorIngressoV1          @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  excecoes TemplateBlocoExcecaoIngressoV1[]
+
+  @@index([templateId])
+  @@map("template_nivel_regras")
+}
+
+model TemplateBlocoExcecaoIngressoV1 {
+  id                 String   @id @default(uuid()) @db.Uuid
+  nivelRegraId       String   @map("nivel_regra_id") @db.Uuid
+  numeroBloco        Int      @map("numero_bloco")
+  cadeirasPorFileira Int      @map("cadeiras_por_fileira")
+  criadoEm           DateTime @default(now()) @map("criado_em")
+  atualizadoEm       DateTime @updatedAt @map("atualizado_em")
+
+  nivelRegra TemplateNivelRegraIngressoV1 @relation(fields: [nivelRegraId], references: [id], onDelete: Cascade)
+
+  @@unique([nivelRegraId, numeroBloco])
+  @@index([nivelRegraId])
+  @@map("template_bloco_excecoes")
+}
+
 model AssentoIngressoV1 {
   id       String   @id @default(uuid()) @db.Uuid
   setorId  String   @db.Uuid
+  nivel    String?  @db.VarChar(60)
+  bloco    String?  @db.VarChar(40)
   fileira  String   @db.VarChar(10)
   numero   Int
+  tipo     String?  @db.VarChar(40)
+  acessivel Boolean @default(false)
+  reservadoVisitante Boolean @default(false)
   ativo    Boolean  @default(true)
   criadoEm DateTime @default(now())
 
@@ -1163,20 +1296,23 @@ model PedidoIngressoV1 {
 }
 
 model IngressoV1 {
-  id           String           @id @default(uuid()) @db.Uuid
-  partidaId    String           @db.Uuid
-  alocacaoId   String           @db.Uuid
-  loteId       String?          @db.Uuid
-  pedidoId     String?          @db.Uuid
-  assentoId    String?          @db.Uuid
-  nomeTitular  String?          @db.VarChar(150)
-  cpfTitular   String?          @db.VarChar(14)
-  status       StatusIngressoV1 @default(DISPONIVEL)
-  chaveQr      String           @unique @db.VarChar(150)
-  utilizadoEm  DateTime?
-  catracaId    String?          @db.VarChar(50)
-  criadoEm     DateTime         @default(now())
-  atualizadoEm DateTime         @updatedAt
+  id               String           @id @default(uuid()) @db.Uuid
+  partidaId        String           @db.Uuid
+  alocacaoId       String           @db.Uuid
+  loteId           String?          @db.Uuid
+  pedidoId         String?          @db.Uuid
+  assentoId        String?          @db.Uuid
+  blocoEscolhido   Int?             @map("bloco_escolhido")
+  fileiraEscolhida String?          @map("fileira_escolhida") @db.VarChar(10)
+  assentoEscolhido Int?             @map("assento_escolhido")
+  nomeTitular      String?          @db.VarChar(150)
+  cpfTitular       String?          @db.VarChar(14)
+  status           StatusIngressoV1 @default(DISPONIVEL)
+  chaveQr          String           @unique @db.VarChar(512)
+  utilizadoEm      DateTime?
+  catracaId        String?          @db.VarChar(50)
+  criadoEm         DateTime         @default(now())
+  atualizadoEm     DateTime         @updatedAt
 
   partida  PartidaIngressoV1              @relation(fields: [partidaId], references: [id], onDelete: Restrict)
   alocacao AlocacaoSetorPartidaIngressoV1 @relation(fields: [alocacaoId], references: [id], onDelete: Restrict)
@@ -1185,7 +1321,9 @@ model IngressoV1 {
   assento  AssentoIngressoV1?             @relation(fields: [assentoId], references: [id], onDelete: Restrict)
 
   @@unique([partidaId, assentoId])
+  @@unique([alocacaoId, blocoEscolhido, fileiraEscolhida, assentoEscolhido])
   @@index([partidaId, status])
   @@index([alocacaoId, status])
+  @@index([alocacaoId, blocoEscolhido, fileiraEscolhida, assentoEscolhido])
   @@map("ingresso_v1_ingressos")
 }
