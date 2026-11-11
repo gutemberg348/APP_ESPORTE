@@ -1,4 +1,5 @@
-﻿import express from 'express';
+import { isIP } from 'node:net';
+import express from 'express';
 import { requestContext } from './middleware/request-context.js';
 import { fileURLToPath } from 'node:url';
 import { cors } from './middleware/cors.js';
@@ -8,11 +9,11 @@ import { createApiRouter } from './router.js';
 import { AppError } from '../lib/errors.js';
 import { jsonBody } from './body.js';
 
-export function createApp({ routes, authenticate, corsOrigins = [], allowDevelopmentOrigin, readiness = async () => {}, logger = console }) {
+export function createApp({ routes, authenticate, corsOrigins = [], allowDevelopmentOrigin, trustProxy = false, readiness = async () => {}, logger = console }) {
   const app = express();
   app.disable('x-powered-by');
   app.disable('etag');
-  app.set('trust proxy', false);
+  app.set('trust proxy', trustProxy === 'loopback' || (typeof trustProxy === 'string' && isIP(trustProxy)) ? trustProxy : false);
   app.set('case sensitive routing', true);
   app.set('strict routing', true);
   app.set('query parser', false);

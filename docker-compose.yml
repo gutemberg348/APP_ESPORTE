@@ -17,18 +17,23 @@ services:
       timeout: 5s
       retries: 10
   api:
-    profiles: ["full"]
+    user: "${API_UID:-1000}:${API_GID:-1000}"
     build:
       context: .
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      NPM_CONFIG_CACHE: /tmp/nacional-npm-cache
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_NAME: ${ADMIN_NAME:-Administrador Esporte}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       HOST: 0.0.0.0
+      TRUST_PROXY: ${DOCKER_NETWORK_GATEWAY:-172.30.77.1}
       PORT: 3333
       DATABASE_URL: postgresql://${POSTGRES_USER:-nacional}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-nacional}?schema=public
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8081}
-      CARD_TOKEN_SECRET: ${CARD_TOKEN_SECRET:?Defina CARD_TOKEN_SECRET no .env para usar o perfil full}
+      CARD_TOKEN_SECRET: ${CARD_TOKEN_SECRET:?Execute o setup para gerar CARD_TOKEN_SECRET no .env}
       JWT_SECRET: ${JWT_SECRET:?Execute npm run setup para gerar o segredo JWT}
       TICKET_QR_SECRET: ${TICKET_QR_SECRET:?Execute npm run setup para gerar o segredo dos ingressos}
       JWT_ISSUER: nacional-api
@@ -48,18 +53,11 @@ services:
       SICREDI_PIX_CERT_PASSPHRASE: ${SICREDI_PIX_CERT_PASSPHRASE:-}
       SICREDI_PIX_WEBHOOK_TOKEN: ${SICREDI_PIX_WEBHOOK_TOKEN:-}
       SICREDI_PIX_WEBHOOK_URL: ${SICREDI_PIX_WEBHOOK_URL:-}
-      SICREDI_PIX_CERT_PATH: /run/sicredi/cliente.cer
-      SICREDI_PIX_KEY_PATH: /run/sicredi/cliente.key
-      SICREDI_PIX_CHAIN_PATH: /run/sicredi/cadeia.cer
+      SICREDI_PIX_CERT_PATH: /run/sicredi/sicredi-multipag.cer
+      SICREDI_PIX_KEY_PATH: /run/sicredi/sicredi-multipag.key
+      SICREDI_PIX_CHAIN_PATH: /run/sicredi/sicredi-multipag-chain.cer
       SICREDI_PIX_TXID_PREFIX: ${SICREDI_PIX_TXID_PREFIX:-ESP}
       SICREDI_PIX_TIMEOUT_MS: ${SICREDI_PIX_TIMEOUT_MS:-10000}
-      ASAAS_ENVIRONMENT: ${ASAAS_ENVIRONMENT:-sandbox}
-      ASAAS_API_KEY: ${ASAAS_API_KEY:-}
-      ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:-}
-      ASAAS_WEBHOOK_URL: ${ASAAS_WEBHOOK_URL:-}
-      ASAAS_WEBHOOK_EMAIL: ${ASAAS_WEBHOOK_EMAIL:-}
-      ASAAS_DATA_SECRET: ${ASAAS_DATA_SECRET:-}
-      ASAAS_MERCHANT_WALLETS: ${ASAAS_MERCHANT_WALLETS:-}
       TENANT_SLUG: ${TENANT_SLUG:-nacional-patos}
       SMTP_ENABLED: ${SMTP_ENABLED:-false}
       SMTP_HOST: ${SMTP_HOST:-}
@@ -76,9 +74,35 @@ services:
     volumes:
       - "${SICREDI_CERTS_DIRECTORY:-./.secrets/sicredi}:/run/sicredi:ro"
     ports:
-      - "${API_PORT:-3333}:3333"
+      - "127.0.0.1:${API_PORT:-3333}:3333"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3333/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 8s
+      start_period: 60s
+      retries: 3
     depends_on:
       postgres:
         condition: service_healthy
+  web:
+    build:
+      context: .
+      dockerfile: apps/mobile/Dockerfile
+      args:
+        EXPO_PUBLIC_API_URL: ${EXPO_PUBLIC_API_URL:-https://api-esporte.testes-techcode.shop/v1}
+        EXPO_PUBLIC_CLUB: ${EXPO_PUBLIC_CLUB:-esporte}
+        EXPO_PUBLIC_TENANT_SLUG: ${TENANT_SLUG:-nacional-patos}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
 volumes:
   postgres_data:
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${DOCKER_NETWORK_SUBNET:-172.30.77.0/24}
+          gateway: ${DOCKER_NETWORK_GATEWAY:-172.30.77.1}

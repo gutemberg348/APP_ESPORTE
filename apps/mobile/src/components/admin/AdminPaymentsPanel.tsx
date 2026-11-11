@@ -37,7 +37,7 @@ export function AdminPaymentsPanel({ refreshKey }: { refreshKey: number }) {
     catch (err) { setError(messageOf(err)); }
     finally { lock.current = false; setBusy(false); }
   }
-  const actions = (row: AdminPixIntent) => <AdminMenu disabled={busy} items={[
+  const actions = (row: AdminPixIntent) => row.provider !== 'sicredi' ? <AdminBadge label="Somente consulta" tone="neutral" /> : <AdminMenu disabled={busy} items={[
     { label: 'Conciliar agora', onPress: () => void perform(() => pixApi.reconcile(token!, row.id)) },
     ...(row.providerReference && !['CANCELED', 'REFUNDED'].includes(row.state) ? [{ label: 'Solicitar estorno', danger: true, onPress: () => { setRefund(row); setReason(''); setConfirmed(false); } }] : []),
   ]} />;

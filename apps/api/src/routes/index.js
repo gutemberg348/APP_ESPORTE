@@ -180,7 +180,6 @@ export const routes = [
   { method: 'POST', path: '/v1/payments/resolve', handler: paymentController.resolve, private: true },
   { method: 'PUT', path: '/v1/payments/claim', handler: paymentController.claim, private: true },
   { method: 'GET', path: '/v1/payments/charge', handler: paymentController.ownCharge, private: true },
-  { method: 'POST', path: '/v1/payments/webhook', handler: paymentController.webhook },
   { method: 'POST', path: '/v1/auth/register', handler: authController.register, authLimit: true },
   { method: 'POST', path: '/v1/auth/login', handler: authController.login, authLimit: true },
   { method: 'POST', path: '/v1/auth/refresh', handler: authController.refresh, refreshLimit: true },

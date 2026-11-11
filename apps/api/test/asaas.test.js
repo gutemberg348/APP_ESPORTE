@@ -43,19 +43,20 @@ test('Asaas client isolates sandbox/production, authenticates on the server and 
   const live = createAsaasClient({ apiKey: 'key', environment: 'production', fetch: async (url) => { assert.ok(url.startsWith('https://api.asaas.com/v3/')); return new Response(JSON.stringify({ id: 'pay_1' }), { status: 200 }); } });
   assert.equal((await live.payment('pay_1')).id, 'pay_1');
 });
-test('Asaas startup rejects missing/reused secrets and allows production server with sandbox adapter', () => {
-  const input = { DATABASE_URL: 'postgresql://x', CARD_TOKEN_SECRET: randomBytes(32).toString('hex'), JWT_SECRET: randomBytes(64).toString('hex'), TICKET_QR_SECRET: randomBytes(64).toString('hex'), PAYMENT_MODE: 'asaas', NODE_ENV: 'production', ASAAS_API_KEY: 'sandbox-key'.padEnd(30, 'x'), ASAAS_DATA_SECRET: randomBytes(64).toString('hex'), ASAAS_WEBHOOK_TOKEN: randomBytes(32).toString('hex') };
-  assert.equal(parseEnv(input).ASAAS_ENVIRONMENT, 'sandbox');
-  assert.throws(() => parseEnv({ ...input, ASAAS_WEBHOOK_TOKEN: '' }));
-  assert.throws(() => parseEnv({ ...input, ASAAS_DATA_SECRET: input.JWT_SECRET }));
-  assert.throws(() => parseEnv({ ...input, ASAAS_MERCHANT_WALLETS: 'invalid' }));
+test('runtime rejects the retired provider and no longer loads Asaas environment settings', () => {
+  const input = { DATABASE_URL: 'postgresql://x', CARD_TOKEN_SECRET: randomBytes(32).toString('hex'), JWT_SECRET: randomBytes(64).toString('hex'), TICKET_QR_SECRET: randomBytes(64).toString('hex'), PAYMENT_MODE: 'disabled', NODE_ENV: 'production', ASAAS_API_KEY: 'retired', ASAAS_DATA_SECRET: 'retired', ASAAS_MERCHANT_WALLETS: 'invalid' };
+  const parsed = parseEnv(input);
+  assert.equal(parsed.PAYMENT_MODE, 'disabled');
+  assert.ok(!Object.keys(parsed).some((key) => key.startsWith('ASAAS_')));
+  assert.throws(() => parseEnv({ ...input, PAYMENT_MODE: 'asaas' }));
 });
+
 test('ticket admission accepts verified Asaas receipt and rejects refunded or forged receipts', () => {
   const ticket = { user: { active: true }, priceCents: 5000, payment: { method: 'ASAAS', amountCents: 5000, reference: 'ASAAS:pay_123' } };
   assertTicketPaid(ticket);
   for (const patch of [{ refundedCents: 1 }, { reference: 'forged' }, { amountCents: 4999 }]) assert.throws(() => assertTicketPaid({ ...ticket, payment: { ...ticket.payment, ...patch } }));
 });
-test('real Asaas routes enforce account/admin access before database queries', async () => {
+test('Pix routes enforce account/admin access before database queries', async () => {
   let role = 'USER';
   const app = createApp({ routes, authenticate: async (token) => { if (!token) throw new AppError(401, 'LOGIN_REQUIRED', 'Login necessário.'); return { user: { id: 'user', role, active: true } }; }, logger: { info() {}, error() {} } });
   for (const [path, method] of [['/v1/payments/billing-profile', 'PUT'], ['/v1/tickets/pix', 'POST'], ['/v1/payments/intent', 'GET'], ['/v1/admin/payments', 'GET'], ['/v1/admin/payments/refund', 'POST']]) assert.equal((await inject(app, path, { method })).status, 401);

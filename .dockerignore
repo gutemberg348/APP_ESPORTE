@@ -3,7 +3,6 @@ node_modules
 .git
 .env
 **/.env
-apps/mobile
 apps/api/generated
 .artifacts
 .expo
@@ -23,3 +22,8 @@ naca-digital
 *.csr
 *.pfx
 *.p12
+
+# Runtime environments stay outside every image. Build args contain public web settings.
+**/.env.*
+**/dist
+**/.expo

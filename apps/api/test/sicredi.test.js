@@ -1,3 +1,4 @@
+import { startPaymentWorker } from '../src/services/pix.service.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import https from 'node:https';
@@ -65,4 +66,11 @@ test('native HTTPS presents the client certificate, validates keys and sanitizes
   assert.equal((await transport.send({ url })).data.ok, true); assert.equal(authenticated, true);
   await assert.rejects(transport.send({ url: `${url}/bad` }), (err) => err.code === 'SICREDI_UNAVAILABLE' && !err.message.includes('never-return-this-value'));
   await assert.rejects(transport.send({ url: `${url}/timeout` }), { code: 'SICREDI_TIMEOUT' });
+});
+
+
+test('background reconciliation cannot activate the retired provider', async () => {
+  let ticks = 0;
+  const stop = startPaymentWorker({ settings: { PAYMENT_MODE: 'asaas' }, store: { tick: async () => { ticks++; } }, logger: { error() {} } });
+  await stop(); assert.equal(ticks, 0);
 });

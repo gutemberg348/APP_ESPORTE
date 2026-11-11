@@ -159,8 +159,10 @@ test('Sicredi durable Pix saga with isolated PostgreSQL, refunds and legacy isol
     await legacy.saveProfile(user.id, '52998224725'); const old = await legacy.ticketPix(user.id, ticket.id);
     await assert.rejects(store.ticketPix(user.id, ticket.id), { code: 'PAYMENT_PROVIDER_CONFLICT' });
     await store.process(old.id); assert.equal((await db.gatewayIntent.findUnique({ where: { id: old.id } })).attempts, 0);
-    const queries = createPixQueries(db, { ASAAS_ENVIRONMENT: 'sandbox', SICREDI_PIX_ENV: 'sandbox' });
-    assert.equal((await queries.ownIntent(user.id, old.id)).provider, 'asaas');
+    await db.gatewayIntent.update({ where: { id: old.id }, data: { state: 'PENDING', pixPayload: 'legacy-qr' } });
+    const queries = createPixQueries(db, { PAYMENT_MODE: 'sicredi', SICREDI_PIX_ENV: 'sandbox' });
+    const history = await queries.ownIntent(user.id, old.id);
+    assert.equal(history.provider, 'asaas'); assert.equal(history.pixPayload, null); assert.equal(history.failureCode, 'PAYMENT_PROVIDER_NOT_ACTIVE');
     await assert.rejects(store.cashPix(user.id, randomUUID()), { code: 'SICREDI_SPLIT_UNAVAILABLE' });
     const model = createPaymentModel(db, { settings, gateway: {}, now: () => instant });
     assert.throws(() => model.createCharge(user.id, {}, 'CASHIER_QR'), { code: 'SICREDI_SPLIT_UNAVAILABLE' });

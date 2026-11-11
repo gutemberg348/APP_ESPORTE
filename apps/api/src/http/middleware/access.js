@@ -22,11 +22,11 @@ export function createAccessMiddleware(authenticate) {
   }
   return {
     general(req, res, next) {
-      enforce(res, limit(req.socket.remoteAddress ?? 'unknown'), 60, 'RATE_LIMIT', 'Muitas requisições. Aguarde um minuto.');
+      enforce(res, limit(req.ip || req.socket.remoteAddress || 'unknown'), 60, 'RATE_LIMIT', 'Muitas requisições. Aguarde um minuto.');
       next();
     },
     route: (route) => async (req, res, next) => {
-      const ip = req.socket.remoteAddress ?? 'unknown';
+      const ip = req.ip || req.socket.remoteAddress || 'unknown';
       if (route.authLimit) enforce(res, authLimit(`${route.path}:${ip}`), 900, 'AUTH_RATE_LIMIT', 'Muitas tentativas. Aguarde 15 minutos.');
       if (route.refreshLimit) enforce(res, refreshLimit(ip), 900, 'REFRESH_RATE_LIMIT', 'Muitas renovações de sessão. Aguarde alguns minutos.');
       const auth = route.private ? await authenticate(bearerToken(req.headers.authorization)) : {};

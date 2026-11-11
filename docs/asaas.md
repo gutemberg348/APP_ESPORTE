@@ -1,4 +1,4 @@
-> Compatibilidade com o provedor anterior. Para novas cobranças na Sicredi, use [Pix Sicredi](sicredi-pix.md) e `PAYMENT_MODE=sicredi`. Histórico Asaas foi preservado; não existe fallback automático entre os bancos.
+> Documento histórico do provedor retirado. Asaas não pode ser ativado na configuração atual; serviço/controller/CLI e configurações operacionais foram removidos. Os dados antigos permanecem para consulta. Para a integração ativa, use [Pix Sicredi](sicredi-pix.md). As instruções abaixo registram o funcionamento anterior.
 
 # Asaas: Pix, webhook e atualização automática
 

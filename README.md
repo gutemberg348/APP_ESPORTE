@@ -127,7 +127,7 @@ Para revisar a referência sem API, altere explicitamente `EXPO_PUBLIC_DEMO_MODE
 
 Bundles: `npm run export --workspace @nacional/mobile`. APK/IPA e validação em aparelho são etapas separadas. A câmera requer permissão; esquema de links `nacional://` requer app/build com o esquema registrado.
 
-O perfil Docker completo usa `docker compose --profile full up --build -d`. A API aplica migrations antes de iniciar e roda sem root. O bootstrap administrativo usa os campos `ADMIN_*` no servidor; o container não copia os `.env` locais. Configure credenciais e segredos do ambiente antes de operação pública.
+A implantação na VPS usa três containers: PostgreSQL, API Node/Express e frontend web estático. `docker compose up -d --build` prepara os três; o Nginx existente encaminha os domínios para as portas locais 3333 e 8080. O PM2 do outro projeto permanece separado. [Guia Ubuntu, domínios, certificados e atualização](docs/vps-docker.md). A API aplica migrations antes de iniciar; o bootstrap administrativo é um passo explícito e preserva contas existentes.
 
 Documentação: [API](docs/api.md), [arquitetura](docs/architecture.md), [validação](docs/validation.md) e [etapas restantes](docs/roadmap.md).
 
@@ -135,7 +135,7 @@ Administração: [gestão de vendas por partida, receita, disponibilidade e hist
 
 Interface administrativa: [componentes reutilizáveis, calendário, selects e organização das páginas](docs/admin-design.md).
 
-Pagamento Pix automático: [Sicredi com certificado mTLS, OAuth, webhook, conciliação e devolução](docs/sicredi-pix.md). Configure `SICREDI_PIX_*` e escolha `PAYMENT_MODE=sicredi`. Histórico e compatibilidade [Asaas](docs/asaas.md) foram preservados, sem fallback automático. O checkout V1 permanece separado.
+Pagamento Pix automático: [Sicredi com certificado mTLS, OAuth, webhook, conciliação e devolução](docs/sicredi-pix.md). Configure `SICREDI_PIX_*` e escolha `PAYMENT_MODE=sicredi`. Asaas foi retirado das configurações e da operação; registros anteriores foram preservados somente para consulta. O checkout V1 permanece separado.
 
 Loja oficial: [produtos, variações, estoque, pedidos, checkout, Pix, Melhor Envio e modo de loja externa](docs/loja.md). Aplique a migration `20261106020000_shop` com `npm run db:deploy` e configure **Loja** no admin. CPF/CNPJ, telefone, CEP e valores em reais usam máscaras compartilhadas em `packages/shared/forms.js`.
 

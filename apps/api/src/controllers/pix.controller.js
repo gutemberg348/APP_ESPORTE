@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { currentPixStore, sicrediStore, pixQueries, pixStoreForIntent } from '../services/pix.service.js';
-import { billingSchema } from '../models/asaas.store.js';
 import { paginationSchema } from '../validators/index.js';
 const id = z.object({ id: z.uuid() }).strict();
 const ticket = z.object({ ticketId: z.uuid() }).strict();
@@ -8,7 +7,7 @@ const shop = z.object({ orderId: z.uuid() }).strict();
 const query = (url) => Object.fromEntries(url.searchParams);
 export const pixController = {
   profile: async ({ user }) => ({ data: await currentPixStore.profile(user.id) }),
-  saveProfile: async ({ user, body }) => ({ data: await currentPixStore.saveProfile(user.id, billingSchema.parse(body).document) }),
+  saveProfile: async ({ user, body }) => ({ data: await currentPixStore.saveProfile(user.id, z.object({ document: z.string().max(25).optional() }).strict().parse(body).document) }),
   ticketPix: async ({ user, body }) => ({ data: await currentPixStore.ticketPix(user.id, ticket.parse(body).ticketId) }),
   ticketIntent: async ({ user, url }) => ({ data: await pixQueries.ticketIntent(user.id, ticket.parse(query(url)).ticketId) }),
   shopPix: async ({ user, body }) => ({ data: await currentPixStore.shopPix(user.id, shop.parse(body).orderId) }),

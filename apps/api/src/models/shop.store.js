@@ -47,7 +47,7 @@ export function createShopStore(client, { now = () => new Date(), shipping, sett
   return {
     async settings() {
       const value = await config();
-      return { ...value, pixEnabled: ['asaas', 'sicredi'].includes(runtime.PAYMENT_MODE), shippingConfigured: Boolean(runtime.MELHOR_ENVIO_TOKEN && runtime.MELHOR_ENVIO_CONTACT_EMAIL), shippingEnvironment: runtime.MELHOR_ENVIO_ENVIRONMENT || 'sandbox' };
+      return { ...value, pixEnabled: runtime.PAYMENT_MODE === 'sicredi', shippingConfigured: Boolean(runtime.MELHOR_ENVIO_TOKEN && runtime.MELHOR_ENVIO_CONTACT_EMAIL), shippingEnvironment: runtime.MELHOR_ENVIO_ENVIRONMENT || 'sandbox' };
     },
     async saveSettings(actorId, data) {
       if (data.shippingProvider === 'MELHOR_ENVIO' && data.enabled && data.mode === 'INTERNAL' && (!runtime.MELHOR_ENVIO_TOKEN || !runtime.MELHOR_ENVIO_CONTACT_EMAIL)) throw shopError('SHIPPING_NOT_CONFIGURED', 'Configure o token e o email do Melhor Envio na API antes de ativar este modo.');
@@ -139,7 +139,7 @@ export function createShopStore(client, { now = () => new Date(), shipping, sett
         if (!quote || quote.userId !== userId || quote.cartHash !== value.cartHash || quote.postalCode !== input.postalCode || quote.deliveryMethod !== input.deliveryMethod || quote.expiresAt <= now()) throw shopError('SHOP_QUOTE_EXPIRED', 'Os valores mudaram ou a cotação venceu. Calcule o frete novamente.');
         const choice = quote.options.find((option) => option.id === input.shippingOptionId);
         if (!choice) throw shopError('SHOP_INVALID_SHIPPING', 'Selecione uma das opções de entrega calculadas.');
-        if (choice.testMode && runtime.NODE_ENV === 'production' && (runtime.PAYMENT_MODE === 'sicredi' ? runtime.SICREDI_PIX_ENV : runtime.ASAAS_ENVIRONMENT) === 'production') throw shopError('SHOP_TEST_SHIPPING', 'Configure o Melhor Envio em produção antes de aceitar pagamentos reais com entrega.');
+        if (choice.testMode && runtime.NODE_ENV === 'production' && runtime.SICREDI_PIX_ENV === 'production') throw shopError('SHOP_TEST_SHIPPING', 'Configure o Melhor Envio em produção antes de aceitar pagamentos reais com entrega.');
         const totalCents = maxAmount(value.subtotalCents + choice.amountCents);
         if (totalCents !== input.expectedTotalCents) throw shopError('SHOP_PRICE_CHANGED', 'O total mudou. Revise o pedido.');
         if (await tx.shopOrder.count({ where: { userId, status: 'PENDING', expiresAt: { gt: now() } } }) >= value.business.shopPendingOrderLimit) throw shopError('SHOP_PENDING_LIMIT', 'Conclua ou cancele seus pedidos pendentes antes de reservar mais produtos.');

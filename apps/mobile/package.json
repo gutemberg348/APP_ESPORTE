@@ -10,6 +10,7 @@
     "web": "expo start --web",
     "check": "tsc --noEmit",
     "test:unit": "node --test test/*.test.mjs",
+    "export:web": "expo export --platform web",
     "export": "expo export --platform all"
   },
   "dependencies": {

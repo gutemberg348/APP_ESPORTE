@@ -8,6 +8,30 @@ import { AppError } from '../src/lib/errors.js';
 import { EventEmitter } from 'node:events';
 import { requestContext } from '../src/http/middleware/request-context.js';
 const logger = { info() {}, error() {} };
+
+test('Nginx loopback proxy keeps independent login limits without trusting forwarded IPs from other addresses', async () => {
+  const route = { method: 'POST', path: '/proxy-login', authLimit: true, handler: async ({ req }) => ({ data: { ip: req.ip } }) };
+  const direct = createApp({ routes: [route], logger });
+  const proxied = createApp({ routes: [route], logger, trustProxy: 'loopback' });
+  const options = (forwarded, ip = '127.0.0.1') => ({ method: 'POST', ip, headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': forwarded }, body: '{}' });
+  for (let i = 0; i < 10; i++) assert.equal((await inject(direct, '/proxy-login', options(`198.51.100.${i + 1}`))).status, 200);
+  assert.equal((await inject(direct, '/proxy-login', options('198.51.100.99'))).status, 429, 'headers are ignored by default');
+  for (const address of ['198.51.100.10', '198.51.100.20']) {
+    for (let i = 0; i < 10; i++) {
+      const response = await inject(proxied, '/proxy-login', options(address));
+      assert.equal(response.status, 200); assert.equal((await response.json()).data.ip, address);
+    }
+    assert.equal((await inject(proxied, '/proxy-login', options(address))).status, 429);
+  }
+  const external = createApp({ routes: [route], logger, trustProxy: 'loopback' });
+  for (let i = 0; i < 10; i++) assert.equal((await inject(external, '/proxy-login', options(`198.51.100.${i + 1}`, '203.0.113.50'))).status, 200);
+  assert.equal((await inject(external, '/proxy-login', options('198.51.100.99', '203.0.113.50'))).status, 429, 'untrusted remote connections cannot bypass limits');
+  const docker = createApp({ routes: [route], logger, trustProxy: '172.30.77.1' });
+  const gateway = await inject(docker, '/proxy-login', options('198.51.100.30', '172.30.77.1'));
+  assert.equal((await gateway.json()).data.ip, '198.51.100.30');
+  const neighbor = await inject(docker, '/proxy-login', options('198.51.100.99', '172.30.77.10'));
+  assert.equal((await neighbor.json()).data.ip, '172.30.77.10', 'only the exact configured gateway is trusted');
+});
 test('public connectivity probe verifies JSON POST and CORS without account access or consuming login quotas', async () => {
   let logins = 0;
   const application = createApp({ logger, corsOrigins: ['http://localhost:8081'], routes: [{

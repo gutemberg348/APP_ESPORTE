@@ -9,7 +9,7 @@
     "start": "node src/server.js",
     "check": "node scripts/check.mjs",
     "test": "node --test test/*.test.js",
-    "test:unit": "node --test test/crypto.test.js test/business-rules.test.js test/payment-rules.test.js test/ticket-rules.test.js test/jwt.test.js test/auth-service.test.js test/ticket-entry.test.js test/gate-rules.test.js test/ticket-checkout.test.js test/http.test.js test/admin-sales.test.js test/admin-reports.test.js test/asaas.test.js test/asaas-flow.test.js test/shop.test.js test/finance.test.js test/recovery-partners.test.js test/withdrawals.test.js test/development-origins.test.js test/database-recovery.test.js test/settings.test.js test/shop-images.test.js test/gate-v1.test.js test/sicredi.test.js test/sicredi-flow.test.js",
+    "test:unit": "node --test test/crypto.test.js test/business-rules.test.js test/payment-rules.test.js test/ticket-rules.test.js test/jwt.test.js test/auth-service.test.js test/ticket-entry.test.js test/gate-rules.test.js test/ticket-checkout.test.js test/http.test.js test/admin-sales.test.js test/admin-reports.test.js test/asaas.test.js test/asaas-flow.test.js test/shop.test.js test/finance.test.js test/recovery-partners.test.js test/withdrawals.test.js test/development-origins.test.js test/database-recovery.test.js test/settings.test.js test/shop-images.test.js test/gate-v1.test.js test/sicredi.test.js test/sicredi-flow.test.js test/deploy-config.test.js",
     "test:integration": "node scripts/test-integration.mjs",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

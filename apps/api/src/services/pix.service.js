@@ -2,16 +2,15 @@ import { db } from '../config/database.js';
 import { env } from '../config/env.js';
 import { createSicrediClient } from '../payments/sicredi/client.js';
 import { createSicrediStore } from '../models/sicredi.store.js';
-import { asaasStore } from './asaas.service.js';
 import { publicIntent, ticketGeneration } from '../payments/pix-contract.js';
 import { AppError } from '../lib/errors.js';
 
 export const sicrediStore = createSicrediStore(db, { settings: env, api: createSicrediClient(env) });
-export const currentPixStore = env.PAYMENT_MODE === 'sicredi' ? sicrediStore : asaasStore;
+export const currentPixStore = sicrediStore;
 export function createPixQueries(client, settings = env) {
   const render = (row) => {
     const value = publicIntent(row);
-    const active = row.provider === settings.PAYMENT_MODE && row.environment === (row.provider === 'sicredi' ? settings.SICREDI_PIX_ENV : settings.ASAAS_ENVIRONMENT);
+    const active = row.provider === 'sicredi' && settings.PAYMENT_MODE === 'sicredi' && row.environment === settings.SICREDI_PIX_ENV;
     return active ? value : { ...value, pixPayload: null, failureCode: value.state === 'PENDING' ? 'PAYMENT_PROVIDER_NOT_ACTIVE' : value.failureCode };
   };
   const owned = (userId) => ({ OR: [{ ticket: { userId } }, { shopOrder: { userId } }, { charge: { wallet: { userId } } }] });
@@ -26,7 +25,7 @@ export function createPixQueries(client, settings = env) {
       if (!ticket) throw new AppError(404, 'TICKET_NOT_FOUND', 'Pedido não encontrado.');
       const generation = ticketGeneration(ticket);
       const receipt = ticket.payment && ['ASAAS', 'SICREDI'].includes(ticket.payment.method) ? ticket.payment.reference.split(':').slice(1).join(':') : null;
-      const intent = await client.gatewayIntent.findFirst({ where: { ticketId, OR: [{ generation: `${settings.ASAAS_ENVIRONMENT}:${generation}` }, { generation: `sicredi:${settings.SICREDI_PIX_ENV}:${generation}` }, ...(receipt ? [{ providerReference: receipt }] : [])] }, orderBy: { createdAt: 'desc' } });
+      const intent = await client.gatewayIntent.findFirst({ where: { ticketId, OR: [{ provider: 'asaas', generation: { in: [`sandbox:${generation}`, `production:${generation}`] } }, { generation: `sicredi:${settings.SICREDI_PIX_ENV}:${generation}` }, ...(receipt ? [{ providerReference: receipt }] : [])] }, orderBy: { createdAt: 'desc' } });
       return intent ? render(intent) : null;
     },
     async shopIntent(userId, shopOrderId) {
@@ -42,12 +41,12 @@ export const pixQueries = createPixQueries(db);
 export async function pixStoreForIntent(id) {
   const intent = await db.gatewayIntent.findUnique({ where: { id } });
   if (!intent) throw new AppError(404, 'PAYMENT_NOT_FOUND', 'Pagamento não encontrado.');
-  const expected = intent.provider === 'sicredi' ? env.SICREDI_PIX_ENV : env.ASAAS_ENVIRONMENT;
-  if (intent.environment !== expected || intent.provider !== env.PAYMENT_MODE) throw new AppError(409, 'PAYMENT_PROVIDER_NOT_ACTIVE', 'Esta cobrança pertence a outro provedor ou ambiente. Consulte o histórico; a conciliação exige a configuração original.');
-  return intent.provider === 'sicredi' ? sicrediStore : asaasStore;
+  const expected = env.SICREDI_PIX_ENV;
+  if (intent.provider !== 'sicredi' || intent.environment !== expected || env.PAYMENT_MODE !== 'sicredi') throw new AppError(409, 'PAYMENT_PROVIDER_NOT_ACTIVE', 'Este pagamento está disponível somente para consulta ou pertence a um ambiente inativo. A integração ativa é Sicredi.');
+  return sicrediStore;
 }
 export function startPaymentWorker({ store = currentPixStore, settings = env, logger = console } = {}) {
-  if (!['asaas', 'sicredi'].includes(settings.PAYMENT_MODE)) return async () => {};
+  if (settings.PAYMENT_MODE !== 'sicredi') return async () => {};
   let stopping = false, timer, active;
   const run = () => {
     active = store.tick().catch(() => logger.error('PIX_WORKER_RETRY: conciliação pendente; a próxima rodada retoma as mesmas referências.')).finally(() => { if (!stopping) timer = setTimeout(run, settings.PAYMENT_WORKER_INTERVAL_MS).unref(); });
