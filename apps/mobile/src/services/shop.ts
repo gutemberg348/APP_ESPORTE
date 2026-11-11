@@ -1,4 +1,5 @@
 import type { ShopSettings, ShopSettingsInput, Product, ProductInput, ProductPage, ShippingRule, CartInput, ShopQuote, ShopCheckoutInput, ShopOrder, ShopOrdersPage, ShopPage, StockVariant, StockMovement, ShopAddress } from '@nacional/shared/shop';
+import type { ShopImage, ShopImageUpload } from '@nacional/shared/shop';
 import { request } from './api';
 const qs = (values: Record<string, string>) => new URLSearchParams(Object.entries(values).filter(([, value]) => value)).toString();
 export const shopApi = {
@@ -11,6 +12,7 @@ export const shopApi = {
   cancel: (token: string, orderId: string) => request<ShopOrder>('/shop/orders/cancel', { token, method: 'POST', body: { orderId } }),
 };
 export const shopAdminApi = {
+  uploadImage: (token: string, body: ShopImageUpload) => request<ShopImage>('/admin/shop/images', { token, method: 'POST', body, timeoutMs: 45000 }),
   generateSku: (token: string, excludeSkus: string[]) => request<{ sku: string }>('/admin/shop/skus/generate', { token, method: 'POST', body: { excludeSkus } }),
   checkSkus: (token: string, items: { sku: string; variantId?: string }[]) => request<{ sku: string; status: 'AVAILABLE' | 'CURRENT' | 'USED' }[]>('/admin/shop/skus/check', { token, method: 'POST', body: { items } }),
   settings: (token: string) => request<ShopSettings>('/admin/shop/settings', { token }),

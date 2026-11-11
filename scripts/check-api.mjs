@@ -12,12 +12,20 @@ let appUrl = 'URL inválida; confira apps/mobile/.env';
 try { const url = new URL(mobile.EXPO_PUBLIC_API_URL || 'http://localhost:3333/v1'); appUrl = url.origin + url.pathname; } catch {}
 console.log(`URL base do app: ${appUrl}`);
 for (const item of addresses) console.log(`Rede ${item.name}: http://${item.address}:${port}`);
-const results = await Promise.all(['health', 'ready'].map(async (path) => {
+const results = await Promise.all(['health', 'ready', 'connection-check'].map(async (path) => {
   const started = performance.now();
-  try { const response = await fetch(`http://127.0.0.1:${port}/${path}`, { signal: AbortSignal.timeout(4500) }); const body = await response.json(); const valid = response.ok && body.data?.status === (path === 'health' ? 'ok' : 'ready'); console.log(`/${path}: HTTP ${response.status}, ${Math.round(performance.now() - started)} ms${valid ? ' — OK' : ' — confira a API/banco'}`); return valid; }
+  try {
+    const post = path === 'connection-check';
+    const response = await fetch(`http://127.0.0.1:${port}/${path}`, { signal: AbortSignal.timeout(4500), ...(post ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ probe: true }) } : {}) });
+    const body = await response.json();
+    const valid = response.ok && body.data?.status === (path === 'ready' ? 'ready' : 'ok') && (path === 'ready' || body.data.service === 'nacional-api') && (!post || body.data.method === 'POST');
+    console.log(`${post ? 'POST' : 'GET'} /${path}: HTTP ${response.status}, ${Math.round(performance.now() - started)} ms${valid ? ' — OK' : ' — confira a API/banco'}`);
+    return valid;
+  }
   catch (error) { console.log(`/${path}: sem resposta (${error.cause?.code || error.name}).`); return false; }
 }));
-if (results.every(Boolean)) console.log('API e banco responderam. Se a tela ainda mostra um IP antigo, recarregue com Ctrl+F5; para limpar o cache do Expo web, use npm run web:clear.');
-else if (results[0]) console.log('A API respondeu, mas o banco não está pronto. Confira o PostgreSQL e DATABASE_URL.');
+if (results.every(Boolean)) console.log('API, banco e envio JSON responderam. Se falhar durante Restarting, use npm run dev:api no modo estável. O modo automático fica em npm run dev:api:watch.');
+else if (results[0] && !results[1]) console.log('A API respondeu, mas o banco não está pronto. Confira o PostgreSQL e DATABASE_URL.');
+else if (results[0]) console.log('API e banco responderam, mas o teste de envio JSON falhou. Confira o terminal da API e se a versão atual foi carregada.');
 else console.log('Confira o terminal da API (npm run dev:api). Este diagnóstico não inicia nem reinicia serviços.');
 process.exitCode = results.every(Boolean) ? 0 : 1;

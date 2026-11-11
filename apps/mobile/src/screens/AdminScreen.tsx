@@ -7,9 +7,9 @@ import { Page, Panel, Button } from '../components/ui';
 import { Text } from '../components/Typography';
 import { Sheet } from '../components/Sheet';
 import { MatchForm, SectorForm, PlanForm, AdminField, AdminToggle } from '../components/AdminForms';
-import { AdminSelect, AdminDateTimeField, AdminNotice } from '../components/admin/AdminControls';
+import { AdminSelect, AdminDateTimeField, AdminNotice, AdminButton } from '../components/admin/AdminControls';
 import { EmployeePanel } from '../components/EmployeePanel';
-import { TicketGatePanel } from '../components/TicketGatePanel';
+import { GateV1History } from '../components/GateV1History';
 import { useTheme } from '../theme/ThemeProvider';
 import { useSession } from '../providers/SessionProvider';
 import { adminApi } from '../services/admin';
@@ -45,6 +45,7 @@ function AdminWorkspace({ onBack }: { onBack: () => void }) {
   const { colors } = useTheme();
   const desktop = useDesktopAdmin();
   const [tab, setTab] = useState('Visão geral');
+  const [legacyGateHistory, setLegacyGateHistory] = useState(false);
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
   const [tickets, setTickets] = useState<AdminTicket[]>([]);
@@ -121,9 +122,8 @@ function AdminWorkspace({ onBack }: { onBack: () => void }) {
     {tab === 'Torcedores' && <AdminAccountsPanel onEdit={setAccountEdit} users={users} search={search} onSearchChange={setSearch} onSearch={() => void refresh()} loading={loading} busy={busy} currentUserId={member.id} onRecovery={(user) => void perform(async () => { await recoveryApi.forUser(token!, user.id); setNotice('Se a conta estiver ativa, o link será enviado para o email cadastrado.'); }, false)} onMembership={openMembership} onAccount={(user) => void perform(() => adminApi.account(token!, user.id, !user.active))} />}
     {tab === 'Planos' && <AdminPlanGrid plans={plans} busy={busy} onEdit={setPlanEdit} />}
     {tab === 'Funcionários' && <EmployeePanel matches={matches} desktop={desktop} />}
-    {tab === 'Portaria' && <View style={{ flexDirection: desktop ? 'row' : 'column', gap: 22, alignItems: 'flex-start' }}><Panel style={{ flex: 1, minWidth: 0, width: desktop ? undefined : '100%', borderRadius: 16, padding: desktop ? 25 : 16 }}><TicketGatePanel matches={matches} onChanged={refresh} /></Panel>{desktop && <Panel style={{ width: 245, borderRadius: 16, padding: 22, gap: 13 }}><ScanLine size={24} color={colors.primary} /><Text heading style={{ color: colors.text, fontWeight: '700' }}>Operação da portaria</Text><Text style={{ color: colors.muted, fontSize: 12 }}>Selecione a partida e o setor físico antes de ler ou digitar o código.</Text><Text style={{ color: colors.muted, fontSize: 12 }}>Confira o titular e a quantidade. A consulta não libera a entrada.</Text><Text style={{ color: colors.gold, fontSize: 12 }}>Libere somente após a confirmação registrada no servidor.</Text></Panel>}</View>}
     {tab === 'Auditoria' && <AdminAuditPanel audit={audit} loading={loading} />}
-    {tab === 'Histórico de portaria' && <AdminGateHistory matches={matches} refreshKey={reportRefresh} />}
+    {tab === 'Histórico de portaria' && <View style={{ gap: 18 }}><AdminButton label={legacyGateHistory ? 'Voltar ao histórico V1' : 'Consultar histórico anterior ao V1'} onPress={() => setLegacyGateHistory(!legacyGateHistory)} />{legacyGateHistory ? <AdminGateHistory matches={matches} refreshKey={reportRefresh} /> : <GateV1History refreshKey={reportRefresh} />}</View>}
     {tab === 'Pagamentos' && <AdminPaymentsPanel refreshKey={reportRefresh} />}
     {tab === 'Loja' && <AdminShopPanel refreshKey={reportRefresh} onPayments={() => select('Pagamentos')} />}
     {tab === 'Financeiro' && <AdminFinancePanel refreshKey={reportRefresh} onOpenWithdrawals={() => select('Saques')} />}
@@ -136,7 +136,7 @@ function AdminWorkspace({ onBack }: { onBack: () => void }) {
     {tab === 'Templates de venda' && <TemplatesVendaIngressoV1Panel token={token!} busy={busy} onBusy={setBusy} onNotice={setNotice} onError={setError} createOpen={templateVendaCreateOpen} onConsumeCreate={() => setTemplateVendaCreateOpen(false)} />}
     {tab === 'Partidas V1' && <PartidasIngressoV1Panel token={token!} busy={busy} onBusy={setBusy} onNotice={setNotice} onError={setError} createOpen={partidaV1CreateOpen} onConsumeCreate={() => setPartidaV1CreateOpen(false)} onOpenIngressos={() => { setSelectedPartidaV1Id(undefined); select('Pedidos e ingressos V1'); setIngressoV1CreateOpen(true); }} />}
     {tab === 'Pedidos e ingressos V1' && <IngressosEmitidosV1Panel token={token!} busy={busy} onBusy={setBusy} onNotice={setNotice} onError={setError} createOpen={ingressoV1CreateOpen} onConsumeCreate={() => setIngressoV1CreateOpen(false)} initialPartidaId={selectedPartidaV1Id} />}
-    {tab === 'Portaria V1' && <PortariaIngressoV1Panel token={token!} busy={busy} onBusy={setBusy} onNotice={setNotice} onError={setError} />}
+    {tab === 'Portaria' && <PortariaIngressoV1Panel />}
     {accountEdit && <AdminAccountForm userId={accountEdit.id} onClose={() => setAccountEdit(null)} onSaved={async (signedOut) => { setAccountEdit(null); setNotice('Conta atualizada.'); if (!signedOut) await refresh(); }} />}
     {matchEdit !== undefined && <MatchForm match={matchEdit} onClose={() => setMatchEdit(undefined)} onSaved={async () => { setMatchEdit(undefined); await refresh(); }} />}
     {sectorEdit && <SectorForm {...sectorEdit} onClose={() => setSectorEdit(null)} onSaved={async () => { setSectorEdit(null); await refresh(); }} />}

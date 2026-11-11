@@ -1,3 +1,5 @@
+import QRCode from 'react-native-qrcode-svg';
+import { TicketBarcode } from '../../TicketBarcode';
 import React, { useEffect, useState } from 'react';
 import { View, Pressable, Image } from 'react-native';
 import { Ban, QrCode } from 'lucide-react-native';
@@ -313,7 +315,7 @@ export function IngressosEmitidosV1Panel({
                   }
                 />
                 <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 10 }}>
-                  {row.chaveQr}
+                  {row.codigoPortaria}
                 </Text>
               </View>,
               <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -699,17 +701,8 @@ export function IngressosEmitidosV1Panel({
                   gap: 6,
                 }}
               >
-                <Image
-                  source={{
-                    uri: `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
-                      bilheteVisivel.chaveQr
-                    )}`,
-                  }}
-                  style={{ width: 150, height: 150 }}
-                />
-                <Text style={{ color: '#0F172A', fontSize: 14, fontWeight: '800', letterSpacing: 1 }}>
-                  {bilheteVisivel.chaveQr}
-                </Text>
+                <QRCode value={bilheteVisivel.chaveQr} size={180} />
+                {!!bilheteVisivel.codigoPortaria && <TicketBarcode code={bilheteVisivel.codigoPortaria} />}
               </View>
 
               {!!bilheteVisivel.alocacao.setor.instrucaoAcomodacao && (

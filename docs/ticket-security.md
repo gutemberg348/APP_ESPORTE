@@ -1,3 +1,5 @@
+> Este documento descreve o fluxo anterior. A operação de leitura foi substituída pela [portaria unificada V1](ingresso-v1.md) em 11/11/2026; consulte seu contrato e os limites de migração antes de operar. Dados e relatórios anteriores permanecem preservados.
+
 # Venda e validação de ingressos — estado atual
 
 Atualização de 06/11/2026: Pix Asaas, webhook, conciliação e solicitação de estorno estão implementados. O funcionamento depende de `PAYMENT_MODE`: em `asaas`, a emissão é automática após consulta autenticada ao provedor; em `disabled`, depende de confirmação manual administrativa. Consulte a [configuração da integração](asaas.md). As credenciais ficam exclusivamente na API.

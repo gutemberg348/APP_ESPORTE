@@ -35,11 +35,13 @@ npm run dev:api
 npm run dev:mobile
 ```
 
+`npm run dev:api` usa um processo estável, sem reiniciar ao salvar arquivos. A recarga automática é opcional em `npm run dev:api:watch`; esse modo pode interromper requisições durante a troca do processo. Se o terminal já estava em watch, encerre-o com Ctrl+C e execute `npm run dev:api` uma vez para ativar o modo estável. [Diagnóstico e estabilidade da API](docs/api-estabilidade.md).
+
 Ou use `npm run web` para o app/painel no navegador. A API usa `http://localhost:3333`, e o PostgreSQL usa `localhost:55432`. `GET /health` verifica a API; `GET /ready` também verifica o banco.
 
 O login ADMIN abre o painel na versão web. Se o Expo já estiver usando 8081, a versão web pode abrir em 8082; as duas origens locais estão previstas no `CORS_ORIGINS`. Ao usar outro IP/porta, inclua a origem exata na configuração da API e recarregue-a.
 
-No navegador, `/` e `/admin` abrem o novo login administrativo; `/app` abre o acesso do torcedor e da portaria. A sessão web é preservada ao atualizar a página e restaurada pela API. [Login administrativo e persistência da sessão](docs/admin-login.md).
+No navegador, `/` e `/admin` abrem o login administrativo, `/app` o login comum e `/portaria` o acesso da equipe de entrada, sem cadastro público. Contas GATE abrem diretamente a portaria também no app. A sessão web é preservada ao atualizar. [Acesso administrativo](docs/admin-login.md) e [portaria V1](docs/ingresso-v1.md).
 
 O admin tem identidade própria com fonte Inter, paleta neutra, detalhes na cor do clube (vermelho no Esporte) e temas claro/escuro independentes. No PC, a partir de 1024 px, ocupa a largura da janela e usa menu lateral recolhível, visão geral e tabelas. No celular, o menu abre pela lateral e as consultas usam cartões. Os formulários se adaptam à largura disponível. [Organização do painel administrativo](docs/admin-desktop.md).
 
@@ -53,25 +55,25 @@ EXPO_PUBLIC_API_HOST_MODE=local
 
 Mantenha `http://localhost:3333/v1` durante o desenvolvimento para não fixar o IP atribuído pelo Wi-Fi. No Expo Go nativo, localhost é resolvido automaticamente para o host atual do Expo. Na web em desenvolvimento, usa o endereço pelo qual o navegador abriu o painel: localhost no próprio PC ou o IP atual no outro aparelho. Com `EXPO_PUBLIC_API_HOST_MODE=local`, um IP privado antigo também acompanha o host atual do Expo/navegador. Para uma API em outra máquina ou um emulador com `http://10.0.2.2:3333/v1`, use `EXPO_PUBLIC_API_HOST_MODE=configured` para preservar exatamente o endereço. O modo `auto` adapta somente localhost; APIs públicas remotas e builds de produção são preservados em todos os modos. A API em `NODE_ENV=development` aceita os IPs atuais do próprio computador nas mesmas portas web já autorizadas para localhost; em produção, só vale `CORS_ORIGINS` explícito. Para builds instalados, configure o endereço acessível da API.
 
-Se a tela mostrar um IP antigo, recarregue com **Ctrl+F5**. Se o Expo ainda entregar a configuração antiga, pare apenas o Expo e execute `npm run web:clear`. Use `npm run api:check` para verificar IPs atuais, `/health` e `/ready` sem iniciar ou reiniciar serviços. `/health` e `/ready` respondendo 200 indicam que API e banco estão acessíveis pelo endereço local; um endereço antigo no cliente deve ser corrigido no app/cache, sem reiniciar o PostgreSQL por esse motivo. Prefira abrir o painel neste PC em `http://localhost:8081/admin`.
+Se a tela mostrar um IP antigo, recarregue com **Ctrl+F5**. Se o Expo ainda entregar a configuração antiga, pare apenas o Expo e execute `npm run web:clear`. Use `npm run api:check` para verificar IPs atuais, `/health`, `/ready` e o envio JSON em `/connection-check`, sem iniciar ou reiniciar serviços. `/health` e `/ready` respondendo 200 indicam que API e banco estão acessíveis pelo endereço local; um endereço antigo no cliente deve ser corrigido no app/cache, sem reiniciar o PostgreSQL por esse motivo. Prefira abrir o painel neste PC em `http://localhost:8081/admin`.
 
 **Estado desta máquina — 03/11/2026:** com API e PostgreSQL já iniciados pelo responsável, `npm run db:prepare` aplicou as seis migrations pendentes (sete no total) e configurou o administrador. Cadastro, perfil autenticado, login e rejeição de e-mail duplicado foram verificados pela API na rede local; somente a conta temporária dessa verificação foi removida. O agente não iniciou serviços. As verificações anteriores de 14/10 e 30/10 encontraram o banco indisponível; essa pendência foi resolvida.
 
 ## Operação de ingressos
 
-A portaria agora exige partida e setor selecionados e QR assinado de até 45 segundos, renovado no app. Cada entrada invalida as versões anteriores do QR; consultas e repetições não autorizam novas entradas. Controle de horário, confirmação financeira, titular ativo, consumo e auditoria são conferidos no servidor. [Funcionamento, validações e limites reais](docs/ticket-security.md).
+A portaria foi unificada no modelo V1: câmera (QR/Code 128), imagem QR, leitor USB em modo teclado e código manual de 16 caracteres consultam o mesmo ingresso. O servidor confere escala, partida, setor, horário e pedido pago; a confirmação consome um ingresso uma única vez e gera protocolo. [Configuração, contrato e limites](docs/ingresso-v1.md).
 
-**Funcionários:** ADMIN → **Funcionários** → cadastrar conta → definir escala por jogo/setor. O porteiro usa o login comum e abre automaticamente a portaria, lê pela câmera ou digita o código de 10 caracteres mostrado junto ao QR do titular. Os dois caminhos compartilham validade e consumo; desativação/redefinição de senha revoga sessões. A migration de funcionários e códigos foi aplicada em 03/11/2026. A operação de portaria ainda precisa de validação em aparelho. [Operação e API de portaria](docs/gate-staff.md).
+**Funcionários:** ADMIN → **Funcionários** → cadastrar perfil Portaria → definir escala por partida/setor V1. Em **Partidas V1**, habilite a portaria e configure horários. Desativação e redefinição de senha revogam sessões; a troca de perfil remove as escalas. Os ingressos e o checkout anteriores permanecem separados: não houve conversão automática para V1. O histórico anterior continua disponível para consulta.
 
-**Compra no app:** **Central de ingressos → Comprar** reúne catálogo com busca e filtro de vendas abertas, setores/vagas, quantidade e revisão de preço/desconto pela API. **Meus ingressos** acompanha reserva, confirmação, prazo, cancelamento não pago e QR/código na portaria. O checkout compara o total revisado antes de reservar; pagamento continua por conferência externa do clube enquanto o gateway não é escolhido. [Fluxo de compra e contrato da revisão](docs/ticket-purchase-app.md).
+**Compra no app (checkout anterior):** catálogo, revisão de preço e reserva continuam disponíveis. O Pix automático usa o provedor configurado na API; valores/status do webhook sozinhos não confirmam pagamento. Os bilhetes desse checkout não foram convertidos automaticamente ao V1. [Contrato do checkout](docs/ticket-purchase-app.md) e [Sicredi](docs/sicredi-pix.md).
 
-Administrador: login → **Jogos** → criar rascunho → cadastrar setores/preços/capacidade → publicar. Também pode pausar vendas, conferir recebimentos em **Vendas**, gerenciar contas/associações/planos e registrar acessos em **Portaria**. As ações administrativas têm auditoria.
+Administrador: login → **Partidas V1** → configurar partida, alocações/lotes e portaria. O cadastro **Funcionários** define equipe e escala, **Pedidos e ingressos V1** mostra os bilhetes e **Portaria** valida entradas. Os módulos anteriores **Jogos/Vendas** e seus registros foram preservados; não são a fonte dos ingressos V1.
 
 Em **Vendas**, pode editar setor/quantidade e excluir vendas, inclusive pagas e utilizadas, com motivo e auditoria. Nas pagas, o valor recebido é preservado; depois de uma entrada, o setor é mantido e a quantidade não pode ficar abaixo do uso. A exclusão invalida o ingresso e preserva pagamento e portaria no filtro **Excluídas**, sem estorno automático. [Regras de edição e exclusão](docs/admin-sales.md).
 
-Torcedor: cadastro/login → **Perfil → Meus ingressos** → escolher jogo/setor/quantidade → reservar → seguir as instruções do clube. A compra permanece pendente até o administrador confirmar o recebimento externo. Após confirmação, o QR de ingresso aparece para o titular. A portaria consome as entradas informadas e bloqueia reutilização acima da quantidade comprada.
+No fluxo anterior do torcedor, **Perfil → Meus ingressos** mantém reservas e pagamentos existentes. Esse checkout continua separado do V1; seus bilhetes antigos não foram convertidos para a nova portaria. A unificação do checkout exige uma etapa própria de migração, antes de usar os dois fluxos em um mesmo evento.
 
-Ingressos gratuitos são emitidos automaticamente. Reservas pagas têm até 15 minutos, estoque conferido na transação e total calculado no servidor. Cancelamento de reserva não paga libera os lugares. Pagamento automático via gateway, reembolso de pedido pago e compra com cashback ainda exigem integração. Configure `TICKET_PAYMENT_INSTRUCTIONS` com as orientações reais do clube.
+No checkout anterior, ingressos gratuitos são emitidos automaticamente e reservas pagas usam estoque transacional e total calculado no servidor. Com `PAYMENT_MODE=sicredi`, recebimentos Pix são conferidos no banco e confirmados automaticamente; casos não pagáveis entram em devolução. A portaria e o checkout V1 são módulos separados. [Configuração do gateway](docs/sicredi-pix.md).
 
 Detalhes de uso e limites: [contas e ingressos](docs/real-accounts-ticketing.md).
 
@@ -79,7 +81,7 @@ Detalhes de uso e limites: [contas e ingressos](docs/real-accounts-ticketing.md)
 
 Carteira em reais separada dos pontos Zezito. O modelo B gera a venda no caixa e vincula o torcedor por código da carteira ou QR da venda. O modelo A com QR fixo usa o mesmo motor e começa desativado por loja.
 
-O gateway ainda não foi escolhido. Não há Pix pagável ou movimentação de dinheiro real no módulo de cashback. A simulação de API exige `PAYMENT_MODE=demo`, apenas fora de produção e com conta autorizada de caixa. [Fluxo e contrato de integração](docs/cashback-pix.md).
+Para o Pix de ingressos e loja, a integração Sicredi está preparada. A API Pix de recebimento não executa split de parceiros: o cashback real fica bloqueado nesse modo. A simulação continua exclusiva de `PAYMENT_MODE=demo` fora de produção. [Pix Sicredi e limites](docs/sicredi-pix.md).
 
 ## Estrutura
 
@@ -133,7 +135,7 @@ Administração: [gestão de vendas por partida, receita, disponibilidade e hist
 
 Interface administrativa: [componentes reutilizáveis, calendário, selects e organização das páginas](docs/admin-design.md).
 
-Pagamento Pix automático: [configuração Asaas, webhook, emissão de ingresso e conciliação/estorno](docs/asaas.md). O processamento começa junto da API em modo Asaas. Configure o sandbox em `apps/api/.env` antes de habilitar; o webhook público é `/v1/payments/webhook`.
+Pagamento Pix automático: [Sicredi com certificado mTLS, OAuth, webhook, conciliação e devolução](docs/sicredi-pix.md). Configure `SICREDI_PIX_*` e escolha `PAYMENT_MODE=sicredi`. Histórico e compatibilidade [Asaas](docs/asaas.md) foram preservados, sem fallback automático. O checkout V1 permanece separado.
 
 Loja oficial: [produtos, variações, estoque, pedidos, checkout, Pix, Melhor Envio e modo de loja externa](docs/loja.md). Aplique a migration `20261106020000_shop` com `npm run db:deploy` e configure **Loja** no admin. CPF/CNPJ, telefone, CEP e valores em reais usam máscaras compartilhadas em `packages/shared/forms.js`.
 
@@ -151,4 +153,6 @@ Saques, pedidos de repasse e comprovantes privados: [operação e instalação](
 
 Configurações de valores, taxas, prazos, pontos e recompensas: [mapa do admin e regras de histórico](docs/configuracoes-negocio.md).
 
-No erro de conexão do login, **Verificar conexão** consulta os endpoints públicos de API/banco sem enviar credenciais. O modo de desenvolvimento web também oferece **Atualizar página** para descartar uma tela já carregada com configuração antiga. Não há repetição automática de login em outro endereço.
+No erro de conexão do login, **Verificar conexão** consulta API/banco e testa um POST JSON sem enviar credenciais. O modo de desenvolvimento web também oferece **Atualizar página** para descartar uma tela já carregada com configuração antiga. Não há repetição automática de login em outro endereço.
+
+Fotos de produtos: upload pelo computador/celular, links HTTPS, prévia e escolha da capa. [Formatos, armazenamento e implantação](docs/loja-fotos.md).

@@ -28,6 +28,7 @@ export function createApiRouter(routes, access) {
         const result = await route.handler({ req, url: res.locals.url, body: parseBody ? req.body : undefined, ...res.locals.auth });
         const status = result.status ?? 200;
         if (status === 204) return res.status(status).end();
+        if (route.binary) return res.status(status).set(result.headers).send(result.body);
         return res.status(status).json({ data: result.data });
       });
     }

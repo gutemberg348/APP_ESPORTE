@@ -80,6 +80,7 @@ export async function updateAdminAccount(
     });
   }
   if (roleChanged) {
+    await tx.gateAssignmentV1.updateMany({ where: { userId }, data: { active: false } });
     await tx.gateAssignment.updateMany({
       where: { userId },
       data: { active: false },

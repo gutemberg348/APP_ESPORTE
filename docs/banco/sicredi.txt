@@ -1,0 +1,47 @@
+SICREDI PIX — MIGRATION PREPARADA 11/11/2026
+Arquivo: 20261111020000_sicredi_pix/migration.sql.
+Validada em PostgreSQL descartável. Banco local recusou conexão (ECONNREFUSED), não aplicada nesta revisão.
+Nenhum dado Asaas foi apagado ou reinterpretado como Sicredi.
+
+TicketPaymentMethod (enum): acrescenta SICREDI, mantendo MANUAL, FREE e ASAAS.
+TicketPayment/ShopPayment usam SICREDI e reference SICREDI:<txid> nos novos recebimentos.
+
+GatewayIntent:
++ provider VARCHAR(16) NOT NULL DEFAULT 'asaas', CHECK asaas/sicredi.
+  O default classifica registros anteriores como Asaas sem alterar seus valores ou referências.
++ pixEndToEndId VARCHAR(32) NULL — E2E confirmado no GET Pix bancário.
++ refundId VARCHAR(35) NULL — ID persistido antes de pedir devolução; conservado em timeout.
++ refundAmountCents INTEGER NULL — valor imutável da solicitação de devolução, em centavos.
+~ customerId UUID passa a aceitar NULL. FK para BillingCustomer mantém ON DELETE RESTRICT.
+  Sicredi não cadastra um cliente/devedor remoto obrigatório; CPF não é coletado só para gerar o Pix.
+  BillingCustomer e seus documentos criptografados anteriores permanecem para o Asaas.
++ UNIQUE(environment,pixEndToEndId): um recebimento não pode creditar dois pedidos no mesmo ambiente.
++ INDEX(provider,environment,nextAttemptAt): fila por provedor e ambiente.
++ CHECK Sicredi exige providerReference alfanumérica de 26–35 caracteres e chargeId NULL.
++ CHECK refundAmountCents é positivo e não supera amountCents, quando preenchido.
+Mantém UNIQUE(environment,providerReference), generation UNIQUE, relações e CHECK de um único alvo
+(ticketId,chargeId,shopOrderId). ChargeId não é usado pela Sicredi porque split não é suportado.
+
+Sicredi grava providerReference=TXID ANTES de chamar PUT /cob/{txid}.
+Generation tem namespace sicredi:<ambiente>:<reserva>, sem reaproveitar o namespace Asaas.
+Snapshot: userId, hash SHA256 da chave Pix recebedora e geração da reserva, quando ingresso.
+Não guarda certificado, chave privada, client secret ou access token.
+CreationStartedAt, leases e wakeVersion são reutilizados para idempotência e recuperação.
+NetCents permanece NULL quando a API não informa o líquido; não é inventada tarifa efetiva.
+
+GatewayWebhook:
++ provider VARCHAR(16) NOT NULL DEFAULT 'asaas', CHECK asaas/sicredi.
+externalId Sicredi tem prefixo sicredi: e hash do ambiente/TXID/E2E.
+fingerprint guarda esse hash; paymentId guarda TXID. Não persiste o corpo com dados do pagador.
+Notificação somente acorda uma referência local; processedAt confirma o enfileiramento, não o pagamento.
+A confirmação financeira é feita por consulta mTLS ao Sicredi e transação no banco.
+
+Financeiro/estoque:
+TicketFinancial, TicketFinancialEntry e política histórica continuam existentes.
+Tarifa Sicredi segue ESTIMATED conforme configuração, pois não é retornada no contrato usado.
+Pedidos usam as mesmas rotinas transacionais de estoque/estorno e movimentos idempotentes.
+ClubPayout/WithdrawalRequest não passam a enviar dinheiro automaticamente.
+
+V1:
+Não altera PedidoIngressoV1, IngressoV1, AdmissionV1 ou seus QRs.
+Integração do checkout V1 é uma etapa independente da troca do gateway existente.

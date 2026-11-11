@@ -1,0 +1,60 @@
+PORTARIA UNIFICADA V1 — 11/11/2026
+Migration aditiva: 20261111010000_unified_gate_v1. Aplicada localmente; 29 migrations.
+Nenhum pagamento, ingresso, QR ou status anterior foi apagado/resetado.
+
+1. ingresso_v1_ingressos (Prisma IngressoV1)
++ codigoPortaria VARCHAR(19) NOT NULL UNIQUE
+  DEFAULT ingresso_v1_novo_codigo(). CHECK formato XXXX-XXXX-XXXX-XXXX, hex maiúsculo.
+  Função SQL VOLATILE usa gen_random_uuid(), conserva 64 bits aleatórios, sem sequências ou IDs públicos.
+  Backfill dos V1 existentes é automático; UTILIZADO continua UTILIZADO.
+  QR, código de barras e código manual apontam ao mesmo ingresso.
++ relação admission: zero ou um AdmissionV1.
+
+2. ingresso_v1_partidas (Prisma PartidaIngressoV1)
++ portariaAtiva BOOLEAN NOT NULL DEFAULT false
++ portariaAbreEm TIMESTAMP(3) NULL
++ portariaFechaEm TIMESTAMP(3) NULL
+CHECK, quando ambos preenchidos: fechamento posterior à abertura.
+Aplicação também valida os horários efetivos, incluindo defaults -2h/+4h da dataPartida.
+Datas guardadas em UTC, formulário de Patos UTC-3. Editáveis pelo ADMIN.
+
+3. GateAssignmentV1
+id UUID PK, gerado pelo Prisma
+userId UUID NOT NULL → User.id ON DELETE CASCADE
+alocacaoId UUID NOT NULL → ingresso_v1_alocacoes_setor_partida.id ON DELETE RESTRICT
+active BOOLEAN NOT NULL DEFAULT true
+createdAt TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+UNIQUE(userId, alocacaoId); INDEX(alocacaoId, active)
+Relações: User.gateAssignmentsV1[] e AlocacaoSetorPartidaIngressoV1.gateAssignments[].
+Cada alocação pertence a uma partida e setor; escala não dá acesso a outro jogo no mesmo estádio.
+Edição desativa as marcações antigas e reativa/cria as selecionadas em transação.
+Mudança do perfil remove permissões V1; desativação do usuário bloqueia acesso mesmo com escala ativa.
+
+4. AdmissionV1
+id UUID PK, gerado pelo Prisma (protocolo da entrada)
+ingressoId UUID NOT NULL UNIQUE → ingresso_v1_ingressos.id ON DELETE RESTRICT
+actorId UUID NOT NULL → User.id ON DELETE RESTRICT
+requestKey VARCHAR(80) NOT NULL
+gate VARCHAR(50) NOT NULL
+createdAt TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+UNIQUE(actorId, requestKey); INDEX(createdAt, actorId)
+Relações: User.admissionsV1[], IngressoV1.admission?.
+Uma admissão por ingresso, uma operação por funcionário/chave.
+Ingresso muda VENDIDO → UTILIZADO, utilizadoEm e catracaId são gravados na mesma transação Serializable.
+Repetição da mesma chave recupera protocolo; chave em outro ingresso/portão é rejeitada.
+Não são criadas admissões fictícias para ingressos utilizados antes desta migration.
+
+5. AuditLog (tabela existente)
+INGRESSO_V1_ACESSO_LIBERADO: ingressoId em entityId; details contém admissionId, partidaId,
+alocacaoId e gate. Uma auditoria por consumo confirmado.
+INGRESSO_V1_VALIDACAO_RECUSADA: partidaId em entityId; details contém code, stage
+(INSPECT/ADMIT), alocacaoId, gate e credentialHash SHA-256. Nunca persiste QR/código bruto.
+GATE_V1_ASSIGNMENTS_CHANGED: userId em entityId; details contém allocationIds.
+Histórico de recusa é filtrado pelas partidas do clube e pelo ator, quando GATE.
+
+6. LEGADO
+GateAssignment e TicketAdmission permanecem para preservar dados e relatórios antigos.
+Não há conversão automática de GateAssignment para GateAssignmentV1.
+Não há conversão automática de Ticket/Pedido legado para IngressoV1/PedidoIngressoV1.
+A interface de leitura antiga foi removida e os caminhos antigos de admissão usam o motor V1.
+Relatórios antigos continuam consultáveis no histórico anterior ao V1.

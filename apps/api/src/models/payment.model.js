@@ -63,6 +63,7 @@ const paymentModel = {
     return charge;
   },
   createCharge(userId, input, channel, tenantSlug) {
+    if (env.PAYMENT_MODE === 'sicredi') throw new AppError(409, 'SICREDI_SPLIT_UNAVAILABLE', 'Recebimento Pix Sicredi não oferece split automático de parceiros.');
     return serializable(db, async (tx) => {
       let offer;
       if (channel === 'CASHIER_QR') {

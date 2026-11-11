@@ -39,7 +39,7 @@ export async function reverseShopOrder(tx, intent, refunded, now) {
     }
     return;
   }
-  if (order.payment.reference !== `ASAAS:${intent.providerReference}`) return;
+  if (order.payment.reference !== `${(intent.provider || 'asaas').toUpperCase()}:${intent.providerReference}`) return;
   await applyShopRefund(tx, order, refunded, now, order.userId, { intentId: intent.id });
 }
 export async function applyShopRefund(tx, order, refunded, now, actorId, details = {}) {

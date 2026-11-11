@@ -4,23 +4,27 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --watch src/server.js",
+    "dev": "node src/server.js",
+    "dev:watch": "node --watch --watch-preserve-output src/server.js",
     "start": "node src/server.js",
     "check": "node scripts/check.mjs",
     "test": "node --test test/*.test.js",
-    "test:unit": "node --test test/crypto.test.js test/business-rules.test.js test/payment-rules.test.js test/ticket-rules.test.js test/jwt.test.js test/auth-service.test.js test/ticket-entry.test.js test/gate-rules.test.js test/ticket-checkout.test.js test/http.test.js test/admin-sales.test.js test/admin-reports.test.js test/asaas.test.js test/asaas-flow.test.js test/shop.test.js test/finance.test.js test/recovery-partners.test.js test/withdrawals.test.js test/development-origins.test.js test/database-recovery.test.js test/settings.test.js",
+    "test:unit": "node --test test/crypto.test.js test/business-rules.test.js test/payment-rules.test.js test/ticket-rules.test.js test/jwt.test.js test/auth-service.test.js test/ticket-entry.test.js test/gate-rules.test.js test/ticket-checkout.test.js test/http.test.js test/admin-sales.test.js test/admin-reports.test.js test/asaas.test.js test/asaas-flow.test.js test/shop.test.js test/finance.test.js test/recovery-partners.test.js test/withdrawals.test.js test/development-origins.test.js test/database-recovery.test.js test/settings.test.js test/shop-images.test.js test/gate-v1.test.js test/sicredi.test.js test/sicredi-flow.test.js",
     "test:integration": "node scripts/test-integration.mjs",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
+    "ingresso-v1:seed-demo": "node prisma/seed-ingresso-v1-demo.js",
     "db:bootstrap": "node prisma/bootstrap.js",
     "db:prepare": "node scripts/prepare-database.mjs",
     "auth:cleanup": "node scripts/cleanup-auth.mjs",
     "shop:cleanup": "node scripts/cleanup-shop.mjs",
     "shop:seed-demo": "node prisma/seed-shop-demo.js",
     "db:studio": "prisma studio",
-    "payments:webhook": "node scripts/configure-asaas-webhook.mjs"
+    "payments:webhook": "node scripts/configure-pix-webhook.mjs",
+    "sicredi:diagnostic": "node scripts/sicredi-pix.mjs diagnostico",
+    "sicredi:token": "node scripts/sicredi-pix.mjs token"
   },
   "dependencies": {
     "@nacional/shared": "0.1.0",
@@ -31,6 +35,7 @@
     "jose": "^6.2.14",
     "nodemailer": "^10.4.0",
     "pg": "^8.16.3",
+    "sharp": "0.35.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {

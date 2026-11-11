@@ -1,3 +1,5 @@
+import { gateV1Controller } from '../controllers/gate-v1.controller.js';
+import { shopImageController } from '../controllers/shop-image.controller.js';
 import { settingsController } from '../controllers/settings.controller.js';
 import { authController } from '../controllers/auth.controller.js';
 import { memberController } from '../controllers/member.controller.js';
@@ -6,7 +8,7 @@ import { engagementController } from '../controllers/engagement.controller.js';
 import { paymentController } from '../controllers/payment.controller.js';
 import { adminController } from '../controllers/admin.controller.js';
 import { staffController } from '../controllers/staff.controller.js';
-import { asaasController } from '../controllers/asaas.controller.js';
+import { pixController } from '../controllers/pix.controller.js';
 import { shopController } from '../controllers/shop.controller.js';
 import { withdrawalController } from '../controllers/withdrawal.controller.js';
 import { financeController } from '../controllers/finance.controller.js';
@@ -14,6 +16,16 @@ import { passwordRecoveryController } from '../controllers/password-recovery.con
 import { partnerController } from '../controllers/partner.controller.js';
 import { ingressoV1Controller } from '../controllers/ingresso-v1.controller.js';
 export const routes = [
+  { method: 'POST', path: '/v1/payments/webhooks/sicredi/:webhookToken', handler: pixController.sicrediWebhook },
+  { method: 'POST', path: '/v1/payments/webhooks/sicredi/:webhookToken/pix', handler: pixController.sicrediWebhook },
+  { method: 'GET', path: '/v1/gate/v1/matches', handler: gateV1Controller.matches, private: true, gate: true },
+  { method: 'POST', path: '/v1/gate/v1/inspect', handler: gateV1Controller.inspect, private: true, gate: true },
+  { method: 'POST', path: '/v1/gate/v1/admit', handler: gateV1Controller.admit, private: true, gate: true },
+  { method: 'GET', path: '/v1/gate/v1/receipt', handler: gateV1Controller.receipt, private: true, gate: true },
+  { method: 'GET', path: '/v1/gate/v1/history', handler: gateV1Controller.history, private: true, gate: true },
+  { method: 'PUT', path: '/v1/admin/employees/assignments-v1', handler: gateV1Controller.assignments, private: true, admin: true },
+  { method: 'POST', path: '/v1/admin/shop/images', handler: shopImageController.upload, private: true, admin: true, bodyLimit: 7100000, shopLimit: 'upload' },
+  { method: 'GET', path: '/media/shop/upload-:id.webp', handler: shopImageController.read, binary: true },
   { method: 'GET', path: '/v1/ingresso-v1/templates-setor', handler: ingressoV1Controller.templatesSetor, private: true, admin: true },
   { method: 'POST', path: '/v1/ingresso-v1/templates-setor', handler: ingressoV1Controller.criarTemplateSetor, private: true, admin: true },
   { method: 'PATCH', path: '/v1/ingresso-v1/templates-setor', handler: ingressoV1Controller.atualizarTemplateSetor, private: true, admin: true },
@@ -41,8 +53,8 @@ export const routes = [
   { method: 'GET', path: '/v1/ingresso-v1/ingressos', handler: ingressoV1Controller.ingressos, private: true, admin: true },
   { method: 'POST', path: '/v1/ingresso-v1/ingressos/emitir', handler: ingressoV1Controller.emitirIngresso, private: true, admin: true },
   { method: 'POST', path: '/v1/ingresso-v1/ingressos/cancelar', handler: ingressoV1Controller.cancelarIngresso, private: true, admin: true },
-  { method: 'POST', path: '/v1/ingresso-v1/portaria/inspecionar', handler: ingressoV1Controller.inspecionarPortaria, private: true, admin: true },
-  { method: 'POST', path: '/v1/ingresso-v1/portaria/liberar', handler: ingressoV1Controller.liberarPortaria, private: true, admin: true },
+  { method: 'POST', path: '/v1/ingresso-v1/portaria/inspecionar', handler: gateV1Controller.inspect, private: true, gate: true },
+  { method: 'POST', path: '/v1/ingresso-v1/portaria/liberar', handler: gateV1Controller.admit, private: true, gate: true },
   { method: 'GET', path: '/v1/admin/settings', handler: settingsController.settings, private: true, admin: true },
   { method: 'PUT', path: '/v1/admin/settings', handler: settingsController.saveSettings, private: true, admin: true },
   { method: 'GET', path: '/v1/admin/rewards', handler: settingsController.rewards, private: true, admin: true },
@@ -87,8 +99,8 @@ export const routes = [
   { method: 'POST', path: '/v1/shop/orders', handler: shopController.checkout, private: true, shopLimit: 'checkout' },
   { method: 'GET', path: '/v1/shop/orders', handler: shopController.orders, private: true },
   { method: 'POST', path: '/v1/shop/orders/cancel', handler: shopController.cancel, private: true, shopLimit: 'checkout' },
-  { method: 'POST', path: '/v1/shop/pix', handler: asaasController.shopPix, private: true, shopLimit: 'checkout' },
-  { method: 'GET', path: '/v1/shop/payment', handler: asaasController.shopIntent, private: true },
+  { method: 'POST', path: '/v1/shop/pix', handler: pixController.shopPix, private: true, shopLimit: 'checkout' },
+  { method: 'GET', path: '/v1/shop/payment', handler: pixController.shopIntent, private: true },
   { method: 'GET', path: '/v1/admin/shop/settings', handler: shopController.adminSettings, private: true, admin: true },
   { method: 'PUT', path: '/v1/admin/shop/settings', handler: shopController.saveSettings, private: true, admin: true },
   { method: 'GET', path: '/v1/admin/shop/products', handler: shopController.adminProducts, private: true, admin: true },
@@ -108,27 +120,27 @@ export const routes = [
   { method: 'POST', path: '/v1/admin/shop/orders/confirm', handler: shopController.confirm, private: true, admin: true },
   { method: 'POST', path: '/v1/admin/shop/orders/refund-manual', handler: shopController.refundManual, private: true, admin: true },
   { method: 'PATCH', path: '/v1/admin/shop/orders', handler: shopController.fulfill, private: true, admin: true },
-  { method: 'GET', path: '/v1/payments/billing-profile', handler: asaasController.profile, private: true },
-  { method: 'PUT', path: '/v1/payments/billing-profile', handler: asaasController.saveProfile, private: true, authLimit: true },
-  { method: 'POST', path: '/v1/tickets/pix', handler: asaasController.ticketPix, private: true, ticketLimit: 'checkout' },
-  { method: 'GET', path: '/v1/tickets/payment', handler: asaasController.ticketIntent, private: true },
-  { method: 'POST', path: '/v1/payments/pix', handler: asaasController.cashPix, private: true },
-  { method: 'GET', path: '/v1/payments/intent', handler: asaasController.intent, private: true },
-  { method: 'GET', path: '/v1/admin/payments', handler: asaasController.list, private: true, admin: true },
-  { method: 'POST', path: '/v1/admin/payments/reconcile', handler: asaasController.retry, private: true, admin: true },
-  { method: 'POST', path: '/v1/admin/payments/refund', handler: asaasController.refund, private: true, admin: true },
+  { method: 'GET', path: '/v1/payments/billing-profile', handler: pixController.profile, private: true },
+  { method: 'PUT', path: '/v1/payments/billing-profile', handler: pixController.saveProfile, private: true, authLimit: true },
+  { method: 'POST', path: '/v1/tickets/pix', handler: pixController.ticketPix, private: true, ticketLimit: 'checkout' },
+  { method: 'GET', path: '/v1/tickets/payment', handler: pixController.ticketIntent, private: true },
+  { method: 'POST', path: '/v1/payments/pix', handler: pixController.cashPix, private: true },
+  { method: 'GET', path: '/v1/payments/intent', handler: pixController.intent, private: true },
+  { method: 'GET', path: '/v1/admin/payments', handler: pixController.list, private: true, admin: true },
+  { method: 'POST', path: '/v1/admin/payments/reconcile', handler: pixController.retry, private: true, admin: true },
+  { method: 'POST', path: '/v1/admin/payments/refund', handler: pixController.refund, private: true, admin: true },
   { method: 'POST', path: '/v1/tickets/quote', handler: clubController.quoteTicket, private: true, ticketLimit: 'quote' },
   { method: 'GET', path: '/v1/admin/employees', handler: staffController.list, private: true, admin: true },
   { method: 'POST', path: '/v1/admin/employees', handler: staffController.create, private: true, admin: true },
   { method: 'PATCH', path: '/v1/admin/employees', handler: staffController.update, private: true, admin: true },
   { method: 'PUT', path: '/v1/admin/employees/password', handler: staffController.password, private: true, admin: true },
-  { method: 'PUT', path: '/v1/admin/employees/assignments', handler: staffController.assignments, private: true, admin: true },
-  { method: 'GET', path: '/v1/gate/matches', handler: staffController.matches, private: true, gate: true },
-  { method: 'POST', path: '/v1/gate/inspect', handler: adminController.inspect, private: true, gate: true },
-  { method: 'POST', path: '/v1/gate/admit', handler: adminController.admit, private: true, gate: true },
-  { method: 'GET', path: '/v1/gate/admission-receipt', handler: adminController.receipt, private: true, gate: true },
+  { method: 'PUT', path: '/v1/admin/employees/assignments', handler: gateV1Controller.assignments, private: true, admin: true },
+  { method: 'GET', path: '/v1/gate/matches', handler: gateV1Controller.matches, private: true, gate: true },
+  { method: 'POST', path: '/v1/gate/inspect', handler: gateV1Controller.inspect, private: true, gate: true },
+  { method: 'POST', path: '/v1/gate/admit', handler: gateV1Controller.admit, private: true, gate: true },
+  { method: 'GET', path: '/v1/gate/admission-receipt', handler: gateV1Controller.receipt, private: true, gate: true },
   { method: 'GET', path: '/v1/tickets/entry-qr', handler: adminController.qr, private: true, ticketLimit: 'qr' },
-  { method: 'GET', path: '/v1/admin/tickets/admission-receipt', handler: adminController.receipt, private: true, admin: true },
+  { method: 'GET', path: '/v1/admin/tickets/admission-receipt', handler: gateV1Controller.receipt, private: true, admin: true },
   { method: 'GET', path: '/v1/tickets/payment-instructions', handler: adminController.instructions, private: true },
   { method: 'POST', path: '/v1/tickets/cancel', handler: adminController.customerCancel, private: true, ticketLimit: 'checkout' },
   { method: 'GET', path: '/v1/admin/overview', handler: adminController.overview, private: true, admin: true },
@@ -148,8 +160,8 @@ export const routes = [
   { method: 'DELETE', path: '/v1/admin/tickets', handler: adminController.deleteSale, private: true, admin: true },
   { method: 'POST', path: '/v1/admin/tickets/confirm-payment', handler: adminController.confirm, private: true, admin: true },
   { method: 'POST', path: '/v1/admin/tickets/cancel', handler: adminController.cancel, private: true, admin: true },
-  { method: 'POST', path: '/v1/admin/tickets/inspect', handler: adminController.inspect, private: true, admin: true },
-  { method: 'POST', path: '/v1/admin/tickets/admit', handler: adminController.admit, private: true, admin: true },
+  { method: 'POST', path: '/v1/admin/tickets/inspect', handler: gateV1Controller.inspect, private: true, admin: true },
+  { method: 'POST', path: '/v1/admin/tickets/admit', handler: gateV1Controller.admit, private: true, admin: true },
   { method: 'GET', path: '/v1/admin/users', handler: adminController.users, private: true, admin: true },
   { method: 'GET', path: '/v1/admin/users/detail', handler: adminController.userDetail, private: true, admin: true },
   { method: 'PATCH', path: '/v1/admin/users', handler: adminController.updateUser, private: true, admin: true },

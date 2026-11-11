@@ -5,7 +5,45 @@ import { createApp } from '../src/http/app.js';
 import { createHttpServer } from '../src/http/server.js';
 import { inject } from './helpers/inject.js';
 import { AppError } from '../src/lib/errors.js';
+import { EventEmitter } from 'node:events';
+import { requestContext } from '../src/http/middleware/request-context.js';
 const logger = { info() {}, error() {} };
+test('public connectivity probe verifies JSON POST and CORS without account access or consuming login quotas', async () => {
+  let logins = 0;
+  const application = createApp({ logger, corsOrigins: ['http://localhost:8081'], routes: [{
+    method: 'POST', path: '/login', authLimit: true, handler: () => { logins++; return { data: { status: 'ok' } }; },
+  }] });
+  const options = { method: 'POST', headers: { Origin: 'http://localhost:8081', 'Content-Type': 'application/json' }, body: '{"probe":true}' };
+  const preflight = await inject(application, '/connection-check', { method: 'OPTIONS', headers: { Origin: 'http://localhost:8081', 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type' } });
+  assert.equal(preflight.status, 204);
+  for (let i = 0; i < 12; i++) {
+    const probe = await inject(application, '/connection-check', options);
+    assert.equal(probe.status, 200);
+    assert.deepEqual((await probe.json()).data, { status: 'ok', service: 'nacional-api', method: 'POST' });
+    assert.equal(probe.headers.get('access-control-allow-origin'), 'http://localhost:8081');
+    assert.equal(probe.headers.get('access-control-expose-headers'), 'X-Request-Id');
+  }
+  assert.equal(logins, 0);
+  assert.equal((await inject(application, '/login', { ...options, body: '{}' })).status, 200);
+  assert.equal(logins, 1);
+  for (const body of ['{}', '{"probe":false}', 'null', '[]', '{"probe":true,"password":"must-not-be-echoed"}']) {
+    const response = await inject(application, '/connection-check', { ...options, body });
+    assert.equal(response.status, 422); assert.ok(!(await response.text()).includes('must-not-be-echoed'));
+  }
+  assert.equal((await inject(application, '/connection-check')).status, 405);
+  assert.equal((await inject(application, '/connection-check', { ...options, headers: { ...options.headers, Origin: 'http://untrusted.local' } })).status, 403);
+});
+
+test('interrupted requests are observable without logging passwords, tokens or query strings', () => {
+  const logs = [], req = { method: 'POST', originalUrl: '/v1/auth/login?token=must-not-appear', headers: { authorization: 'must-not-appear' }, body: { password: 'must-not-appear' } };
+  const res = new EventEmitter(); res.locals = {}; res.set = () => {}; res.writableFinished = false;
+  let next = false;
+  requestContext({ info: (line) => logs.push(JSON.parse(line)) })(req, res, () => { next = true; });
+  res.emit('close');
+  assert.equal(next, true); assert.equal(logs.length, 1); assert.equal(logs[0].event, 'REQUEST_INTERRUPTED');
+  assert.equal(logs[0].path, '/v1/auth/login'); assert.ok(!JSON.stringify(logs).includes('must-not-appear'));
+  res.writableFinished = true; res.emit('close'); assert.equal(logs.length, 1, 'completed responses do not generate interruption warnings');
+});
 async function app(t, extra = {}) {
   const application = createApp({
     logger, corsOrigins: ['http://allowed.local'],

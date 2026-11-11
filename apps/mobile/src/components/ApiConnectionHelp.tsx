@@ -6,14 +6,14 @@ import { Button } from './ui';
 import { Text } from './Typography';
 import { useTheme } from '../theme/ThemeProvider';
 
-export function ApiConnectionHelp({ disabled = false }: { disabled?: boolean }) {
+export function ApiConnectionHelp({ disabled = false, onRecovered }: { disabled?: boolean; onRecovered?: (message: string) => void }) {
   const { colors } = useTheme(), [busy, setBusy] = useState(false), [status, setStatus] = useState<ApiConnectionStatus | null>(null);
   const lock = useRef(false), mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   async function check() {
     if (lock.current) return;
     lock.current = true; setBusy(true); setStatus(null);
-    try { const result = await checkApiConnection(config.apiUrl); if (mounted.current) setStatus(result); }
+    try { const result = await checkApiConnection(config.apiUrl); if (mounted.current) { setStatus(result); if (result.ready) onRecovered?.(result.message); } }
     catch { if (mounted.current) setStatus({ ready: false, apiOrigin: '', message: 'Confira a configuração do endereço da API.' }); }
     finally { lock.current = false; if (mounted.current) setBusy(false); }
   }

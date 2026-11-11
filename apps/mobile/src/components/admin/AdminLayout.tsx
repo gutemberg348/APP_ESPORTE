@@ -29,9 +29,8 @@ export const adminSections = [
   { name: 'Templates de venda', icon: Ticket, group: 'Gestão de Ingressos', description: 'Regras comerciais por estádio.' },
   { name: 'Partidas V1', icon: CalendarDays, group: 'Gestão de Ingressos', description: 'Crie partidas e aplique templates de venda.' },
   { name: 'Pedidos e ingressos V1', icon: Ticket, group: 'Gestão de Ingressos', description: 'Acompanhe pedidos e ingressos do novo sistema.' },
-  { name: 'Portaria V1', icon: ScanLine, group: 'Gestão de Ingressos', description: 'Valide entradas do sistema paralelo após sua implementação.' },
-  { name: 'Portaria', icon: ScanLine, group: 'Controle', description: 'Confira o ingresso e registre a entrada.' },
-  { name: 'Histórico de portaria', icon: History, group: 'Controle', description: 'Entradas, recusas e protocolos de validação.' },
+  { name: 'Portaria', icon: ScanLine, group: 'Gestão de Ingressos', description: 'Câmera, imagem, leitor USB e código impresso. Entradas do sistema de ingressos V1.' },
+  { name: 'Histórico de portaria', icon: History, group: 'Controle', description: 'Entradas e protocolos da portaria unificada.' },
   { name: 'Auditoria', icon: History, group: 'Controle', description: 'Consulte as ações realizadas pela administração.' },
 ];
 export function useDesktopAdmin() { return useWindowDimensions().width >= 1024; }

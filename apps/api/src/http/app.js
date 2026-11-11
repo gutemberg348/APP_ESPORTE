@@ -6,6 +6,7 @@ import { createAccessMiddleware } from './middleware/access.js';
 import { errorHandler } from './middleware/errors.js';
 import { createApiRouter } from './router.js';
 import { AppError } from '../lib/errors.js';
+import { jsonBody } from './body.js';
 
 export function createApp({ routes, authenticate, corsOrigins = [], allowDevelopmentOrigin, readiness = async () => {}, logger = console }) {
   const app = express();
@@ -34,6 +35,20 @@ export function createApp({ routes, authenticate, corsOrigins = [], allowDevelop
   app.get('/ready', async (req, res) => {
     try { await readiness(); } catch { throw new AppError(503, 'DATABASE_UNAVAILABLE', 'Banco de dados indisponível.'); }
     return res.json({ data: { status: 'ready' } });
+  });
+  // Exercise the same JSON POST/CORS path as login, without credentials,
+  // account lookup, authentication quotas or any database mutation.
+  app.all('/connection-check', (req, res, next) => {
+    if (req.method !== 'POST') {
+      res.set('Allow', 'POST');
+      throw new AppError(405, 'METHOD_NOT_ALLOWED', 'Método não permitido.');
+    }
+    next();
+  });
+  app.post('/connection-check', jsonBody, (req, res) => {
+    if (!req.body || Array.isArray(req.body) || req.body.probe !== true || Object.keys(req.body).length !== 1)
+      throw new AppError(422, 'INVALID_CONNECTION_PROBE', 'Envie somente a verificação de conexão.');
+    return res.json({ data: { status: 'ok', service: 'nacional-api', method: 'POST' } });
   });
   app.use(createApiRouter(routes, access));
   app.use(() => { throw new AppError(404, 'NOT_FOUND', 'Rota não encontrada.'); });

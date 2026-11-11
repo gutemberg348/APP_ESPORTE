@@ -364,6 +364,9 @@ export const partidaV1CreateSchema = z
     fimVendas: z.string().trim().nullable().optional(),
     status: z.enum(['RASCUNHO', 'PUBLICADA', 'ESGOTADA', 'ENCERRADA', 'CANCELADA']).default('PUBLICADA'),
     vendasAtivas: z.boolean().default(true),
+    portariaAtiva: z.boolean().default(false),
+    portariaAbreEm: z.iso.datetime().nullable().optional(),
+    portariaFechaEm: z.iso.datetime().nullable().optional(),
     alocacoesSetor: z.array(alocacaoSetorPartidaV1Schema).optional().default([]),
   })
   .strict();
@@ -378,6 +381,9 @@ export const partidaV1UpdateSchema = z
     fimVendas: z.string().trim().nullable().optional(),
     status: z.enum(['RASCUNHO', 'PUBLICADA', 'ESGOTADA', 'ENCERRADA', 'CANCELADA']).optional(),
     vendasAtivas: z.boolean().optional(),
+    portariaAtiva: z.boolean().optional(),
+    portariaAbreEm: z.iso.datetime().nullable().optional(),
+    portariaFechaEm: z.iso.datetime().nullable().optional(),
     alocacoesSetor: z.array(alocacaoSetorPartidaV1Schema).optional(),
   })
   .strict();
@@ -410,17 +416,4 @@ export const ingressoV1EmitirSchema = z
   })
   .strict();
 
-export const portariaV1InspecionarSchema = z
-  .object({
-    chaveQr: z.string().trim().min(4).max(1024),
-    partidaId: z.uuid().optional(),
-  })
-  .strict();
-
-export const portariaV1LiberarSchema = z
-  .object({
-    chaveQr: z.string().trim().min(4).max(1024),
-    partidaId: z.uuid().optional(),
-    catracaId: z.string().trim().max(50).optional(),
-  })
-  .strict();
+export { gateV1InspectSchema as portariaV1InspecionarSchema, gateV1AdmitSchema as portariaV1LiberarSchema } from './gate-v1.js';

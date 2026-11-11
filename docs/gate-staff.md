@@ -1,3 +1,5 @@
+> Este documento descreve o fluxo anterior. A operação de leitura foi substituída pela [portaria unificada V1](ingresso-v1.md) em 11/11/2026; consulte seu contrato e os limites de migração antes de operar. Dados e relatórios anteriores permanecem preservados.
+
 # Funcionários e app de portaria
 
 ## Operação

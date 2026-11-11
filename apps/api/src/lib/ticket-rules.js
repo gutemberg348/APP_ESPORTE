@@ -31,7 +31,7 @@ export function assertGateOpen(match, now = new Date()) {
 export function assertTicketPaid(ticket) {
   if (ticket.deletedAt) throw new AppError(409, 'SALE_DELETED', 'Este ingresso foi excluído pela administração.');
   const payment = ticket.payment;
-  if (!payment || !['MANUAL', 'FREE', 'ASAAS'].includes(payment.method) || (payment.refundedCents || 0) > 0 || payment.amountCents !== ticket.priceCents || (payment.method === 'MANUAL' && !payment.confirmedById) || (payment.method === 'ASAAS' && !/^ASAAS:pay_[A-Za-z0-9_-]+$/.test(payment.reference || '')) || (payment.method === 'FREE' && ticket.priceCents !== 0)) throw new AppError(409, 'TICKET_PAYMENT_NOT_CONFIRMED', 'O recebimento deste ingresso não foi confirmado corretamente.');
+  if (!payment || !['MANUAL', 'FREE', 'ASAAS', 'SICREDI'].includes(payment.method) || (payment.refundedCents || 0) > 0 || payment.amountCents !== ticket.priceCents || (payment.method === 'MANUAL' && !payment.confirmedById) || (payment.method === 'ASAAS' && !/^ASAAS:pay_[A-Za-z0-9_-]+$/.test(payment.reference || '')) || (payment.method === 'SICREDI' && !/^SICREDI:[A-Za-z0-9]{26,35}$/.test(payment.reference || '')) || (payment.method === 'FREE' && ticket.priceCents !== 0)) throw new AppError(409, 'TICKET_PAYMENT_NOT_CONFIRMED', 'O recebimento deste ingresso não foi confirmado corretamente.');
   if (!ticket.user?.active) throw new AppError(409, 'HOLDER_DISABLED', 'A conta do titular está desativada.');
 }
 export function assertEntryContext(ticket, claims, selectedMatchId, now = new Date(), selectedSectorId = ticket.sectorId) {

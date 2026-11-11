@@ -1,3 +1,7 @@
+> Pix Sicredi (11/11/2026): o controller genérico de Pix preserva as rotas de checkout/loja/admin e seleciona Sicredi com `PAYMENT_MODE=sicredi`. Webhook: POST `/v1/payments/webhooks/sicredi/:token` e `/v1/payments/webhooks/sicredi/:token/pix`; notificações apenas acionam consulta bancária. [Configuração e contrato](sicredi-pix.md). O webhook anterior permanece exclusivo do Asaas.
+
+> Atualização de 11/11/2026: a leitura foi unificada no V1. Consulte [portaria e contrato atual](ingresso-v1.md). Os caminhos `/gate/inspect`, `/gate/admit`, `/admin/tickets/inspect`, `/admin/tickets/admit` e aliases de recibo agora usam os campos V1 (`partidaId`, `alocacaoId`, `chaveQr`, `requestKey`, `catracaId`); os contratos antigos de leitura abaixo são históricos. Relatórios anteriores permanecem disponíveis.
+
 # API v1
 
 Loja oficial: catálogo, variações, estoque, checkout e frete estão descritos no [guia da loja](loja.md). A migration `20261106020000_shop` precisa ser aplicada antes de utilizar essas rotas.
@@ -201,3 +205,9 @@ Erros principais: 400 JSON/setor inválido, 401 credenciais/sessão inválida, 4
 
 
 Configurações comerciais (ADMIN ativo): `GET/PUT /v1/admin/settings` e `GET/POST/PATCH /v1/admin/rewards`. Atualizações enviam `version`; conflitos de versão retornam 409. Preços, comissões e taxas continuam nos cadastros de Jogos, Planos, Loja, Parceiros e Financeiro. Consulte o [mapa completo das configurações](configuracoes-negocio.md) para regras de snapshots e compatibilidade dos recebedores Asaas.
+
+
+Diagnóstico público de envio: `POST /connection-check`, corpo exclusivo `{"probe":true}`, `Content-Type: application/json`; resposta `data: { status: "ok", service: "nacional-api", method: "POST" }`. Não autentica, não consulta conta nem altera dados; usa CORS e limite geral. Junto de `/health` e `/ready`, é usado pelo botão Verificar conexão e `npm run api:check`. Consulte [estabilidade da API](api-estabilidade.md).
+
+
+Fotos da loja: `POST /v1/admin/shop/images` (ADMIN; JSON com `mimeType`/`base64`) grava a foto normalizada e retorna sua URL. `GET /media/shop/upload-<UUID>.webp` retorna a imagem pública em formato binário. [Limites e armazenamento](loja-fotos.md).

@@ -61,7 +61,7 @@ export interface Ticket {
   voidedQuantity?: number;
   remainingQuantity?: number;
   entryQr?: string | null;
-  payment?: { method: 'MANUAL' | 'FREE' | 'ASAAS'; amountCents: number; refundedCents?: number; confirmedAt: string } | null;
+  payment?: { method: 'MANUAL' | 'FREE' | 'ASAAS' | 'SICREDI'; amountCents: number; refundedCents?: number; confirmedAt: string } | null;
   match: Match;
   sector: Sector;
 }
@@ -73,7 +73,7 @@ export interface TicketQuote {
   serverTime: string; expiresAt: string; paymentInstructions: string;
 }
 export interface GateCredential { token?: string; code?: string }
-export interface Employee { id: string; name: string; email: string; contact: string; updatedAt: string; role: 'GATE' | 'ADMIN' | 'CASHIER'; active: boolean; assignments: { sectorId: string; sectorName: string; matchId: string; matchLabel: string; active: boolean }[] }
+export interface Employee { id: string; name: string; email: string; contact: string; updatedAt: string; role: 'GATE' | 'ADMIN' | 'CASHIER'; active: boolean; assignmentsV1: { allocationId: string; sectorName: string; matchId: string; matchLabel: string; active: boolean }[]; assignments: { sectorId: string; sectorName: string; matchId: string; matchLabel: string; active: boolean }[] }
 export interface TicketReview extends Ticket { holder: string; qrExpiresAt: string; serverTime: string; decision: 'REVIEW'; message: string }
 export interface AdmissionResult { ticket: Ticket & { holder: string }; duplicate: boolean; decision: 'ALLOW' | 'ALREADY_RECORDED'; admission: { id: string; quantity: number; createdAt: string } }
 export interface PointEntry { id: string; amount: number; reason: string; createdAt: string }
@@ -116,6 +116,7 @@ export interface CashCharge {
   expiresAt: string; createdAt: string; paidAt: string | null;
 }
 export interface PixIntent {
+  provider?: 'asaas' | 'sicredi';
   shopOrderId?: string | null;
   id: string; ticketId: string | null; chargeId: string | null; environment: 'sandbox' | 'production';
   state: 'QUEUED' | 'CREATING' | 'PENDING' | 'PROCESSING' | 'RECEIVED' | 'REFUNDING' | 'REFUNDED' | 'CANCELED' | 'REVIEW' | 'PARTIAL_REFUND';

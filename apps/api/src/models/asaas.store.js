@@ -1,3 +1,5 @@
+import { ticketGeneration, publicIntent } from '../payments/pix-contract.js';
+export { ticketGeneration, publicIntent } from '../payments/pix-contract.js';
 import { paymentDestination } from '../lib/merchant-payment-policy.js';
 import { randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
@@ -11,16 +13,12 @@ import { recordTicketFinancial } from '../lib/ticket-finance.js';
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 const providerId = z.string().regex(/^[A-Za-z0-9_-]{3,100}$/);
 const webhookSchema = z.object({ id: z.string().min(1).max(200), event: z.string().min(1).max(100), payment: z.object({ id: providerId, externalReference: z.string().max(200).nullable().optional() }).passthrough().optional() }).passthrough();
-export const ticketGeneration = (ticket) => hash(JSON.stringify([ticket.id, ticket.createdAt, ticket.sectorId, ticket.quantity, ticket.priceCents, ticket.expiresAt]));
 export const billingSchema = z.object({ document: z.string().max(25).transform((value) => value.replace(/\D/g, '')).refine(validTaxId, 'Informe um CPF ou CNPJ válido.') }).strict();
 const terminal = ['CANCELED', 'REFUNDED'];
 const reference = (intent) => `socio:${intent.id}`;
 const dateInPatos = (instant) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Fortaleza', year: 'numeric', month: '2-digit', day: '2-digit' }).format(instant);
 const error = (code, message) => new AppError(409, code, message);
-export function publicIntent(intent, now = new Date()) {
-  const payable = intent.state === 'PENDING' && !intent.cancelRequestedAt && !intent.refundRequestedAt && intent.expiresAt > now;
-  return { id: intent.id, ticketId: intent.ticketId, chargeId: intent.chargeId, shopOrderId: intent.shopOrderId || null, environment: intent.environment, state: intent.state, amountCents: intent.amountCents, refundedCents: intent.refundedCents, pixPayload: payable ? intent.pixPayload : null, expiresAt: intent.expiresAt, failureCode: intent.failureCode, serverTime: now.toISOString() };
-}
+
 export function createAsaasStore(client, { settings, api, now = () => new Date() }) {
   const environment = settings.ASAAS_ENVIRONMENT, docs = protectDocument(settings.ASAAS_DATA_SECRET || 'disabled');
   const enabled = () => { if (settings.PAYMENT_MODE !== 'asaas') throw new AppError(503, 'ASAAS_DISABLED', 'O pagamento Pix não está habilitado.'); };
@@ -233,7 +231,7 @@ export function createAsaasStore(client, { settings, api, now = () => new Date()
         if (!order) throw new AppError(404, 'SHOP_NOT_FOUND', 'Pedido não encontrado.');
         if (order.status !== 'PENDING' || order.payment || order.expiresAt <= now() || order.totalCents <= 0) throw error('SHOP_NOT_PAYABLE', 'Este pedido não está disponível para pagamento.');
         const previous = await tx.gatewayIntent.findUnique({ where: { shopOrderId: orderId } });
-        if (previous && previous.environment !== environment) throw error('ASAAS_ENVIRONMENT_MISMATCH', 'Este pedido pertence a outro ambiente.');
+        if (previous && (previous.environment !== environment || previous.provider !== 'asaas')) throw error('ASAAS_ENVIRONMENT_MISMATCH', 'Este pedido pertence a outro ambiente.');
         const intent = await tx.gatewayIntent.upsert({ where: { shopOrderId: orderId }, update: {}, create: { environment, generation: `${environment}:shop:${orderId}`, shopOrderId: orderId, customerId: customer.id, amountCents: order.totalCents, expiresAt: order.expiresAt, snapshot: { userId } } });
         return publicIntent(intent, now());
       });
@@ -245,7 +243,7 @@ export function createAsaasStore(client, { settings, api, now = () => new Date()
       return intent ? publicIntent(intent, now()) : null;
     },
     async ownIntent(userId, id) {
-      const intent = await client.gatewayIntent.findFirst({ where: { id, environment, OR: [{ ticket: { userId } }, { charge: { wallet: { userId } } }, { shopOrder: { userId } }] } });
+      const intent = await client.gatewayIntent.findFirst({ where: { id, provider: 'asaas', environment, OR: [{ ticket: { userId } }, { charge: { wallet: { userId } } }, { shopOrder: { userId } }] } });
       if (!intent) throw new AppError(404, 'PAYMENT_NOT_FOUND', 'Pagamento não encontrado na sua conta.');
       return publicIntent(intent, now());
     },
@@ -261,7 +259,7 @@ export function createAsaasStore(client, { settings, api, now = () => new Date()
       const event = webhookSchema.parse(body);
       const data = { environment, externalId: event.id, event: event.event, paymentId: event.payment?.id || null, externalReference: event.payment?.externalReference || null };
       const fingerprint = hash(JSON.stringify([data.event, data.paymentId, data.externalReference]));
-      const existing = await client.gatewayWebhook.findUnique({ where: { environment_externalId: { environment, externalId: event.id } } });
+      const existing = await client.gatewayWebhook.findUnique({ where: { provider: 'asaas', environment_externalId: { environment, externalId: event.id } } });
       if (existing) {
         if (existing.fingerprint !== fingerprint) throw error('WEBHOOK_ID_CONFLICT', 'Evento com identificador conflitante.');
         return { received: true, duplicate: true };
@@ -269,7 +267,7 @@ export function createAsaasStore(client, { settings, api, now = () => new Date()
       try { await client.gatewayWebhook.create({ data: { ...data, fingerprint } }); }
       catch (err) {
         if (err.code !== 'P2002') throw err;
-        const previous = await client.gatewayWebhook.findUnique({ where: { environment_externalId: { environment, externalId: event.id } } });
+        const previous = await client.gatewayWebhook.findUnique({ where: { provider: 'asaas', environment_externalId: { environment, externalId: event.id } } });
         if (previous.fingerprint !== fingerprint) throw error('WEBHOOK_ID_CONFLICT', 'Evento com identificador conflitante.');
         return { received: true, duplicate: true };
       }
@@ -277,7 +275,7 @@ export function createAsaasStore(client, { settings, api, now = () => new Date()
     },
     async requestRefund(actorId, id, reason) {
       return serializable(client, async (tx) => {
-        const intent = await tx.gatewayIntent.findFirst({ where: { id, environment } });
+        const intent = await tx.gatewayIntent.findFirst({ where: { id, provider: 'asaas', environment } });
         if (!intent) throw new AppError(404, 'PAYMENT_NOT_FOUND', 'Pagamento não encontrado.');
         await tx.gatewayIntent.update({ where: { id }, data: { refundRequestedAt: intent.refundRequestedAt || now(), nextAttemptAt: now(), pixPayload: null, wakeVersion: { increment: 1 } } });
         if (intent.ticketId) {
@@ -291,28 +289,28 @@ export function createAsaasStore(client, { settings, api, now = () => new Date()
       });
     },
     async adminList({ limit, offset }) {
-      const rows = await client.gatewayIntent.findMany({ where: { environment }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: limit, skip: offset });
+      const rows = await client.gatewayIntent.findMany({ where: { provider: 'asaas', environment }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: limit, skip: offset });
       return rows.map((row) => ({ ...publicIntent(row, now()), providerReference: row.providerReference, attempts: row.attempts, updatedAt: row.updatedAt }));
     },
-    async retry(id) { await client.gatewayIntent.updateMany({ where: { id, environment }, data: { nextAttemptAt: now(), wakeVersion: { increment: 1 } } }); return { queued: true }; },
+    async retry(id) { await client.gatewayIntent.updateMany({ where: { id, provider: 'asaas', environment }, data: { nextAttemptAt: now(), wakeVersion: { increment: 1 } } }); return { queued: true }; },
     async tick() {
       enabled();
       // Inbox is persisted before HTTP 200. Awakening an intent and acknowledging
       // the notification share one transaction, so a crash cannot lose the wakeup.
-      const inbox = await client.gatewayWebhook.findMany({ where: { environment, processedAt: null }, orderBy: { createdAt: 'asc' }, take: 100 });
+      const inbox = await client.gatewayWebhook.findMany({ where: { provider: 'asaas', environment, processedAt: null }, orderBy: { createdAt: 'asc' }, take: 100 });
       for (const event of inbox) await serializable(client, async (tx) => {
         const intentId = /^socio:([a-f\d-]{36})$/i.exec(event.externalReference || '')?.[1];
-        const intent = await tx.gatewayIntent.findFirst({ where: { environment, OR: [...(event.paymentId ? [{ providerReference: event.paymentId }] : []), ...(intentId ? [{ id: intentId }] : [])] } });
+        const intent = await tx.gatewayIntent.findFirst({ where: { provider: 'asaas', environment, OR: [...(event.paymentId ? [{ providerReference: event.paymentId }] : []), ...(intentId ? [{ id: intentId }] : [])] } });
         if (intent) await tx.gatewayIntent.update({ where: { id: intent.id }, data: { nextAttemptAt: now(), wakeVersion: { increment: 1 } } });
         await tx.gatewayWebhook.update({ where: { id: event.id }, data: { processedAt: now() } });
       });
-      const due = await client.gatewayIntent.findMany({ where: { environment, nextAttemptAt: { lte: now() }, OR: [{ lockedUntil: null }, { lockedUntil: { lt: now() } }] }, orderBy: { nextAttemptAt: 'asc' }, take: 20 });
+      const due = await client.gatewayIntent.findMany({ where: { provider: 'asaas', environment, nextAttemptAt: { lte: now() }, OR: [{ lockedUntil: null }, { lockedUntil: { lt: now() } }] }, orderBy: { nextAttemptAt: 'asc' }, take: 20 });
       for (const row of due) await this.process(row.id);
       return { inbox: inbox.length, intents: due.length };
     },
     async process(id) {
       const token = randomUUID(), instant = now();
-      const claim = await client.gatewayIntent.updateMany({ where: { id, environment, OR: [{ lockedUntil: null }, { lockedUntil: { lt: instant } }] }, data: { lockToken: token, lockedUntil: new Date(instant.getTime() + 300000), attempts: { increment: 1 } } });
+      const claim = await client.gatewayIntent.updateMany({ where: { id, provider: 'asaas', environment, OR: [{ lockedUntil: null }, { lockedUntil: { lt: instant } }] }, data: { lockToken: token, lockedUntil: new Date(instant.getTime() + 300000), attempts: { increment: 1 } } });
       if (!claim.count) return;
       let delay = 30000, wakeVersion;
       try {

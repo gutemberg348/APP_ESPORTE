@@ -13,3 +13,13 @@ apps/api/generated
 docs
 base.js
 naca-digital
+
+# Private bank certificates and keys
+.secrets/
+**/.secrets/
+*.key
+*.cer
+*.pem
+*.csr
+*.pfx
+*.p12

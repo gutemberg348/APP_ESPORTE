@@ -9,7 +9,7 @@ import { useSession } from '../providers/SessionProvider';
 import { useTheme } from '../theme/ThemeProvider';
 import { pixApi } from '../services/pix';
 import { messageOf, money } from '../utils/format';
-export const pixStates: Record<PixIntent['state'], string> = { QUEUED: 'Preparando seu Pix…', CREATING: 'Gerando cobrança…', PENDING: 'Aguardando pagamento', PROCESSING: 'Pagamento em análise pelo Asaas', RECEIVED: 'Pagamento confirmado', REFUNDING: 'Estorno solicitado · aguardando confirmação', REFUNDED: 'Pagamento estornado', CANCELED: 'Cobrança cancelada', REVIEW: 'Pagamento em conciliação', PARTIAL_REFUND: 'Pagamento parcialmente estornado' };
+export const pixStates: Record<PixIntent['state'], string> = { QUEUED: 'Preparando seu Pix…', CREATING: 'Gerando cobrança…', PENDING: 'Aguardando pagamento', PROCESSING: 'Pagamento em análise pelo provedor', RECEIVED: 'Pagamento confirmado', REFUNDING: 'Estorno solicitado · aguardando confirmação', REFUNDED: 'Pagamento estornado', CANCELED: 'Cobrança cancelada', REVIEW: 'Pagamento em conciliação', PARTIAL_REFUND: 'Pagamento parcialmente estornado' };
 export function PixCheckout({ ticketId, chargeId, shopOrderId, initialIntentId, onChanged }: { ticketId?: string; chargeId?: string; shopOrderId?: string; initialIntentId?: string | null; onChanged: () => Promise<unknown> }) {
   const { token, demoMode } = useSession(), { colors } = useTheme();
   const [profile, setProfile] = useState<BillingProfile | null>(null), [intent, setIntent] = useState<PixIntent | null>(null), [document, setDocument] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [copied, setCopied] = useState(false);
@@ -56,6 +56,7 @@ export function PixCheckout({ ticketId, chargeId, shopOrderId, initialIntentId, 
   if (demoMode || profile?.enabled === false) return null;
   return <Panel style={{ gap: 14, borderColor: colors.primary, borderRadius: 16 }}>
     <Text heading style={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>Pagamento Pix</Text>
+    {intent?.failureCode === 'PAYMENT_PROVIDER_NOT_ACTIVE' && <Text style={{ color: colors.danger }}>Este pagamento pertence ao provedor anterior. Fale com o atendimento antes de pagar.</Text>}
     {profile?.environment === 'sandbox' && <Text style={{ color: colors.gold, fontSize: 12 }}>Ambiente de testes · Pix sandbox sem dinheiro real.</Text>}
     {!intent && <>
       {!profile?.configured && <><Text style={{ color: colors.muted, fontSize: 13 }}>Informe o CPF ou CNPJ do pagador para gerar a cobrança.</Text><TextInput accessibilityLabel="CPF ou CNPJ do pagador" value={document} onChangeText={setDocument} keyboardType="number-pad" autoComplete="off" maxLength={25} placeholder="CPF ou CNPJ" placeholderTextColor={colors.muted} style={{ minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, color: colors.text }} /></>}

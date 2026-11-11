@@ -1,96 +1,14 @@
-import crypto from 'node:crypto';
+import { signTicketV1Token } from '../lib/ingresso-v1-token.js';
+import { gateV1Service } from '../services/gate-v1.service.js';
 import { db } from '../config/database.js';
 import { env } from '../config/env.js';
 import { AppError } from '../lib/errors.js';
 
-const uuidToB64 = (u) => Buffer.from(String(u).replace(/-/g, ''), 'hex').toString('base64url');
-const b64ToUuid = (b) => {
-  const hex = Buffer.from(String(b), 'base64url').toString('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
-};
-
-/**
- * Gera um token criptográfico assinado com HMAC-SHA256 usando TICKET_QR_SECRET (64+ bytes).
- * Estrutura compacta para leitura rápida em câmera/scanner:
- * INGV1.<payloadBase64Url>.<assinaturaHmacSha256Base64Url>
- */
-function signTicketV1Token({
-  partidaId,
-  alocacaoId,
-  blocoEscolhido = null,
-  fileiraEscolhida = null,
-  assentoEscolhido = null,
-  now = Date.now(),
-}) {
-  const nonce = crypto.randomBytes(12).toString('base64url'); // 96 bits CSPRNG
-  const payloadObj = {
-    v: 1,
-    m: uuidToB64(partidaId),
-    a: uuidToB64(alocacaoId),
-    b: blocoEscolhido,
-    r: fileiraEscolhida,
-    s: assentoEscolhido,
-    t: Math.floor(now / 1000),
-    n: nonce,
-  };
-  const payloadB64 = Buffer.from(JSON.stringify(payloadObj)).toString('base64url');
-  const mac = crypto
-    .createHmac('sha256', env.TICKET_QR_SECRET)
-    .update(`INGV1.${payloadB64}`)
-    .digest('base64url');
-  return `INGV1.${payloadB64}.${mac}`;
-}
-
-/**
- * Verifica em tempo constante (timingSafeEqual) a autenticidade e integridade
- * criptográfica do token antes de aceitar na portaria.
- */
-function verifyTicketV1TokenSignature(rawToken) {
-  const clean = (rawToken || '').trim();
-  if (!clean.startsWith('INGV1.')) {
-    return { isSignedFormat: false, valid: false, claims: null };
-  }
-  const parts = clean.split('.');
-  if (parts.length !== 3) {
-    throw new AppError(422, 'INVALID_TICKET_QR', 'Formato de token QR inválido ou adulterado.');
-  }
-  const [, payloadB64, providedMac] = parts;
-  const expectedMac = crypto
-    .createHmac('sha256', env.TICKET_QR_SECRET)
-    .update(`INGV1.${payloadB64}`)
-    .digest('base64url');
-
-  const bufProvided = Buffer.from(providedMac, 'utf8');
-  const bufExpected = Buffer.from(expectedMac, 'utf8');
-  if (
-    bufProvided.length !== bufExpected.length ||
-    !crypto.timingSafeEqual(bufProvided, bufExpected)
-  ) {
-    throw new AppError(
-      422,
-      'INVALID_TICKET_QR',
-      'Assinatura criptográfica do ingresso inválida (possível tentativa de falsificação).'
-    );
-  }
-
-  try {
-    const raw = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
-    return {
-      isSignedFormat: true,
-      valid: true,
-      claims: {
-        mid: raw.m ? b64ToUuid(raw.m) : raw.mid,
-        alc: raw.a ? b64ToUuid(raw.a) : raw.alc,
-        blk: raw.b ?? raw.blk ?? null,
-        row: raw.r ?? raw.row ?? null,
-        seat: raw.s ?? raw.seat ?? null,
-        iat: raw.t ?? raw.iat,
-        jti: raw.n ?? raw.jti,
-      },
-    };
-  } catch {
-    throw new AppError(422, 'INVALID_TICKET_QR', 'Payload do token QR corrompido.');
-  }
+function assertGateWindow(date, open, close) {
+  const matchTime = new Date(date).getTime();
+  const start = open ? new Date(open).getTime() : matchTime - 2 * 3600000;
+  const end = close ? new Date(close).getTime() : matchTime + 4 * 3600000;
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) throw new AppError(422, 'INVALID_GATE_WINDOW', 'O fechamento da portaria deve ser posterior à abertura.');
 }
 
 async function getTenantId(tx = db) {
@@ -470,9 +388,11 @@ export const ingressoV1OperacaoModel = {
       fimVendas = null,
       status = 'PUBLICADA',
       vendasAtivas = true,
+      portariaAtiva = false, portariaAbreEm = null, portariaFechaEm = null,
       alocacoesSetor = [],
     }
   ) {
+    assertGateWindow(dataPartida, portariaAbreEm, portariaFechaEm);
     const tenantId = await getTenantId();
     const estadio = await db.estadioIngressoV1.findFirst({
       where: { id: estadioId, tenantId },
@@ -554,6 +474,7 @@ export const ingressoV1OperacaoModel = {
         fimVendas: fimVendas ? new Date(fimVendas) : null,
         status,
         vendasAtivas,
+        portariaAtiva, portariaAbreEm: portariaAbreEm ? new Date(portariaAbreEm) : null, portariaFechaEm: portariaFechaEm ? new Date(portariaFechaEm) : null,
         alocacoesSetor: {
           create: alocacoesInput.map((a) => ({
             setorId: a.setorId,
@@ -590,6 +511,7 @@ export const ingressoV1OperacaoModel = {
       fimVendas,
       status,
       vendasAtivas,
+      portariaAtiva, portariaAbreEm, portariaFechaEm,
       alocacoesSetor,
     }
   ) {
@@ -601,6 +523,8 @@ export const ingressoV1OperacaoModel = {
     if (!current) {
       throw new AppError(404, 'PARTIDA_NAO_ENCONTRADA', 'Partida não encontrada.');
     }
+
+    assertGateWindow(dataPartida ?? current.dataPartida, portariaAbreEm === undefined ? current.portariaAbreEm : portariaAbreEm, portariaFechaEm === undefined ? current.portariaFechaEm : portariaFechaEm);
 
     const updated = await db.$transaction(async (tx) => {
       if (Array.isArray(alocacoesSetor)) {
@@ -669,6 +593,9 @@ export const ingressoV1OperacaoModel = {
           ...(fimVendas !== undefined ? { fimVendas: fimVendas ? new Date(fimVendas) : null } : {}),
           ...(status !== undefined ? { status } : {}),
           ...(vendasAtivas !== undefined ? { vendasAtivas } : {}),
+        ...(portariaAtiva !== undefined ? { portariaAtiva } : {}),
+        ...(portariaAbreEm !== undefined ? { portariaAbreEm: portariaAbreEm ? new Date(portariaAbreEm) : null } : {}),
+        ...(portariaFechaEm !== undefined ? { portariaFechaEm: portariaFechaEm ? new Date(portariaFechaEm) : null } : {}),
         },
         include: partidaInclude,
       });
@@ -940,7 +867,7 @@ export const ingressoV1OperacaoModel = {
       fileiraEscolhida: fileiraStr,
       assentoEscolhido: numAssento,
       tipoValidacao: alocacao.setor.tipoValidacao || 'QR_CODE_ESTATICO',
-    });
+    }, env.TICKET_QR_SECRET);
 
     const ingresso = await db.$transaction(async (tx) => {
       const pedido = await tx.pedidoIngressoV1.create({
@@ -1056,84 +983,6 @@ export const ingressoV1OperacaoModel = {
   // =========================================================================
   // 5. PORTARIA V1 (INSPEÇÃO E VALIDAÇÃO DE ACESSO)
   // =========================================================================
-  async inspectTicket({ chaveQr, partidaId }) {
-    const tenantId = await getTenantId();
-    const cleanCode = (chaveQr || '').trim();
-
-    // 1. Se for token assinado INGV1.<payload>.<hmac>, verifica assinatura HMAC-SHA256 em tempo constante
-    const verification = verifyTicketV1TokenSignature(cleanCode);
-
-    const ingresso = await db.ingressoV1.findFirst({
-      where: {
-        chaveQr: verification.isSignedFormat ? cleanCode : cleanCode.toUpperCase(),
-        partida: {
-          estadio: { tenantId },
-          ...(partidaId ? { id: partidaId } : {}),
-        },
-      },
-      include: ingressoInclude,
-    });
-    if (!ingresso) {
-      throw new AppError(404, 'INGRESSO_NAO_ENCONTRADO', 'Token QR não encontrado para esta partida.');
-    }
-
-    // 2. Cruzamento das claims assinadas contra o registro do banco (anti-tampering)
-    if (verification.isSignedFormat && verification.claims) {
-      const c = verification.claims;
-      if (
-        c.mid !== ingresso.partidaId ||
-        c.alc !== ingresso.alocacaoId ||
-        (c.blk ?? null) !== (ingresso.blocoEscolhido ?? null) ||
-        (c.row ?? null) !== (ingresso.fileiraEscolhida ?? null) ||
-        (c.seat ?? null) !== (ingresso.assentoEscolhido ?? null)
-      ) {
-        throw new AppError(
-          422,
-          'INVALID_TICKET_QR',
-          'Os dados criptográficos do QR não correspondem ao assento/setor registrado.'
-        );
-      }
-    }
-
-    return ingresso;
-  },
-
-  async admitTicket(actorId, { chaveQr, partidaId, catracaId = 'CATRACA-01' }) {
-    const ingresso = await this.inspectTicket({ chaveQr, partidaId });
-    if (ingresso.status === 'UTILIZADO') {
-      throw new AppError(
-        409,
-        'INGRESSO_JA_UTILIZADO',
-        `Ingresso já utilizado em ${new Date(ingresso.utilizadoEm).toLocaleString('pt-BR')} (${ingresso.catracaId || 'Catraca'}).`
-      );
-    }
-    if (ingresso.status !== 'VENDIDO') {
-      throw new AppError(
-        409,
-        'INGRESSO_INVALIDO_ACESSO',
-        `Ingresso com status ${ingresso.status} não está liberado para acesso.`
-      );
-    }
-
-    const updated = await db.ingressoV1.update({
-      where: { id: ingresso.id },
-      data: {
-        status: 'UTILIZADO',
-        utilizadoEm: new Date(),
-        catracaId: catracaId?.trim() || 'CATRACA-01',
-      },
-      include: ingressoInclude,
-    });
-
-    await audit(actorId, 'INGRESSO_V1_ACESSO_LIBERADO', updated.id, {
-      chaveQr: updated.chaveQr,
-      catracaId: updated.catracaId,
-      bloco: updated.blocoEscolhido,
-      fileira: updated.fileiraEscolhida,
-      assento: updated.assentoEscolhido,
-    });
-
-    return updated;
-  },
+  inspectTicket(actorId, input) { return gateV1Service.inspect(actorId, input); },
+  admitTicket(actorId, input) { return gateV1Service.admit(actorId, input); },
 };
-

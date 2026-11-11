@@ -1,4 +1,4 @@
-import { ProductImage } from "../../shop/ProductImage";
+import { ProductPhotosField } from "./ProductPhotosField";
 import React, { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 import { Plus, Trash2, Package, Shuffle } from "lucide-react-native";
@@ -56,7 +56,7 @@ export function ShopProductForm({
       product?.compareAtCents ? centsInput(product.compareAtCents) : "",
     ),
     [cost, setCost] = useState(centsInput(product?.costCents || 0));
-  const [images, setImages] = useState(product?.images || [""]),
+  const [images, setImages] = useState(product?.images || []),
     [active, setActive] = useState(product?.active ?? true),
     [featured, setFeatured] = useState(product?.featured || false);
   const [weight, setWeight] = useState(String(product?.weightGrams || 300)),
@@ -131,7 +131,8 @@ export function ShopProductForm({
       clearTimeout(timer);
     };
   }, [skuKey, token]);
-  const blocked = busy || generating !== null;
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const blocked = busy || generating !== null || uploadingImages;
   async function generate(index: number) {
     if (!token || generationLock.current || busy) return;
     generationLock.current = true;
@@ -393,51 +394,7 @@ export function ShopProductForm({
           }
         />
       </AdminSection>
-      <AdminSection
-        title="Fotos"
-        description="Cole o endereço HTTPS de uma imagem já hospedada. A primeira foto será a capa."
-      >
-        {images.map((image, index) => (
-          <View key={index} style={{ gap: 8 }}>
-            <AdminField
-              label={index ? `Foto ${index + 1}` : "Foto de capa"}
-              value={image}
-              onChange={(text) =>
-                setImages((rows) =>
-                  rows.map((row, i) => (i === index ? text : row)),
-                )
-              }
-              autoCapitalize="none"
-              keyboardType="url"
-              placeholder="https://…/foto.jpg"
-              editable={!blocked}
-            />
-            {!!image && /^(https:\/\/|\/media\/shop\/)/i.test(image) && (
-              <ProductImage
-                uri={image}
-                label="Prévia da foto do produto"
-                style={{ width: 90, height: 90, borderRadius: 8 }}
-              />
-            )}
-            {images.length > 1 && (
-              <AdminButton
-                label="Remover foto"
-                variant="ghost"
-                disabled={blocked}
-                onPress={() =>
-                  setImages((rows) => rows.filter((_, i) => i !== index))
-                }
-              />
-            )}
-          </View>
-        ))}
-        <AdminButton
-          label="Adicionar outra foto"
-          icon={Plus}
-          disabled={blocked || images.length >= 8}
-          onPress={() => setImages([...images, ""])}
-        />
-      </AdminSection>
+      <ProductPhotosField images={images} onChange={setImages} disabled={blocked} onBusyChange={setUploadingImages} />
       <AdminButton
         label={
           advanced

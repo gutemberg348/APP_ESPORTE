@@ -10,6 +10,7 @@ export function cors(origins, allowDevelopmentOrigin = () => false) {
         'Access-Control-Allow-Origin': origin,
         'Access-Control-Allow-Methods': 'GET,POST,PATCH,PUT,DELETE,OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+        'Access-Control-Expose-Headers': 'X-Request-Id',
       });
     }
     if (req.method === 'OPTIONS') return res.status(204).end();

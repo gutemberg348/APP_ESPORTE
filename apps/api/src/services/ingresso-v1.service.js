@@ -1,3 +1,4 @@
+import { assertGateUser } from '../lib/gate-rules.js';
 import { assertAdmin } from '../lib/ticket-rules.js';
 import { ingressoV1EstadioModel } from '../models/ingresso-v1-estadio.model.js';
 import { ingressoV1OperacaoModel } from '../models/ingresso-v1-operacao.model.js';
@@ -68,8 +69,8 @@ export const ingressoV1Service = {
 
   // Portaria V1
   inspecionarPortaria: (user, input) => {
-    assertAdmin(user);
-    return ingressoV1OperacaoModel.inspectTicket(input);
+    assertGateUser(user);
+    return ingressoV1OperacaoModel.inspectTicket(user.id, input);
   },
-  liberarPortaria: guard((actorId, input) => ingressoV1OperacaoModel.admitTicket(actorId, input)),
+  liberarPortaria: (user, input) => { assertGateUser(user); return ingressoV1OperacaoModel.admitTicket(user.id, input); },
 };

@@ -1,0 +1,25 @@
+FOTOS DOS PRODUTOS — 10/11/2026
+Migration: 20261110120000_shop_image_uploads, aplicada ao banco local.
+28 migrations aplicadas. Alteração aditiva; produtos existentes preservados.
+
+ShopImage
+  id UUID PK; gerado pelo Prisma.
+  sha256 VARCHAR(64) NOT NULL UNIQUE; hash do conteúdo WebP normalizado.
+  mimeType VARCHAR(32) NOT NULL; CHECK exige image/webp.
+  byteLength INTEGER NOT NULL; entre 1 e 5242880.
+  width, height INTEGER NOT NULL; entre 1 e 2000 cada.
+  content BYTEA NOT NULL; octet_length(content) deve ser igual a byteLength.
+  createdById UUID NOT NULL FK -> User.id, ON DELETE RESTRICT, ON UPDATE CASCADE.
+  createdAt TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP.
+
+Índice único ShopImage_sha256_key permite reaproveitar conteúdo já enviado.
+CHECK ShopImage_values_valid confere tipo, tamanho, dimensões e formato do hash.
+User 1:N ShopImage; relação inversa Prisma User.shopImages.
+
+Product.images continua como String[] e guarda URLs, preservando compatibilidade
+com os links HTTPS e imagens de demonstração existentes. Não há FK entre a URL
+do produto e ShopImage; a API verifica as referências no cadastro/edição.
+ShopOrderItem.image preserva a URL da foto no momento da compra.
+Arquivos persistem mesmo após remover a referência do produto, para manter o histórico.
+AuditLog registra SHOP_IMAGE_UPLOADED com responsável e dimensões/tamanho,
+sem conteúdo base64, senha ou token.

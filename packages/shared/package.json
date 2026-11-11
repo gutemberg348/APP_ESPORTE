@@ -13,6 +13,11 @@
     },
     "./demo.json": "./demo.json",
     "./brands.json": "./brands.json",
-    "./settings": "./settings.ts"
+    "./settings": "./settings.ts",
+    "./shop-media": {
+      "types": "./shop-media.d.ts",
+      "default": "./shop-media.js"
+    },
+    "./gate-v1": "./gate-v1.ts"
   }
 }

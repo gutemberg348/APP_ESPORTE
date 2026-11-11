@@ -67,12 +67,13 @@ test('connection diagnostics validate API identity and readiness without credent
   const calls = [];
   const result = await checkApiConnection('http://localhost:3333/backend/v1', async (url, options) => {
     calls.push({ url, options });
-    return Response.json({ data: { status: url.endsWith('/health') ? 'ok' : 'ready', service: 'nacional-api' } });
+    return Response.json({ data: { status: url.endsWith('/ready') ? 'ready' : 'ok', service: 'nacional-api', ...(url.endsWith('/connection-check') ? { method: 'POST' } : {}) } });
   });
   assert.equal(result.ready, true);
-  assert.deepEqual(calls.map((call) => call.url).sort(), ['http://localhost:3333/backend/health', 'http://localhost:3333/backend/ready']);
-  for (const { options } of calls) {
-    assert.equal(options.method, 'GET'); assert.equal(options.body, undefined);
+  assert.deepEqual(calls.map((call) => call.url).sort(), ['http://localhost:3333/backend/connection-check', 'http://localhost:3333/backend/health', 'http://localhost:3333/backend/ready']);
+  for (const { url, options } of calls) {
+    if (url.endsWith('/connection-check')) { assert.equal(options.method, 'POST'); assert.deepEqual(JSON.parse(options.body), { probe: true }); assert.equal(options.headers['Content-Type'], 'application/json'); }
+    else { assert.equal(options.method, 'GET'); assert.equal(options.body, undefined); }
     assert.equal(options.credentials, 'omit'); assert.equal(options.cache, 'no-store');
     assert.equal(options.headers.Authorization, undefined);
   }
@@ -85,6 +86,21 @@ test('connection diagnostics validate API identity and readiness without credent
 test('connection diagnostics stop on deadline instead of leaving the login stuck', async () => {
   const result = await checkApiConnection('http://localhost:3333/v1', async (url, { signal }) => new Promise((resolve, reject) => signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })), 5);
   assert.equal(result.ready, false); assert.match(result.message, /localhost:3333/);
+});
+
+test('healthy GETs cannot mark a connection recovered while JSON POST fails or is replaced by another service', async () => {
+  for (const failure of ['network', 'bad-payload', 'missing-endpoint']) {
+    const result = await checkApiConnection('http://localhost:3333/v1', async (url) => {
+      if (url.endsWith('/connection-check')) {
+        if (failure === 'network') throw new TypeError('Failed to fetch');
+        if (failure === 'missing-endpoint') return Response.json({ error: { code: 'NOT_FOUND' } }, { status: 404 });
+        return Response.json({ data: { status: 'ok', service: 'another-api', method: 'POST' } });
+      }
+      return Response.json({ data: { status: url.endsWith('/health') ? 'ok' : 'ready', service: 'nacional-api' } });
+    });
+    assert.equal(result.ready, false); assert.equal(result.code, 'API_POST_FAILED');
+    assert.match(result.message, /envio de dados falhou/);
+  }
 });
 
 test('registration transport sends JSON to the API and accepts the data envelope', async () => {

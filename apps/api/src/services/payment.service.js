@@ -9,7 +9,7 @@ export const paymentService = {
   wallet: async (user, tenant = env.TENANT_SLUG) => ({ ...toCashWallet(await paymentModel.wallet(user.id, tenant)), demo: env.PAYMENT_MODE === 'demo' }),
   async merchantSetup(user) {
     const operators = await paymentModel.merchantSetup(user.id);
-    return { demo: env.PAYMENT_MODE === 'demo', enabled: env.PAYMENT_MODE !== 'disabled', merchants: operators.map(({ merchant }) => ({ id: merchant.id, name: merchant.name, fixedQr: `nacional://merchant/${merchant.publicCode}`, offers: merchant.offers.map((offer) => ({ id: offer.id, tenant: { slug: offer.tenant.slug, name: offer.tenant.name }, cashbackBps: offer.cashbackBps, commissionBps: offer.commissionBps, customerQrEnabled: offer.customerQrEnabled })) })) };
+    return { demo: env.PAYMENT_MODE === 'demo', enabled: ['asaas', 'demo'].includes(env.PAYMENT_MODE), merchants: operators.map(({ merchant }) => ({ id: merchant.id, name: merchant.name, fixedQr: `nacional://merchant/${merchant.publicCode}`, offers: merchant.offers.map((offer) => ({ id: offer.id, tenant: { slug: offer.tenant.slug, name: offer.tenant.name }, cashbackBps: offer.cashbackBps, commissionBps: offer.commissionBps, customerQrEnabled: offer.customerQrEnabled })) })) };
   },
   merchantCharges: async (user) => (await paymentModel.merchantCharges(user.id)).map(toCharge),
   merchantCreate: async (user, input) => toCharge(await paymentModel.createCharge(user.id, input, 'CASHIER_QR')),

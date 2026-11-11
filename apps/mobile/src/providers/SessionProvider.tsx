@@ -6,7 +6,7 @@ import { request, ApiError } from '../services/api';
 import { authClient } from '../services/auth-client';
 interface Session {
   member: Member | null; token: string | null; loading: boolean; bootError: string | null; demoMode: boolean;
-  signIn: (email: string, password: string, name?: string, portal?: 'APP' | 'ADMIN') => Promise<void>;
+  signIn: (email: string, password: string, name?: string, portal?: 'APP' | 'ADMIN' | 'GATE') => Promise<void>;
   signOut: () => Promise<void>; logoutAll: () => Promise<void>; clearSession: () => Promise<void>;
   retry: () => Promise<void>; updateMember: (member: Member) => void; resumeDemo: () => void;
 }
@@ -38,8 +38,8 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
     if (!config.demo) void retry();
     return unsubscribe;
   }, []);
-  async function signIn(email: string, password: string, name?: string, portal: 'APP' | 'ADMIN' = 'APP') {
-    const result = await request<AuthResponse>(name ? '/auth/register' : '/auth/login', { method: 'POST', body: { email, password, ...(name ? { name } : portal === 'ADMIN' ? { portal } : {}) } });
+  async function signIn(email: string, password: string, name?: string, portal: 'APP' | 'ADMIN' | 'GATE' = 'APP') {
+    const result = await request<AuthResponse>(name ? '/auth/register' : '/auth/login', { method: 'POST', body: { email, password, ...(name ? { name } : portal !== 'APP' ? { portal } : {}) } });
     await authClient.accept(result); setToken(result.accessToken); setMember(result.member);
   }
   const signOut = useCallback(async () => {

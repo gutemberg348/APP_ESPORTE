@@ -14,7 +14,7 @@ export function createAccessMiddleware(authenticate) {
     checkout: createRateLimiter({ max: 10 }),
     qr: createRateLimiter({ max: 20 }),
   };
-  const shopLimits = { quote: createRateLimiter({ max: 20 }), checkout: createRateLimiter({ max: 10 }) };
+  const shopLimits = { upload: createRateLimiter({ max: 20 }), quote: createRateLimiter({ max: 20 }), checkout: createRateLimiter({ max: 10 }) };
   function enforce(res, accepted, seconds, code, message) {
     if (accepted) return;
     res.set('Retry-After', String(seconds));

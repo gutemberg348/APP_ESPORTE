@@ -352,14 +352,14 @@ export function createFinanceStore(client, { now = () => new Date() } = {}) {
           });
           const intent = ticket.paymentIntents.find(
             (item) =>
-              ticket.payment.reference === `ASAAS:${item.providerReference}`,
+              ticket.payment.reference === `${(item.provider || 'asaas').toUpperCase()}:${item.providerReference}`,
           );
           await recordTicketFinancial(
             tx,
             { ...ticket, financialPolicy: policy },
             {
               providerNetCents:
-                ticket.payment.method === "ASAAS"
+                ["ASAAS", "SICREDI"].includes(ticket.payment.method)
                   ? intent?.netCents
                   : undefined,
               blocked: Boolean(

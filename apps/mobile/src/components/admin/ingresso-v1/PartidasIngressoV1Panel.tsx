@@ -83,6 +83,7 @@ export function PartidasIngressoV1Panel({
   const [dataPartida, setDataPartida] = useState('');
   const [status, setStatus] = useState<StatusPartidaIngressoV1>('PUBLICADA');
   const [vendasAtivas, setVendasAtivas] = useState(true);
+  const [portariaAtiva, setPortariaAtiva] = useState(false), [portariaAbreEm, setPortariaAbreEm] = useState(''), [portariaFechaEm, setPortariaFechaEm] = useState('');
   const [alocacoesDraft, setAlocacoesDraft] = useState<AlocacaoDraft[]>([]);
   const [formError, setFormError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<PartidaIngressoV1 | null>(null);
@@ -181,6 +182,7 @@ export function PartidasIngressoV1Panel({
     setDataPartida('');
     setStatus('PUBLICADA');
     setVendasAtivas(true);
+    setPortariaAtiva(false); setPortariaAbreEm(''); setPortariaFechaEm('');
     setAlocacoesDraft([]);
     setFormError('');
     setModalOpen(true);
@@ -195,6 +197,7 @@ export function PartidasIngressoV1Panel({
     setDataPartida(formDate(row.dataPartida));
     setStatus(row.status);
     setVendasAtivas(row.vendasAtivas);
+    setPortariaAtiva(row.portariaAtiva); setPortariaAbreEm(row.portariaAbreEm ? formDate(row.portariaAbreEm) : ''); setPortariaFechaEm(row.portariaFechaEm ? formDate(row.portariaFechaEm) : '');
     setAlocacoesDraft(buildAlocacoesFromStadium(row.estadioId, row.templateVendaId || '', row));
     setFormError('');
     setModalOpen(true);
@@ -233,9 +236,11 @@ export function PartidasIngressoV1Panel({
       return;
     }
 
-    let isoDate: string;
+    let isoDate: string, open: string | null, close: string | null;
     try {
       isoDate = parseClubDate(dataPartida);
+      open = portariaAbreEm.trim() ? parseClubDate(portariaAbreEm) : null; close = portariaFechaEm.trim() ? parseClubDate(portariaFechaEm) : null;
+      if (new Date(close || new Date(new Date(isoDate).getTime() + 4 * 3600000)) <= new Date(open || new Date(new Date(isoDate).getTime() - 2 * 3600000))) throw new Error('O fechamento da portaria deve ser posterior à abertura.');
     } catch (err) {
       setFormError(messageOf(err));
       return;
@@ -284,7 +289,8 @@ export function PartidasIngressoV1Panel({
           dataPartida: isoDate,
           status,
           vendasAtivas,
-          alocacoesSetor,
+          portariaAtiva, portariaAbreEm: open, portariaFechaEm: close,
+          ...(JSON.stringify(alocacoesDraft) !== JSON.stringify(buildAlocacoesFromStadium(editing.estadioId, editing.templateVendaId || '', editing)) ? { alocacoesSetor } : {}),
         });
       } else {
         await ingressoV1Api.criarPartida(token, {
@@ -295,6 +301,7 @@ export function PartidasIngressoV1Panel({
           dataPartida: isoDate,
           status,
           vendasAtivas,
+          portariaAtiva, portariaAbreEm: open, portariaFechaEm: close,
           alocacoesSetor,
         });
       }
@@ -488,6 +495,13 @@ export function PartidasIngressoV1Panel({
             />
           </AdminSection>
 
+          <AdminSection title="Horário da portaria" description="Sem horários personalizados, permite entrada de 2 horas antes até 4 horas depois do início do jogo. A partida deve estar publicada ou esgotada.">
+            <AdminToggle label="Habilitar portaria desta partida" value={portariaAtiva} onChange={setPortariaAtiva} disabled={busy} />
+            <AdminFormGrid>
+              <AdminDateTimeField optional label="Abertura personalizada (opcional)" value={portariaAbreEm} onChange={setPortariaAbreEm} disabled={busy} />
+              <AdminDateTimeField optional label="Fechamento personalizado (opcional)" value={portariaFechaEm} onChange={setPortariaFechaEm} disabled={busy} />
+            </AdminFormGrid>
+          </AdminSection>
           <AdminSection title="Setores do estádio e preços dos lotes na partida">
             {!estadioId ? (
               <Text style={{ color: colors.muted, fontSize: 12 }}>

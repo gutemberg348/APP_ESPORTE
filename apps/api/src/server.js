@@ -3,7 +3,7 @@ import { env } from './config/env.js';
 import { db } from './config/database.js';
 import { routes } from './routes/index.js';
 import { authService } from './services/auth.service.js';
-import { startPaymentWorker } from './services/asaas.service.js';
+import { startPaymentWorker } from './services/pix.service.js';
 import { startMailWorker } from './services/password-recovery.service.js';
 import { createDevelopmentOriginPolicy } from './http/development-origins.js';
 

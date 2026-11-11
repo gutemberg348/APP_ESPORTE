@@ -386,6 +386,7 @@ export interface PartidaIngressoV1 {
   fimVendas?: string | null;
   status: StatusPartidaIngressoV1;
   vendasAtivas: boolean;
+  portariaAtiva: boolean; portariaAbreEm: string | null; portariaFechaEm: string | null;
   criadoEm: string;
   atualizadoEm: string;
   estadio: {
@@ -441,6 +442,7 @@ export interface IngressoEmitidoV1 {
   cpfTitular?: string | null;
   status: StatusIngressoV1;
   chaveQr: string;
+  codigoPortaria: string;
   utilizadoEm?: string | null;
   catracaId?: string | null;
   criadoEm: string;
@@ -631,6 +633,7 @@ export const ingressoV1Api = {
       fimVendas?: string | null;
       status?: StatusPartidaIngressoV1;
       vendasAtivas?: boolean;
+      portariaAtiva?: boolean; portariaAbreEm?: string | null; portariaFechaEm?: string | null;
       alocacoesSetor?: {
         setorId: string;
         capacidadeLiberada: number;
@@ -656,6 +659,7 @@ export const ingressoV1Api = {
       fimVendas?: string | null;
       status?: StatusPartidaIngressoV1;
       vendasAtivas?: boolean;
+      portariaAtiva?: boolean; portariaAbreEm?: string | null; portariaFechaEm?: string | null;
       alocacoesSetor?: {
         setorId: string;
         capacidadeLiberada: number;
@@ -702,8 +706,4 @@ export const ingressoV1Api = {
   cancelarIngresso: (token: string, id: string) =>
     request<IngressoEmitidoV1>('/ingresso-v1/ingressos/cancelar', { token, method: 'POST', body: { id } }),
 
-  inspecionarPortaria: (token: string, body: { chaveQr: string; partidaId?: string }) =>
-    request<IngressoEmitidoV1>('/ingresso-v1/portaria/inspecionar', { token, method: 'POST', body }),
-  liberarPortaria: (token: string, body: { chaveQr: string; partidaId?: string; catracaId?: string }) =>
-    request<IngressoEmitidoV1>('/ingresso-v1/portaria/liberar', { token, method: 'POST', body }),
 };

@@ -11,6 +11,7 @@
   },
   "scripts": {
     "dev:api": "npm run dev --workspace @nacional/api",
+    "dev:api:watch": "npm run dev:watch --workspace @nacional/api",
     "dev:mobile": "npm run start --workspace @nacional/mobile",
     "dev:mobile:clear": "npm run start --workspace @nacional/mobile -- --clear",
     "android": "npm run android --workspace @nacional/mobile",
@@ -21,6 +22,7 @@
     "db:migrate": "npm run db:migrate --workspace @nacional/api",
     "db:deploy": "npm run db:deploy --workspace @nacional/api",
     "db:seed": "npm run db:seed --workspace @nacional/api",
+    "ingresso-v1:seed-demo": "npm run ingresso-v1:seed-demo --workspace @nacional/api",
     "db:bootstrap": "npm run db:bootstrap --workspace @nacional/api",
     "db:prepare": "npm run db:prepare --workspace @nacional/api",
     "db:studio": "npm run db:studio --workspace @nacional/api",
@@ -30,6 +32,8 @@
     "test:integration": "npm run test:integration --workspace @nacional/api",
     "setup": "node scripts/setup.mjs",
     "payments:webhook": "npm run payments:webhook --workspace @nacional/api",
+    "sicredi:diagnostic": "npm run sicredi:diagnostic --workspace @nacional/api",
+    "sicredi:token": "npm run sicredi:token --workspace @nacional/api",
     "api:check": "node scripts/check-api.mjs",
     "web:clear": "npm run web --workspace @nacional/mobile -- --clear"
   }

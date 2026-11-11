@@ -192,7 +192,7 @@ export function PartnerForm({
           hint="Desativar também bloqueia novas cobranças no caixa. O histórico financeiro permanece disponível."
         />
       </AdminSection>
-      <AdminSection title="Recebedor Asaas" description="Wallet ID da conta que recebe o split do parceiro. Não é a chave de API. Alterações afetam novas vendas; cobranças existentes mantêm o recebedor original.">
+      <AdminSection title="Split Asaas (legado)" description="Exclusivo de operações Asaas. Estes campos não são usados pelo Pix Sicredi. Cobranças anteriores mantêm o recebedor original.">
         <AdminFormGrid>
           <AdminField label="Wallet ID — sandbox" value={sandboxWallet} onChange={(value) => { setSandboxWallet(value); setWalletsEdited((old) => ({ ...old, sandbox: true })); }} autoCapitalize="none" maxLength={36} editable={!busy} hint={partner?.merchant?.asaasSandboxWalletId == null ? "Cadastro legado: usa o .env até você configurar. Ao editar este campo, vazio desabilita este ambiente." : "Vazio desabilita o recebimento neste ambiente."} />
           <AdminField label="Wallet ID — produção" value={productionWallet} onChange={(value) => { setProductionWallet(value); setWalletsEdited((old) => ({ ...old, production: true })); }} autoCapitalize="none" maxLength={36} editable={!busy} hint={partner?.merchant?.asaasProductionWalletId == null ? "Cadastro legado: usa o .env até você configurar. Ao editar este campo, vazio desabilita este ambiente." : "Vazio desabilita o recebimento neste ambiente."} />
@@ -233,9 +233,9 @@ export function PartnerForm({
           disabled={busy || !offerActive}
         />
         <AdminNotice>
-          O recebimento real depende da configuração do gateway e da conta
-          recebedora do parceiro em ASAAS_MERCHANT_WALLETS. Sem essa
-          configuração, o pagamento não é liberado.
+          Vendas com cashback exigem confirmação do split pelo provedor.
+          A API Pix Sicredi de recebimento não executa esse split; pagamentos
+          de parceiros permanecem bloqueados nesse modo.
         </AdminNotice>
       </AdminSection>
       {!!error && <AdminNotice tone="error">{error}</AdminNotice>}

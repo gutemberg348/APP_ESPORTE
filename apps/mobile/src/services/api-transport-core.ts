@@ -11,7 +11,7 @@ export function createApiTransport(apiUrl: string | (() => string), fetcher: typ
     const timeout = setTimeout(() => controller.abort(), options.timeoutMs === undefined ? timeoutMs : Math.max(1000, Math.min(90000, options.timeoutMs)));
     try {
       const response = await fetcher(`${baseUrl}${path}`, {
-        method: options.method || 'GET', signal: controller.signal,
+        method: options.method || 'GET', signal: controller.signal, credentials: 'omit', cache: 'no-store',
         headers: { Accept: 'application/json', ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}) },
         ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
       });

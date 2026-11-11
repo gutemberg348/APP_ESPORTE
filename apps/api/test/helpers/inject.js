@@ -25,7 +25,7 @@ export function inject(app, path, { method = 'GET', headers = {}, body, ip = '12
     res.on('finish', () => {
       clearTimeout(timeout);
       const text = Buffer.concat(chunks).toString('utf8');
-      const response = { status: res.statusCode, headers: new Headers(res.getHeaders()), text: async () => text, json: async () => JSON.parse(text) };
+      const response = { status: res.statusCode, headers: new Headers(res.getHeaders()), bytes: Buffer.concat(chunks), text: async () => text, json: async () => JSON.parse(text) };
       socket.destroy(); resolve(response);
     });
     app.handle(req, res);

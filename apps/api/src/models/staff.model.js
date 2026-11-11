@@ -3,6 +3,7 @@ import { serializable } from "../lib/business-rules.js";
 import { AppError } from "../lib/errors.js";
 import { updateAdminAccount } from "./admin-account.store.js";
 const include = {
+  gateAssignmentsV1: { include: { alocacao: { include: { partida: true, setor: true } } } },
   gateAssignments: {
     include: { sector: { include: { match: true } } },
     orderBy: { createdAt: "asc" },
@@ -18,6 +19,7 @@ function safe(user) {
     updatedAt: user.updatedAt,
     active: user.active,
     role: user.role,
+    assignmentsV1: (user.gateAssignmentsV1 || []).map((item) => ({ allocationId: item.alocacaoId, sectorName: item.alocacao.setor.nome, matchId: item.alocacao.partidaId, matchLabel: `${item.alocacao.partida.timeMandante} × ${item.alocacao.partida.timeVisitante}`, active: item.active })),
     assignments: user.gateAssignments.map((item) => ({
       sectorId: item.sectorId,
       sectorName: item.sector.name,

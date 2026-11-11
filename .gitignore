@@ -14,3 +14,13 @@ apps/api/generated/
 apps/mobile/android/
 apps/mobile/ios/
 .DS_Store
+
+# Private bank certificates and keys
+.secrets/
+**/.secrets/
+*.key
+*.cer
+*.pem
+*.csr
+*.pfx
+*.p12

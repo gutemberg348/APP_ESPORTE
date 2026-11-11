@@ -47,7 +47,7 @@ export function createShopStore(client, { now = () => new Date(), shipping, sett
   return {
     async settings() {
       const value = await config();
-      return { ...value, pixEnabled: runtime.PAYMENT_MODE === 'asaas', shippingConfigured: Boolean(runtime.MELHOR_ENVIO_TOKEN && runtime.MELHOR_ENVIO_CONTACT_EMAIL), shippingEnvironment: runtime.MELHOR_ENVIO_ENVIRONMENT || 'sandbox' };
+      return { ...value, pixEnabled: ['asaas', 'sicredi'].includes(runtime.PAYMENT_MODE), shippingConfigured: Boolean(runtime.MELHOR_ENVIO_TOKEN && runtime.MELHOR_ENVIO_CONTACT_EMAIL), shippingEnvironment: runtime.MELHOR_ENVIO_ENVIRONMENT || 'sandbox' };
     },
     async saveSettings(actorId, data) {
       if (data.shippingProvider === 'MELHOR_ENVIO' && data.enabled && data.mode === 'INTERNAL' && (!runtime.MELHOR_ENVIO_TOKEN || !runtime.MELHOR_ENVIO_CONTACT_EMAIL)) throw shopError('SHIPPING_NOT_CONFIGURED', 'Configure o token e o email do Melhor Envio na API antes de ativar este modo.');
@@ -56,6 +56,13 @@ export function createShopStore(client, { now = () => new Date(), shipping, sett
     products,
     async saveProduct(actorId, { id, version, variants, ...data }) {
       return serializable(client, async (tx) => {
+        const uploaded = [...new Set((data.images || []).filter((uri) => uri.startsWith('/media/shop/upload-')))];
+        if (uploaded.length) {
+          const pattern = /^\/media\/shop\/upload-([a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})\.webp$/;
+          const ids = uploaded.map((uri) => pattern.exec(uri)?.[1]);
+          if (ids.some((value) => !value) || await tx.shopImage.count({ where: { id: { in: ids } } }) !== uploaded.length)
+            throw shopError('SHOP_IMAGE_NOT_FOUND', 'Uma das fotos enviadas não está disponível. Envie o arquivo novamente.');
+        }
         const previous = id ? await tx.product.findUnique({ where: { id }, include: { variants: true } }) : null;
         if (id && (!previous || previous.archivedAt)) throw missing();
         if (previous && previous.version !== version) throw stale();
@@ -132,7 +139,7 @@ export function createShopStore(client, { now = () => new Date(), shipping, sett
         if (!quote || quote.userId !== userId || quote.cartHash !== value.cartHash || quote.postalCode !== input.postalCode || quote.deliveryMethod !== input.deliveryMethod || quote.expiresAt <= now()) throw shopError('SHOP_QUOTE_EXPIRED', 'Os valores mudaram ou a cotação venceu. Calcule o frete novamente.');
         const choice = quote.options.find((option) => option.id === input.shippingOptionId);
         if (!choice) throw shopError('SHOP_INVALID_SHIPPING', 'Selecione uma das opções de entrega calculadas.');
-        if (choice.testMode && runtime.NODE_ENV === 'production' && runtime.ASAAS_ENVIRONMENT === 'production') throw shopError('SHOP_TEST_SHIPPING', 'Configure o Melhor Envio em produção antes de aceitar pagamentos reais com entrega.');
+        if (choice.testMode && runtime.NODE_ENV === 'production' && (runtime.PAYMENT_MODE === 'sicredi' ? runtime.SICREDI_PIX_ENV : runtime.ASAAS_ENVIRONMENT) === 'production') throw shopError('SHOP_TEST_SHIPPING', 'Configure o Melhor Envio em produção antes de aceitar pagamentos reais com entrega.');
         const totalCents = maxAmount(value.subtotalCents + choice.amountCents);
         if (totalCents !== input.expectedTotalCents) throw shopError('SHOP_PRICE_CHANGED', 'O total mudou. Revise o pedido.');
         if (await tx.shopOrder.count({ where: { userId, status: 'PENDING', expiresAt: { gt: now() } } }) >= value.business.shopPendingOrderLimit) throw shopError('SHOP_PENDING_LIMIT', 'Conclua ou cancele seus pedidos pendentes antes de reservar mais produtos.');
@@ -171,7 +178,7 @@ export function createShopStore(client, { now = () => new Date(), shipping, sett
     fulfill(actorId, input) {
       return serializable(client, async (tx) => {
         const order = await tx.shopOrder.findUnique({ where: { id: input.orderId }, include: shopOrderInclude }); if (!order) throw missing(); if (order.version !== input.version) throw stale();
-        if (!order.payment || order.payment.refundedCents > 0 || order.payment.amountCents !== order.totalCents || (order.payment.method === 'ASAAS' && (!order.paymentIntent || order.paymentIntent.refundRequestedAt || order.paymentIntent.state !== 'RECEIVED'))) throw shopError('SHOP_PAYMENT_REQUIRED', 'Confirme o recebimento e resolva eventuais estornos antes de despachar.');
+        if (!order.payment || order.payment.refundedCents > 0 || order.payment.amountCents !== order.totalCents || (['ASAAS', 'SICREDI'].includes(order.payment.method) && (!order.paymentIntent || order.paymentIntent.refundRequestedAt || order.paymentIntent.state !== 'RECEIVED'))) throw shopError('SHOP_PAYMENT_REQUIRED', 'Confirme o recebimento e resolva eventuais estornos antes de despachar.');
         const next = { PAID: ['PREPARING', ...(order.deliveryMethod === 'PICKUP' ? ['READY'] : [])], PREPARING: order.deliveryMethod === 'PICKUP' ? ['READY'] : ['SHIPPED'], READY: ['DELIVERED'], SHIPPED: ['SHIPPED', 'DELIVERED'] };
         if (!next[order.status]?.includes(input.status)) throw shopError('SHOP_INVALID_TRANSITION', 'Essa etapa não está disponível para o pedido.');
         if (input.status === 'SHIPPED' && !input.trackingCode) throw shopError('SHOP_TRACKING_REQUIRED', 'Informe o código de rastreio para marcar como enviado.');

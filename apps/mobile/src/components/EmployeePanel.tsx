@@ -18,6 +18,8 @@ import { AdminTable, AdminBadge } from "./admin/AdminLayout";
 import { Search, Plus, RefreshCw } from "lucide-react-native";
 import { useTheme } from "../theme/ThemeProvider";
 import { useSession } from "../providers/SessionProvider";
+import { gateV1Api } from '../services/gate-v1';
+import type { GateV1Match } from '@nacional/shared/gate-v1';
 import { employeeApi } from "../services/gate";
 import { matchDate, messageOf } from "../utils/format";
 import { recoveryApi } from "../services/recovery";
@@ -41,7 +43,6 @@ const roles = [
 ];
 
 export function EmployeePanel({
-  matches,
   desktop = false,
 }: {
   matches: Match[];
@@ -50,6 +51,7 @@ export function EmployeePanel({
   const { token } = useSession();
   const { colors } = useTheme();
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [gateMatches, setGateMatches] = useState<GateV1Match[]>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -74,8 +76,8 @@ export function EmployeePanel({
     const current = ++revision.current;
     setLoading(true);
     try {
-      const value = await employeeApi.list(token, query, offset);
-      if (current === revision.current) setEmployees(value);
+      const [value, matchesV1] = await Promise.all([employeeApi.list(token, query, offset), gateV1Api.matches(token)]);
+      if (current === revision.current) { setEmployees(value); setGateMatches(matchesV1); }
     } catch (err) {
       if (current === revision.current) setError(messageOf(err));
     } finally {
@@ -105,9 +107,9 @@ export function EmployeePanel({
     setName("");
     setEmail("");
     setSectors(
-      employee?.assignments
-        .filter((item) => item.active)
-        .map((item) => item.sectorId) || [],
+      employee?.assignmentsV1
+        ?.filter((item) => item.active)
+        .map((item) => item.allocationId) || [],
     );
     setForm(kind);
     setName(employee?.name || "");
@@ -293,7 +295,7 @@ export function EmployeePanel({
               <Text
                 style={{ color: colors.muted, fontSize: 12, lineHeight: 21 }}
               >
-                {employee.assignments
+                {(employee.assignmentsV1 || [])
                   .filter((item) => item.active)
                   .map((item) => item.matchLabel + " · " + item.sectorName)
                   .join("\n") || "Sem setores liberados"}
@@ -333,7 +335,7 @@ export function EmployeePanel({
                 {employee.email}
               </Text>
               <Text style={{ color: colors.subtle, fontSize: 12 }}>
-                {employee.assignments.filter((item) => item.active).length}{" "}
+                {(employee.assignmentsV1 || []).filter((item) => item.active).length}{" "}
                 setor(es) na escala
               </Text>
               {actions(employee)}
@@ -453,18 +455,18 @@ export function EmployeePanel({
                 Selecione os setores que este funcionário pode operar. Salvar
                 sem marcações remove todas as liberações.
               </AdminNotice>
-              {matches.map((match) => (
+              {gateMatches.map((match) => (
                 <AdminSection
                   key={match.id}
-                  title={match.homeTeam + " × " + match.awayTeam}
-                  description={matchDate(match.startsAt)}
+                  title={match.timeMandante + " × " + match.timeVisitante}
+                  description={matchDate(match.dataPartida)}
                 >
-                  {match.sectors.map((sector) => (
+                  {match.alocacoesSetor.map((sector) => (
                     <AdminToggle
                       key={sector.id}
                       checkbox
                       disabled={busy}
-                      label={sector.name}
+                      label={sector.setor.nome}
                       value={sectors.includes(sector.id)}
                       onChange={(checked) =>
                         setSectors((previous) =>
@@ -484,7 +486,7 @@ export function EmployeePanel({
                 onPress={() =>
                   void perform(
                     () =>
-                      employeeApi.assignments(token!, selected!.id, sectors),
+                      gateV1Api.assignments(token!, selected!.id, sectors),
                     "Escala atualizada.",
                   )
                 }

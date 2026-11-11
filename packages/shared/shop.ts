@@ -31,3 +31,6 @@ export interface ShopOrder {
 export interface ShopOrdersPage extends ShopPage<ShopOrder> { summary: { paidCents: number; refundedCents: number; netCents: number; pending: number } }
 export interface StockVariant extends ProductVariant { product: { name: string; archivedAt: string | null } }
 export interface StockMovement { id: string; kind: 'INITIAL' | 'ADJUSTMENT' | 'SALE' | 'RETURN'; quantity: number; balanceAfter: number; reason: string; createdAt: string; orderId: string | null; variant: { sku: string; label: string; product: { name: string } }; actor: { name: string } }
+
+export interface ShopImageUpload { mimeType: string; base64: string }
+export interface ShopImage { id: string; url: string; mimeType: string; byteLength: number; width: number; height: number }

@@ -1,3 +1,9 @@
+ATUALIZACAO SICREDI PIX 11/11/2026: migration 20261111020000_sicredi_pix preparada; novos campos e relacoes em docs/banco/sicredi.txt. Nao aplicada nesta revisao: banco local localhost:55432 recusou conexao (ECONNREFUSED). Ha 30 diretorios de migrations; isso nao confirma execucao no banco. Levantamentos seguintes sao historicos.
+
+ATUALIZACAO PORTARIA UNIFICADA V1 11/11/2026: GateAssignmentV1, AdmissionV1, codigoPortaria em IngressoV1 e abertura da portaria em PartidaIngressoV1 detalhados em docs/banco/portaria-v1.txt. Migration 20261111010000_unified_gate_v1 aplicada localmente; 29 migrations. Os levantamentos seguintes sao historicos.
+
+ATUALIZACAO FOTOS DE PRODUTOS 10/11/2026: ShopImage guarda os uploads no PostgreSQL. Migration 20261110120000_shop_image_uploads aplicada ao banco local; 28 migrations concluidas. Detalhes em docs/banco/fotos-produtos.txt.
+
 ATUALIZACAO CONFIGURACOES 09/11/2026: BusinessSettings, Reward.version, recebedores Asaas em Merchant e PaymentCharge.paymentPolicy estao em docs/banco/configuracoes.txt. Migration 20261109050000_business_configuration aplicada ao banco local; 15 migrations concluidas. Os levantamentos seguintes sao historicos.
 
 ATUALIZACAO SAQUES 09/11/2026: WithdrawalRequest, PayoutAttachment e enum WithdrawalStatus estao em docs/banco/saques.txt. Migration 20261109040000_withdrawals_receipts aplicada ao banco local; 14 migrations concluidas. Os levantamentos seguintes sao historicos.

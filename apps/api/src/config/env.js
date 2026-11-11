@@ -16,7 +16,21 @@ const schema = z.object({
   JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().min(60).max(1800).default(900),
   TICKET_QR_SECRET: z.string().min(64).max(512),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(30).default(7),
-  PAYMENT_MODE: z.enum(['disabled', 'demo', 'asaas']).default('disabled'),
+  PAYMENT_MODE: z.enum(['disabled', 'demo', 'asaas', 'sicredi']).default('disabled'),
+  SICREDI_PIX_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
+  SICREDI_PIX_API_URL: z.string().default(''),
+  SICREDI_PIX_AUTH_URL: z.string().default(''),
+  SICREDI_PIX_CLIENT_ID: z.string().default(''),
+  SICREDI_PIX_CLIENT_SECRET: z.string().default(''),
+  SICREDI_PIX_RECEIVING_KEY: z.string().max(140).default(''),
+  SICREDI_PIX_CERT_PATH: z.string().default(''),
+  SICREDI_PIX_KEY_PATH: z.string().default(''),
+  SICREDI_PIX_CHAIN_PATH: z.string().default(''),
+  SICREDI_PIX_CERT_PASSPHRASE: z.string().default(''),
+  SICREDI_PIX_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30000).default(10000),
+  SICREDI_PIX_TXID_PREFIX: z.string().regex(/^[A-Za-z0-9]{1,3}$/).default('ESP'),
+  SICREDI_PIX_WEBHOOK_TOKEN: z.string().default(''),
+  SICREDI_PIX_WEBHOOK_URL: z.string().default(''),
   ASAAS_ENVIRONMENT: z.enum(['sandbox', 'production']).default('sandbox'),
   ASAAS_API_KEY: z.string().default(''),
   ASAAS_WEBHOOK_TOKEN: z.string().default(''),
@@ -61,6 +75,19 @@ export function parseEnv(input) {
   let asaasMerchantWallets = {};
   try { asaasMerchantWallets = z.record(z.uuid(), z.uuid()).parse(JSON.parse(result.ASAAS_MERCHANT_WALLETS.trim() || '{}')); }
   catch { throw new Error('ASAAS_MERCHANT_WALLETS deve ser um JSON de merchantId para walletId Asaas.'); }
+  if (result.PAYMENT_MODE === 'sicredi') {
+    for (const name of ['SICREDI_PIX_CLIENT_ID', 'SICREDI_PIX_CLIENT_SECRET', 'SICREDI_PIX_RECEIVING_KEY', 'SICREDI_PIX_CERT_PATH', 'SICREDI_PIX_KEY_PATH']) if (!result[name].trim()) throw new Error(`Configure ${name} para habilitar o Pix Sicredi.`);
+    if (!/^[A-Za-z0-9_-]{32,128}$/.test(result.SICREDI_PIX_WEBHOOK_TOKEN)) throw new Error('Configure SICREDI_PIX_WEBHOOK_TOKEN aleatório (32–128 caracteres alfanuméricos, _ ou -).');
+    if ([result.JWT_SECRET, result.TICKET_QR_SECRET, result.CARD_TOKEN_SECRET, result.SICREDI_PIX_CLIENT_SECRET].includes(result.SICREDI_PIX_WEBHOOK_TOKEN)) throw new Error('O token do webhook Sicredi deve ser exclusivo.');
+    if (result.SICREDI_PIX_ENV === 'production') {
+      result.SICREDI_PIX_API_URL ||= 'https://api-pix.sicredi.com.br/api/v2';
+      result.SICREDI_PIX_AUTH_URL ||= 'https://api-pix.sicredi.com.br/oauth/token';
+    }
+    for (const name of ['SICREDI_PIX_API_URL', 'SICREDI_PIX_AUTH_URL']) {
+      let target; try { target = new URL(result[name]); } catch { throw new Error(`Configure ${name}; URLs de homologação devem ser fornecidas pelo Sicredi.`); }
+      if (target.protocol !== 'https:' || target.username || target.password || target.hash || target.search) throw new Error(`${name} deve ser HTTPS, sem credenciais, query ou fragmento.`);
+    }
+  }
   if (result.PAYMENT_MODE === 'asaas') {
     if (result.ASAAS_API_KEY.length < 20 || !/^[^\s]{32,255}$/.test(result.ASAAS_WEBHOOK_TOKEN) || result.ASAAS_DATA_SECRET.length < 64) throw new Error('Configure ASAAS_API_KEY, ASAAS_WEBHOOK_TOKEN (32–255 caracteres sem espaços) e ASAAS_DATA_SECRET (64+ caracteres).');
     if ([result.ASAAS_API_KEY, result.JWT_SECRET, result.TICKET_QR_SECRET].includes(result.ASAAS_WEBHOOK_TOKEN) || [result.JWT_SECRET, result.TICKET_QR_SECRET, result.CARD_TOKEN_SECRET].includes(result.ASAAS_DATA_SECRET)) throw new Error('Os segredos do Asaas devem ser exclusivos.');

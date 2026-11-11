@@ -37,6 +37,7 @@ enum TicketPaymentMethod {
   MANUAL
   FREE
   ASAAS
+  SICREDI
 }
 
 model User {
@@ -68,6 +69,8 @@ model User {
   ticketAdmissions        TicketAdmission[]
   auditLogs               AuditLog[]
   gateAssignments         GateAssignment[]
+  gateAssignmentsV1       GateAssignmentV1[]
+  admissionsV1            AdmissionV1[]
   billingCustomers        BillingCustomer[]
   shopOrders              ShopOrder[]
   shopPayments            ShopPayment[]
@@ -76,6 +79,7 @@ model User {
   clubPayouts             ClubPayout[]
   withdrawalRequests      WithdrawalRequest[]
   payoutAttachments       PayoutAttachment[]
+  shopImages              ShopImage[]
   passwordResets          PasswordResetToken[]
   pedidosIngressoV1       PedidoIngressoV1[]
 }
@@ -648,11 +652,15 @@ model BillingCustomer {
 
 model GatewayIntent {
   id                String            @id @default(uuid()) @db.Uuid
+  provider          String            @default("asaas") @db.VarChar(16)
+  pixEndToEndId     String?           @db.VarChar(32)
+  refundId          String?           @db.VarChar(35)
+  refundAmountCents Int?
   environment       String            @db.VarChar(20)
   ticketId          String?           @db.Uuid
   chargeId          String?           @unique @db.Uuid
   shopOrderId       String?           @unique @db.Uuid
-  customerId        String            @db.Uuid
+  customerId        String?           @db.Uuid
   generation        String            @unique
   snapshot          Json
   amountCents       Int
@@ -678,10 +686,12 @@ model GatewayIntent {
   ticket            Ticket?           @relation(fields: [ticketId], references: [id])
   charge            PaymentCharge?    @relation(fields: [chargeId], references: [id])
   shopOrder         ShopOrder?        @relation(fields: [shopOrderId], references: [id])
-  customer          BillingCustomer   @relation(fields: [customerId], references: [id])
+  customer          BillingCustomer?  @relation(fields: [customerId], references: [id], onDelete: Restrict)
   ticketRefundCost  TicketRefundCost?
 
   @@unique([environment, providerReference])
+  @@unique([environment, pixEndToEndId])
+  @@index([provider, environment, nextAttemptAt])
   @@index([environment, nextAttemptAt])
   @@index([ticketId, createdAt])
 }
@@ -712,6 +722,19 @@ model ShopSettings {
   paymentInstructions String   @default("") @db.VarChar(1000)
   supportPhone        String   @default("") @db.VarChar(11)
   updatedAt           DateTime @updatedAt
+}
+
+model ShopImage {
+  id String @id @default(uuid()) @db.Uuid
+  sha256 String @unique @db.VarChar(64)
+  mimeType String @db.VarChar(32)
+  byteLength Int
+  width Int
+  height Int
+  content Bytes
+  createdById String @db.Uuid
+  createdAt DateTime @default(now())
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Restrict)
 }
 
 model Product {
@@ -875,6 +898,7 @@ model ShopPayment {
 
 model GatewayWebhook {
   id                String    @id @default(uuid()) @db.Uuid
+  provider String @default("asaas") @db.VarChar(16)
   environment       String    @db.VarChar(20)
   externalId        String    @db.VarChar(200)
   event             String    @db.VarChar(100)
@@ -1227,6 +1251,10 @@ model PartidaIngressoV1 {
   criadoEm        DateTime                @default(now())
   atualizadoEm    DateTime                @updatedAt
 
+  portariaAtiva Boolean @default(false)
+  portariaAbreEm DateTime?
+  portariaFechaEm DateTime?
+
   estadio        EstadioIngressoV1                @relation(fields: [estadioId], references: [id], onDelete: Restrict)
   templateVenda  TemplateVendaIngressoV1?         @relation(fields: [templateVendaId], references: [id], onDelete: Restrict)
   alocacoesSetor AlocacaoSetorPartidaIngressoV1[]
@@ -1249,6 +1277,7 @@ model AlocacaoSetorPartidaIngressoV1 {
 
   partida   PartidaIngressoV1       @relation(fields: [partidaId], references: [id], onDelete: Cascade)
   setor     SetorEstadioIngressoV1  @relation(fields: [setorId], references: [id], onDelete: Restrict)
+  gateAssignments GateAssignmentV1[]
   lotes     LoteIngressoPartidaV1[]
   ingressos IngressoV1[]
 
@@ -1309,6 +1338,8 @@ model IngressoV1 {
   cpfTitular       String?          @db.VarChar(14)
   status           StatusIngressoV1 @default(DISPONIVEL)
   chaveQr          String           @unique @db.VarChar(512)
+  codigoPortaria   String           @unique @default(dbgenerated("ingresso_v1_novo_codigo()")) @db.VarChar(19)
+  admission        AdmissionV1?
   utilizadoEm      DateTime?
   catracaId        String?          @db.VarChar(50)
   criadoEm         DateTime         @default(now())
@@ -1326,4 +1357,29 @@ model IngressoV1 {
   @@index([alocacaoId, status])
   @@index([alocacaoId, blocoEscolhido, fileiraEscolhida, assentoEscolhido])
   @@map("ingresso_v1_ingressos")
+}
+
+model GateAssignmentV1 {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  alocacaoId String @db.Uuid
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  alocacao AlocacaoSetorPartidaIngressoV1 @relation(fields: [alocacaoId], references: [id], onDelete: Restrict)
+  @@unique([userId, alocacaoId])
+  @@index([alocacaoId, active])
+}
+
+model AdmissionV1 {
+  id String @id @default(uuid()) @db.Uuid
+  ingressoId String @unique @db.Uuid
+  actorId String @db.Uuid
+  requestKey String @db.VarChar(80)
+  gate String @db.VarChar(50)
+  createdAt DateTime @default(now())
+  ingresso IngressoV1 @relation(fields: [ingressoId], references: [id], onDelete: Restrict)
+  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  @@unique([actorId, requestKey])
+  @@index([createdAt, actorId])
 }
