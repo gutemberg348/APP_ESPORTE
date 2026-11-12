@@ -3,9 +3,31 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, copyFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve, relative, basename } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { parse } from 'dotenv';
 import { parseEnv } from '../src/config/env.js';
+
+test('setup explains denied access/copy and stops without creating environment files', async (t) => {
+  const temporary = await mkdtemp(join(tmpdir(), 'nacional-setup-'));
+  t.after(async () => { const target = resolve(temporary); assert.ok(!relative(resolve(tmpdir()), target).startsWith('..') && basename(target).startsWith('nacional-setup-')); await rm(target, { recursive: true, force: true }); });
+  await mkdir(join(temporary, 'scripts'));
+  await copyFile(resolve(import.meta.dirname, '../../../scripts/setup.mjs'), join(temporary, 'scripts/setup.mjs'));
+  for (const operation of ['access', 'copyFile']) {
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+      import fs from 'node:fs/promises';
+      import { syncBuiltinESMExports } from 'node:module';
+      fs.access = async () => { throw Object.assign(new Error('denied'), { code: ${JSON.stringify(operation === 'access' ? 'EACCES' : 'ENOENT')} }); };
+      fs.copyFile = async () => { throw Object.assign(new Error('denied'), { code: 'EACCES' }); };
+      syncBuiltinESMExports();
+      await import(${JSON.stringify(pathToFileURL(join(temporary, 'scripts/setup.mjs')).href)});
+    `], { encoding: 'utf8' });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Sem permissão para preparar/);
+    assert.doesNotMatch(result.stderr, /node:internal|at async/);
+    await assert.rejects(readFile(join(temporary, '.env')), { code: 'ENOENT' });
+  }
+});
 
 test('fresh container setup prepares database/admin/UID secrets and preserves them on repeated setup', async (t) => {
   const root = resolve(import.meta.dirname, '../../..');

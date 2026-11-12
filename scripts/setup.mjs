@@ -9,9 +9,16 @@ for (const path of ['.env', 'apps/api/.env', 'apps/mobile/.env']) {
   try {
     await access(target, constants.F_OK);
     console.log(`Mantido: ${path}`);
-  } catch {
-    await copyFile(new URL(`${path}.example`, root), target);
-    console.log(`Criado: ${fileURLToPath(target)}`);
+  } catch (error) {
+    try {
+      if (error.code !== 'ENOENT') throw error;
+      await copyFile(new URL(`${path}.example`, root), target, constants.COPYFILE_EXCL);
+      console.log(`Criado: ${fileURLToPath(target)}`);
+    } catch (failure) {
+      if (!['EACCES', 'EPERM'].includes(failure.code)) throw failure;
+      console.error(`Sem permissão para preparar ${fileURLToPath(target)}. Confira o dono e as permissões da pasta do projeto e deste arquivo. Execute o setup como o usuário da aplicação (server na VPS), sem sudo node.`);
+      process.exit(1);
+    }
   }
 }
 // Prepare host ownership and a fresh database password without rotating existing values.

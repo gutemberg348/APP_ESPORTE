@@ -19,12 +19,43 @@ Domínios autorizados:
 
 Execute os comandos na raiz do repositório, na VPS, como usuário `server`.
 
+Se o setup apresentar `EACCES` ao criar o `.env`, corrija o dono **somente da pasta deste projeto** e execute novamente como `server`, sem `sudo node`:
+
+```bash
+sudo chown -R server:server /var/www/esporte_app/APP_ESPORTE
+cd /var/www/esporte_app/APP_ESPORTE
+node scripts/setup.mjs
+```
+
 ```bash
 docker --version
 docker compose version
 ```
 
 Se Docker/Compose ainda não estiverem instalados, siga a [instalação oficial para Ubuntu](https://docs.docker.com/engine/install/ubuntu/). Não há necessidade de trocar o Node usado pelo outro processo do PM2: as imagens deste projeto já definem a versão do Node.
+
+Para uma VPS sem Docker instalado, adicione o repositório oficial e instale o Engine com o plugin Compose:
+
+```bash
+sudo apt update
+sudo apt install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+sudo tee /etc/apt/sources.list.d/docker.sources > /dev/null <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+Components: stable
+Architectures: $(dpkg --print-architecture)
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo docker compose version
+```
+
+Use `sudo docker compose` nos próximos passos se o usuário não tiver acesso ao daemon. A instalação não exige trocar configurações do Nginx ou do PM2.
 
 ```bash
 node scripts/setup.mjs
@@ -64,6 +95,23 @@ Certificados já enviados:
 Essa pasta é montada somente na API, em `/run/sicredi`, para leitura. Não é montada no frontend. A imagem não contém certificados, chaves ou arquivos de ambiente. O frontend recebe somente os argumentos públicos `EXPO_PUBLIC_*` durante a compilação.
 
 A rede privada tem gateway explícito para a API confiar somente nesse IP de proxy, sem aceitar headers de IP enviados diretamente por outros clientes/containers. Se a faixa de rede já estiver em uso, altere subnet e gateway juntos. Não remova volumes para resolver conflito de rede.
+
+## Compatibilidade do processador e fotos da loja
+
+Os binários Linux x64 pré-compilados do `sharp` exigem x86-64-v2. Uma VPS que não exponha essas instruções pode apresentar `Unsupported CPU` e `Wasm SIMD unsupported`, impedindo a inicialização da API mesmo com as migrations aplicadas.
+
+A imagem da API compila o `sharp` 0.35.5 e o libvips 8.18.7 a partir do código-fonte, sem exigir x86-64-v2. O download do libvips é conferido por SHA-256; compiladores e headers ficam na etapa de build. As bibliotecas WebP de leitura e escrita ficam na imagem final. O teste `scripts/check-image-runtime.mjs --require-local-build` carrega explicitamente o módulo compilado e converte JPEG, PNG e WebP usando o fluxo real de upload nas etapas de build e runtime, sem banco ou credenciais. Também verifica orientação e remoção de EXIF. A compilação usa dois jobs para limitar o consumo de memória; o primeiro build pode demorar mais.
+
+Com os arquivos atualizados na VPS, reconstrua somente a imagem da API e suba os serviços:
+
+```bash
+sudo docker compose build api
+sudo docker compose up -d
+sudo docker compose ps
+sudo docker compose logs --no-color --tail=60 api
+```
+
+Não é necessário remover o volume do banco ou repetir o seed para corrigir essa incompatibilidade. Se o build falhar, corrija esse erro antes de recriar a API.
 
 ## Subir os três serviços
 
