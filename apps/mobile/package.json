@@ -5,8 +5,8 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "npm run start -- --android",
+    "ios": "npm run start -- --ios",
     "web": "expo start --web",
     "check": "tsc --noEmit",
     "test:unit": "node --test test/*.test.mjs",

@@ -125,7 +125,7 @@ npm run db:down             # Parar PostgreSQL, preservando volume
 
 Para revisar a referência sem API, altere explicitamente `EXPO_PUBLIC_DEMO_MODE=true`. Dados desse modo ficam na sessão; o tema fica no dispositivo. `db:seed` é opcional e não substitui o bootstrap do administrador.
 
-Bundles: `npm run export --workspace @nacional/mobile`. APK/IPA e validação em aparelho são etapas separadas. A câmera requer permissão; esquema de links `nacional://` requer app/build com o esquema registrado.
+Bundles: `npm run export --workspace @nacional/mobile`. Para gerar um APK Android instalável neste computador, execute **`npm run local:app`** na raiz. O resultado fica em `dist/android/socio-esporte-release.apk`, com JavaScript incluído e assinatura local reutilizável; não depende de Expo Go ou EAS Build. [Configuração, funcionamento, assinatura e AAB](docs/app-android-local.md). IPA exige macOS/Xcode e assinatura Apple. A câmera requer permissão; esquema de links `nacional://` requer app/build com o esquema registrado.
 
 A implantação na VPS usa três containers: PostgreSQL, API Node/Express e frontend web estático. `docker compose up -d --build` prepara os três; o Nginx existente encaminha os domínios para as portas locais 3333 e 8080. O PM2 do outro projeto permanece separado. [Guia Ubuntu, domínios, certificados e atualização](docs/vps-docker.md). A API aplica migrations antes de iniciar; o bootstrap administrativo é um passo explícito e preserva contas existentes.
 

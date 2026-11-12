@@ -24,3 +24,5 @@ apps/mobile/ios/
 *.csr
 *.pfx
 *.p12
+*.jks
+*.keystore

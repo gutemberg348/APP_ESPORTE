@@ -10,6 +10,7 @@
     "node": ">=22.13.0 <23 || >=24.3.0"
   },
   "scripts": {
+    "local:app": "node scripts/local-app.mjs",
     "build:web": "npm run export:web --workspace @nacional/mobile",
     "dev:api": "npm run dev --workspace @nacional/api",
     "dev:api:watch": "npm run dev:watch --workspace @nacional/api",

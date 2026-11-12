@@ -1,0 +1,24 @@
+// Applied only by local:app. Native files can be regenerated without losing signing.
+gradle.beforeProject { appProject ->
+    if (appProject.path == ':app') {
+        appProject.pluginManager.withPlugin('com.android.application') {
+            appProject.extensions.getByName('androidComponents').finalizeDsl { android ->
+                def setting = { name ->
+                    def value = appProject.providers.gradleProperty(name).orNull
+                    if (!value) throw new GradleException("Assinatura local incompleta. Execute npm run local:app na raiz.")
+                    value
+                }
+                def signing = android.signingConfigs.maybeCreate('localAppRelease')
+                signing.storeFile = appProject.file(setting('localAppStoreFile'))
+                signing.storePassword = setting('localAppStorePassword')
+                signing.keyAlias = setting('localAppKeyAlias')
+                signing.keyPassword = setting('localAppKeyPassword')
+                android.buildTypes.getByName('release').signingConfig = signing
+            }
+            // A changed API/club must invalidate the JS bundle, even if sources match.
+            appProject.tasks.matching { it.name == 'createBundleReleaseJsAndAssets' }.configureEach {
+                inputs.property('localAppPublicEnvironment', System.getenv().findAll { key, value -> key.startsWith('EXPO_PUBLIC_') }.sort())
+            }
+        }
+    }
+}

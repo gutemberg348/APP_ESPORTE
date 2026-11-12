@@ -22,6 +22,8 @@ naca-digital
 *.csr
 *.pfx
 *.p12
+*.jks
+*.keystore
 
 # Runtime environments stay outside every image. Build args contain public web settings.
 **/.env.*
