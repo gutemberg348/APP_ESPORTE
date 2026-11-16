@@ -50,6 +50,11 @@ function verifiedCharge(charge, txid, settings, cents) {
   if (cents !== undefined && cents !== amount) fail('TEST_CHARGE_MISMATCH', 'O valor bancário diverge do valor informado; nenhuma nova cobrança foi criada.');
   return amount;
 }
+function webhookReport(current, settings) {
+  let matchesConfigured = null;
+  if (current?.webhookUrl && settings.SICREDI_PIX_WEBHOOK_URL && settings.SICREDI_PIX_WEBHOOK_TOKEN) matchesConfigured = current.webhookUrl.replace(/\/$/, '') === `${settings.SICREDI_PIX_WEBHOOK_URL.replace(/\/$/, '')}/${settings.SICREDI_PIX_WEBHOOK_TOKEN}`;
+  return { webhookRegistered: Boolean(current?.webhookUrl), matchesConfigured, changedWebhook: false };
+}
 export async function inspectTestCharge(api, settings, txid, expectedCents) {
   checkedTestTxid(txid);
   const charge = await api.charge(txid);
@@ -86,15 +91,39 @@ export async function runSicrediTest(command, options, settings, { createClient 
   if (command === 'certificado') return { ok: true, certificateValid: true };
   const api = createClient(settings);
   try {
+    if (command === 'diagnostico') {
+      const checks = [];
+      async function check(step, work) {
+        let result;
+        try { result = { step, ok: true, ...await work() }; }
+        catch (error) { result = { step, ...safeTestFailure(error) }; }
+        checks.push(result); report(result);
+        return result;
+      }
+      // OAuth grants alone do not prove a bank operation or webhook delivery works.
+      // Isolate failures: a missing webhook scope must not hide working charge credentials.
+      for (const scope of ['cob.read', 'cob.write', 'pix.read', 'webhook.read', 'webhook.write']) {
+        await check(`oauth:${scope}`, async () => { await api.authenticate(scope); return { scope, authenticated: true }; });
+      }
+      const webhook = await check('webhook:read', async () => webhookReport(await api.webhook(), settings));
+      const warnings = [];
+      if (webhook.ok && !webhook.webhookRegistered) warnings.push('WEBHOOK_NOT_REGISTERED');
+      if (webhook.ok && webhook.matchesConfigured === false) warnings.push('WEBHOOK_DIFFERENT_URL');
+      if (webhook.ok && webhook.matchesConfigured === null) warnings.push('WEBHOOK_NOT_COMPARED');
+      return {
+        ok: checks.every(row => row.ok), checks,
+        readyForPaymentTest: ['cob.read', 'cob.write', 'pix.read'].every(scope => checks.some(row => row.step === `oauth:${scope}` && row.ok)),
+        webhookConfigured: webhook.ok && webhook.matchesConfigured === true,
+        paymentTested: false, webhookDeliveryTested: false, changesBank: false, databaseUsed: false, warnings,
+      };
+    }
     if (command === 'conexao') {
       for (const scope of ['cob.read', 'pix.read', 'webhook.read']) { await api.authenticate(scope); report({ step: 'authentication', ok: true, scope }); }
     }
     if (command === 'auth') { const scope = options.scope || 'cob.read'; await api.authenticate(scope); return { ok: true, scope, authenticated: true }; }
     if (command === 'conexao' || command === 'webhook') {
       const current = await api.webhook();
-      let matchesConfigured = null;
-      if (current?.webhookUrl && settings.SICREDI_PIX_WEBHOOK_URL && settings.SICREDI_PIX_WEBHOOK_TOKEN) matchesConfigured = current.webhookUrl.replace(/\/$/, '') === `${settings.SICREDI_PIX_WEBHOOK_URL.replace(/\/$/, '')}/${settings.SICREDI_PIX_WEBHOOK_TOKEN}`;
-      return { ok: true, webhookRegistered: Boolean(current?.webhookUrl), matchesConfigured, changedWebhook: false };
+      return { ok: true, ...webhookReport(current, settings) };
     }
     if (command === 'criar') {
       const existing = await api.charge(txid);

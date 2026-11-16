@@ -53,6 +53,35 @@ test('certificate failure stops before client creation; certificate-only mode ne
   assert.equal(h.calls.length, 0);
 });
 
+test('full VPS diagnostic isolates failures, reports requested OAuth scopes and never mutates banking resources', async () => {
+  const h = harness({ authenticate: scope => { if (scope === 'webhook.write') throw Object.assign(new Error('private-provider-response'), { code: 'SICREDI_ACCESS_DENIED' }); }, webhook: () => ({ webhookUrl: 'https://other-project.test/private-token' }) });
+  const result = await runSicrediTest('diagnostico', {}, settings, h.deps);
+  assert.equal(result.ok, false);
+  assert.equal(result.readyForPaymentTest, true);
+  assert.equal(result.webhookConfigured, false);
+  assert.deepEqual(result.warnings, ['WEBHOOK_DIFFERENT_URL']);
+  assert.equal(result.checks.length, 6);
+  assert.equal(result.checks.filter(row => !row.ok)[0].code, 'SICREDI_ACCESS_DENIED');
+  assert.deepEqual(h.calls.map(row => row.name), ['authenticate', 'authenticate', 'authenticate', 'authenticate', 'authenticate', 'webhook', 'close']);
+  assert.deepEqual(h.calls.filter(row => row.name === 'authenticate').map(row => row.args[0]), ['cob.read', 'cob.write', 'pix.read', 'webhook.read', 'webhook.write']);
+  assert.equal(result.paymentTested, false); assert.equal(result.webhookDeliveryTested, false); assert.equal(result.changesBank, false);
+  for (const value of ['private-provider-response', 'other-project.test', 'private-token', settings.SICREDI_PIX_CLIENT_SECRET, settings.SICREDI_PIX_RECEIVING_KEY]) assert.ok(!JSON.stringify([result, h.reports]).includes(value));
+});
+
+test('diagnostic does not treat OAuth success as paid Pix or proven webhook delivery', async () => {
+  const good = harness({ webhook: () => ({ webhookUrl: `${settings.SICREDI_PIX_WEBHOOK_URL}/${settings.SICREDI_PIX_WEBHOOK_TOKEN}` }) });
+  const result = await runSicrediTest('diagnostico', {}, settings, good.deps);
+  assert.equal(result.ok, true); assert.equal(result.webhookConfigured, true); assert.deepEqual(result.warnings, []);
+  assert.equal(result.paymentTested, false); assert.equal(result.webhookDeliveryTested, false);
+  const missing = await runSicrediTest('diagnostico', {}, settings, harness().deps);
+  assert.equal(missing.ok, true); assert.equal(missing.webhookConfigured, false); assert.ok(missing.warnings.includes('WEBHOOK_NOT_REGISTERED'));
+  const noCompare = await runSicrediTest('diagnostico', {}, { ...settings, SICREDI_PIX_WEBHOOK_URL: '' }, good.deps);
+  assert.equal(noCompare.webhookConfigured, false); assert.ok(noCompare.warnings.includes('WEBHOOK_NOT_COMPARED'));
+  const down = harness({ authenticate: () => { throw Object.assign(new Error('private-error'), { code: 'SICREDI_TIMEOUT' }); }, webhook: () => { throw new Error('private-error'); } });
+  const denied = await runSicrediTest('diagnostico', {}, settings, down.deps);
+  assert.equal(denied.ok, false); assert.equal(denied.readyForPaymentTest, false); assert.equal(denied.checks.length, 6); assert.equal(down.calls.at(-1).name, 'close');
+});
+
 test('creation reuses a known test charge, rejects value mismatch and never recreates after timeout', async () => {
   const existing = harness({ charge: () => charge() });
   assert.equal((await runSicrediTest('criar', { txid, valor: '1,00' }, settings, existing.deps)).reused, true);

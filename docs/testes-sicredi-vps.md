@@ -1,5 +1,47 @@
 # Testes Pix Sicredi separados na VPS
 
+## Comece aqui: credenciais e certificados já colocados
+
+Depois de atualizar os arquivos do projeto na VPS, execute no Ubuntu:
+
+```bash
+cd /var/www/esporte_app/APP_ESPORTE
+sudo docker compose build api
+curl -fsS https://api-esporte.testes-techcode.shop/health
+curl -fsS https://api-esporte.testes-techcode.shop/ready
+sudo docker compose run --rm --no-deps -T api node scripts/sicredi-tests.mjs certificado
+sudo docker compose run --rm --no-deps -T api node scripts/sicredi-tests.mjs diagnostico
+```
+
+`health`/`ready` verificam o acesso público à aplicação e ao banco de dados; não testam o banco Sicredi. O comando `certificado` verifica os arquivos no container. `diagnostico` faz mTLS/OAuth com o Sicredi em cinco escopos (`cob.read`, `cob.write`, `pix.read`, `webhook.read`, `webhook.write`) e consulta o webhook. Ele solicita tokens inclusive para os escopos de escrita, mas **não realiza nenhuma escrita financeira nem altera o cadastro do webhook**.
+
+O build atualiza a imagem para os testes, sem substituir o container em execução. O container temporário lê as credenciais atuais do `.env` da raiz, pelo Compose. Isso não confirma que a API já em execução recebeu as mesmas variáveis; se o `.env` foi alterado depois que ela iniciou, a aplicação precisa ser recriada pelo operador no momento de ativar a integração. Não troque `PAYMENT_MODE` somente para rodar estes testes.
+
+Como ler o relatório:
+
+| Resultado | Significado |
+| --- | --- |
+| `step: certificate`, `ok: true` | Arquivos legíveis, validade e correspondência certificado/chave passaram. |
+| `step: oauth:cob.write`, `ok: true` | Sicredi retornou token ao solicitar esse escopo; criar a cobrança ainda precisa de teste separado. |
+| `readyForPaymentTest: true` | Autenticações solicitadas para cobrança e consulta Pix passaram. Não significa pagamento realizado. |
+| `webhookConfigured: true` | O endereço cadastrado coincide com base/token deste projeto. Não comprova entrega de eventos. |
+| `WEBHOOK_NOT_REGISTERED` | A chave não tem webhook cadastrado. O diagnóstico não registra automaticamente. |
+| `WEBHOOK_DIFFERENT_URL` | Existe outro endereço. Não substitua antes de conferir a qual sistema pertence. |
+| `WEBHOOK_NOT_COMPARED` | Não foi possível comparar: falta cadastro ou base/token esperados. |
+| `ok: false` no resumo | Pelo menos uma etapa falhou; confira seu `step`, `code` e `message`. Saída do processo: 1. |
+
+O relatório não inclui senhas, tokens, chave Pix, URL privada do webhook ou respostas bancárias brutas. Pode enviar a saída do comando **diagnostico** para investigar uma falha; não envie `.env`, certificado/chave privada nem o copia e cola de uma cobrança paga. Mesmo com `ok: true`, os campos `paymentTested` e `webhookDeliveryTested` permanecem `false`: pagamento e entrega real precisam das etapas seguintes.
+
+Para guardar o diagnóstico em arquivo (Bash):
+
+```bash
+mkdir -p .artifacts
+set -o pipefail
+sudo docker compose run --rm --no-deps -T api node scripts/sicredi-tests.mjs diagnostico 2>&1 | tee .artifacts/sicredi-diagnostico.log
+```
+
+Os comandos abaixo detalham criação opcional, consulta, pagamento manual e conferência. A cobrança de teste é isolada das vendas e não gera ingresso ou pedido.
+
 O runner usa o cliente Pix real do projeto com mTLS/OAuth, sem iniciar a API, conectar ao PostgreSQL, emitir ingresso/pedido ou alterar saldos. O padrão confere certificado, autenticação de leitura e cadastro do webhook. Criação e remoção de cobrança são comandos separados. O agente executou somente testes com mocks; as chamadas reais abaixo são executadas por você.
 
 ## Credenciais e imagem

@@ -3,13 +3,14 @@ import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { newTestTxid, runSicrediTest, safeTestFailure, SicrediTestError, testSettings } from './sicredi-test-core.mjs';
 
-const commands = ['certificado', 'conexao', 'auth', 'webhook', 'referencia', 'criar', 'consultar', 'acompanhar', 'cancelar'];
+const commands = ['certificado', 'conexao', 'diagnostico', 'auth', 'webhook', 'referencia', 'criar', 'consultar', 'acompanhar', 'cancelar'];
 try {
   const { values, positionals } = parseArgs({ allowPositionals: true, options: { help: { type: 'boolean' }, txid: { type: 'string' }, valor: { type: 'string' }, expiracao: { type: 'string' }, tentativas: { type: 'string' }, intervalo: { type: 'string' }, scope: { type: 'string' } } });
   if (values.help) {
     console.log(`Testes Sicredi isolados: npm run test:sicredi -- [comando] [opções]
 Padrão: conexao (certificado, OAuth de leitura e consulta do webhook).
 certificado                Confere arquivos mTLS sem chamar o banco.
+diagnostico                Relatorio por etapa: certificado, 5 escopos OAuth e webhook; sem criar Pix.
 conexao                    Autentica cob.read/pix.read/webhook.read e consulta webhook.
 auth --scope cob.write     Testa apenas autenticação no escopo informado.
 webhook                    Consulta cadastro, sem criar/substituir webhook.
@@ -33,6 +34,7 @@ Não emite ingresso/pedido, não altera saldo/DB, não envia Pix e não faz devo
       report({ step: 'start', command, environment: settings.SICREDI_PIX_ENV, changesBank: ['criar', 'cancelar'].includes(command), databaseUsed: false });
       const result = await runSicrediTest(command, values, settings, { report });
       report(result);
+      if (result.ok === false) process.exitCode = 1;
       if (command === 'acompanhar' && !result.paymentConfirmed) process.exitCode = 2;
     }
   }

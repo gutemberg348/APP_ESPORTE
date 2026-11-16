@@ -1,4 +1,45 @@
 // Applied only by local:app. Native files can be regenerated without losing signing.
+// RNGP uses File.relativeTo(nodeWorkingDir) on Windows. Autolinking can resolve
+// a library to C: while the app/codegen tooling remains under the SUBST drive.
+// Normalize just codegen inputs/outputs and its actual process cwd to the original
+// workspace, after plugin configuration. CMake and the app retain the short root.
+def shortRootValue = System.getenv('LOCAL_APP_SHORT_ROOT')
+def originalRootValue = System.getenv('LOCAL_APP_ORIGINAL_ROOT')
+if (System.getProperty('os.name').toLowerCase().contains('windows') && shortRootValue && originalRootValue) {
+    def shortRoot = new File(shortRootValue).toPath().toAbsolutePath().normalize()
+    def originalRoot = new File(originalRootValue).toPath().toAbsolutePath().normalize()
+    def originalFile = { File file ->
+        def path = file.toPath().toAbsolutePath().normalize()
+        (path.startsWith(shortRoot) ? originalRoot.resolve(shortRoot.relativize(path)) : path).toFile()
+    }
+    gradle.projectsEvaluated {
+        gradle.rootProject.allprojects.each { codegenProject ->
+            codegenProject.tasks.configureEach { task ->
+                def type = task.getClass()
+                while (type != null && !(type.name in ['com.facebook.react.tasks.GenerateCodegenSchemaTask', 'com.facebook.react.tasks.GenerateCodegenArtifactsTask'])) {
+                    type = type.superclass
+                }
+                if (type != null) {
+                    def base = originalFile(new File(task.nodeWorkingDir.get()))
+                    def directories = [:]
+                    ['codegenDir', 'reactNativeDir', 'jsRootDir', 'generatedSrcDir'].each { name ->
+                        if (task.hasProperty(name)) directories[name] = originalFile(task.property(name).get().asFile)
+                    }
+                    def packageFile = task.hasProperty('packageJsonFile') && task.packageJsonFile.isPresent()
+                        ? originalFile(task.packageJsonFile.get().asFile) : null
+                    if ((directories.values() + (packageFile ? [packageFile] : [])).any { it.toPath().root != base.toPath().root }) {
+                        throw new GradleException("Codegen ${task.path}: caminhos em unidades diferentes mesmo apos normalizar o workspace. Confira dependencias externas ao projeto.")
+                    }
+                    directories.each { name, file -> task.property(name).set(file) }
+                    if (packageFile) task.packageJsonFile.set(packageFile)
+                    task.nodeWorkingDir.set(base.absolutePath)
+                    task.workingDir(base)
+                }
+            }
+        }
+    }
+}
+
 gradle.beforeProject { appProject ->
     if (System.getProperty('os.name').toLowerCase().contains('windows')) {
         ['com.android.application', 'com.android.library'].each { androidPlugin ->
