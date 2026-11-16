@@ -6,6 +6,8 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs, parseEnv } from 'node:util';
+import { resetNativePathCache, withWindowsShortRoot } from './android-windows-paths.mjs';
+import { checkWindowsNativeTools } from './android-windows-toolchain.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const mobile = join(root, 'apps/mobile');
@@ -42,11 +44,24 @@ export function buildChildEnv(environment, publicEnv) {
   const clean = Object.fromEntries(Object.entries(environment).filter(([key]) => !key.startsWith('EXPO_PUBLIC_')));
   return { ...clean, ...publicEnv, NODE_ENV: 'production', EXPO_NO_DOTENV: '1', EXPO_NO_TELEMETRY: '1', CI: '1' };
 }
-function run(command, args, { env, cwd = mobile, capture = false } = {}) {
+function run(command, args, { env, cwd = mobile, capture = false, stage } = {}) {
   const result = spawnSync(command, args, { cwd, env, stdio: capture ? 'pipe' : 'inherit', encoding: 'utf8', windowsHide: true });
   if (result.error) throw new Error(`Não foi possível executar ${command}: ${result.error.code || 'falha ao iniciar'}.`);
-  if (result.status !== 0) throw new Error(`A etapa ${command.endsWith('keytool.exe') || command === 'keytool' ? 'assinatura Android' : 'de build'} falhou (saída ${result.status ?? result.signal}). Confira a saída acima; nenhum APK antigo será apresentado como novo.`);
+  if (result.status !== 0) {
+    if (stage === 'setup') throw new Error(`A preparação do Windows não foi concluída (saída ${result.status ?? result.signal}). Confira a mensagem acima. Nenhuma compilação foi iniciada.`);
+    if (stage === 'verify') throw new Error(`A verificação da assinatura do APK falhou (saída ${result.status ?? result.signal}). O arquivo gerado foi preservado em apps/mobile/android/app/build/outputs/apk/release; não foi publicado em dist/android.`);
+    throw new Error(`A etapa ${command.endsWith('keytool.exe') || command === 'keytool' ? 'assinatura Android' : 'de build'} falhou (saída ${result.status ?? result.signal}). Confira a saída acima; nenhum APK antigo será apresentado como novo.`);
+  }
   return `${result.stdout || ''}\n${result.stderr || ''}`;
+}
+export async function verifyAndroidApk({ artifact, buildTools, java, env, execute = run }) {
+  // Invoke the SDK's verifier directly: cmd.exe/batch quoting corrupts some Windows paths.
+  // Keep paths as individual arguments, never interpolated shell commands.
+  const candidates = [join(buildTools, 'lib/apksigner.jar'), join(buildTools, 'apksigner.jar'), resolve(buildTools, '../framework/apksigner.jar')];
+  let jar;
+  for (const candidate of candidates) if (await exists(candidate)) { jar = candidate; break; }
+  if (!jar) throw new Error('apksigner.jar não encontrado no Android Build Tools selecionado. O APK gerado foi preservado; reinstale essa versão pelo SDK Manager.');
+  execute(java, ['-Xmx1024M', '-Xss1m', '-jar', jar, 'verify', '--verbose', '--print-certs', artifact], { env, cwd: buildTools, stage: 'verify' });
 }
 export function parseRequirements(toml) {
   const value = (name) => {
@@ -104,9 +119,21 @@ export async function prepareSigning({ directory, settings, packageId, generate 
 }
 
 async function main() {
-  const { values } = parseArgs({ options: { help: { type: 'boolean' }, plan: { type: 'boolean' }, check: { type: 'boolean' }, aab: { type: 'boolean' } } });
-  if (values.help) { console.log('npm run local:app [-- --check | --plan | --aab]\nPadrão: APK Android release local, assinado e com JavaScript incluído.\n--check: confere as ferramentas, sem prebuild, chave ou compilação.\n--plan: mostra as etapas, sem executar ferramentas.\n--aab: gera um Android App Bundle usando a mesma assinatura.'); return; }
+  const { values } = parseArgs({ options: { help: { type: 'boolean' }, plan: { type: 'boolean' }, check: { type: 'boolean' }, setup: { type: 'boolean' }, aab: { type: 'boolean' } } });
+  if (values.help) { console.log('npm run local:app [-- --check | --plan | --aab]\nPadrão: APK Android release local, assinado e com JavaScript incluído.\n--check: confere as ferramentas, sem prebuild, chave ou compilação.\n--plan: mostra as etapas, sem executar ferramentas.\n--aab: gera um Android App Bundle usando a mesma assinatura.\nnpm run local:app:setup: prepara CMake/Ninja e caminhos longos no Windows, sem compilar.'); return; }
   if (values.plan && values.check) throw new Error('Use apenas --plan ou --check.');
+  if (values.setup && (values.plan || values.check || values.aab)) throw new Error('Execute a preparação separadamente: npm run local:app:setup.');
+  if (process.platform === 'win32' && !values.plan && !values.check && !values.setup && process.env.LOCAL_APP_SHORT_ROOT !== root) {
+    await withWindowsShortRoot(root, async (shortRoot) => {
+      console.log(`Build Android pelo caminho curto ${shortRoot} (atalho temporário; os arquivos permanecem no projeto).`);
+      const result = spawnSync(process.execPath, [join(shortRoot, 'scripts/local-app.mjs'), ...process.argv.slice(2)], {
+        cwd: shortRoot, env: { ...process.env, LOCAL_APP_SHORT_ROOT: shortRoot, LOCAL_APP_ORIGINAL_ROOT: root }, stdio: 'inherit', windowsHide: true,
+      });
+      if (result.error) throw new Error(`Não foi possível iniciar o build no caminho curto: ${result.error.code}.`);
+      process.exitCode = result.status ?? 1;
+    });
+    return;
+  }
   const brands = JSON.parse(await readFile(join(root, 'packages/shared/brands.json'), 'utf8'));
   // Never load the root/server .env, nor the mobile development .env.
   const config = resolveBuildSettings([await optionalEnv(join(mobile, '.env.production.example')), await optionalEnv(join(mobile, '.env.production')), await optionalEnv(join(mobile, '.env.android.local')), process.env], brands);
@@ -116,12 +143,23 @@ async function main() {
   const extension = values.aab ? 'aab' : 'apk';
   const filename = `${brands[config.club].appName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-release.${extension}`;
   const destination = join(root, 'dist/android', filename);
+  const displayedDestination = join(process.env.LOCAL_APP_ORIGINAL_ROOT || root, 'dist/android', filename);
   const rnRoot = dirname(require.resolve('react-native/package.json'));
   const requirements = parseRequirements(await readFile(join(rnRoot, 'gradle/libs.versions.toml'), 'utf8'));
-  console.log(`App: ${brands[config.club].appName}\nAPI: ${config.publicEnv.EXPO_PUBLIC_API_URL}\nSaída: ${destination}`);
-  if (values.plan) { console.log(`1. Conferir JDK/SDK/NDK.\n2. Preparar/reutilizar assinatura privada local.\n3. Gerar/atualizar apps/mobile/android com prebuild local, sem apagar a pasta.\n4. Gradle :app:${values.aab ? 'bundleRelease' : 'assembleRelease'}, sem iniciar Metro ou instalar no aparelho.\n5. ${values.aab ? 'Copiar AAB assinado' : 'Verificar assinatura e copiar APK'} para dist/android.\nNenhuma etapa de geração foi executada.`); return; }
+  console.log(`App: ${brands[config.club].appName}\nAPI: ${config.publicEnv.EXPO_PUBLIC_API_URL}\nSaída: ${displayedDestination}`);
+  if (values.plan) { console.log(`1. ${process.platform === 'win32' ? 'Criar atalho temporário com SUBST; limpar caches nativos se o caminho de build mudou. ' : ''}Conferir JDK/SDK/NDK.\n2. Preparar/reutilizar assinatura privada local.\n3. Gerar/atualizar apps/mobile/android com prebuild local, sem apagar a pasta.\n4. Gradle :app:${values.aab ? 'bundleRelease' : 'assembleRelease'}, sem iniciar Metro ou instalar no aparelho.\n5. ${values.aab ? 'Copiar AAB assinado' : 'Verificar assinatura e copiar APK'} para dist/android.\nNenhuma etapa de geração foi executada.`); return; }
   const tools = await toolchain(config.settings, env, requirements);
+  if (values.setup) {
+    if (process.platform !== 'win32') throw new Error('local:app:setup prepara as ferramentas específicas do Windows.');
+    run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', join(root, 'scripts/setup-android-windows.ps1')], { cwd: root, env: tools.env, stage: 'setup' });
+    return;
+  }
+  const windowsNative = await checkWindowsNativeTools({ sdk: tools.sdk, env: tools.env });
   if (values.check) { console.log('Verificação concluída. Nenhuma chave, projeto nativo ou APK foi gerado.'); return; }
+  if (process.platform === 'win32') {
+    const removed = await resetNativePathCache(root, root);
+    if (removed.length) console.log(`Caches Android antigos removidos para regenerar caminhos curtos: ${removed.length}.`);
+  }
   const signing = await prepareSigning({ directory: join(root, '.secrets/android', app.android.package), settings: config.settings, packageId: app.android.package,
     generate: async (key) => run(tools.executable('keytool'), ['-genkeypair', '-noprompt', '-storetype', 'PKCS12', '-keystore', key.storeFile, '-alias', key.keyAlias, '-keyalg', 'RSA', '-keysize', '3072', '-validity', '10000', '-dname', 'CN=Socio Esporte Local, OU=Mobile, O=Esporte, C=BR', '-storepass:env', 'LOCAL_APP_STORE_PASSWORD', '-keypass:env', 'LOCAL_APP_KEY_PASSWORD'], { env: { ...tools.env, LOCAL_APP_STORE_PASSWORD: key.storePassword, LOCAL_APP_KEY_PASSWORD: key.keyPassword } }) });
   const signedEnv = { ...tools.env, LOCAL_APP_STORE_PASSWORD: signing.storePassword };
@@ -133,21 +171,23 @@ async function main() {
   const gradleEnv = { ...tools.env, ORG_GRADLE_PROJECT_localAppStoreFile: signing.storeFile, ORG_GRADLE_PROJECT_localAppStorePassword: signing.storePassword, ORG_GRADLE_PROJECT_localAppKeyAlias: signing.keyAlias, ORG_GRADLE_PROJECT_localAppKeyPassword: signing.keyPassword };
   const task = values.aab ? ':app:bundleRelease' : ':app:assembleRelease';
   const gradleArgs = [task, '--no-daemon', '--no-configuration-cache', '--console=plain', '--init-script', '../../../scripts/android-local.init.gradle'];
+  if (windowsNative.cmakeVersion) gradleArgs.push(`-Pandroid.cmakeVersion=${windowsNative.cmakeVersion}`);
   if (process.platform === 'win32') run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `gradlew.bat ${gradleArgs.join(' ')}`], { cwd: native, env: gradleEnv });
   else run('sh', ['./gradlew', ...gradleArgs], { cwd: native, env: gradleEnv });
   const artifact = join(native, 'app/build/outputs', values.aab ? 'bundle/release/app-release.aab' : 'apk/release/app-release.apk');
   if (!await exists(artifact)) throw new Error('O Gradle terminou sem o arquivo release assinado esperado. Confira os outputs da compilação.');
   if (!values.aab) {
-    const verifyEnv = { ...tools.env, LOCAL_APP_APK: artifact };
     const buildTools = join(tools.sdk, 'build-tools', requirements.buildTools);
-    if (process.platform === 'win32') run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'apksigner.bat verify --verbose --print-certs "%LOCAL_APP_APK%"'], { cwd: buildTools, env: verifyEnv });
-    else run(join(buildTools, 'apksigner'), ['verify', '--verbose', '--print-certs', artifact], { env: verifyEnv });
+    await verifyAndroidApk({ artifact, buildTools, java: tools.executable('java'), env: tools.env });
   }
   await mkdir(dirname(destination), { recursive: true });
   await copyFile(artifact, destination);
   const sha256 = createHash('sha256').update(await readFile(destination)).digest('hex');
   await writeFile(`${destination}.json`, JSON.stringify({ file: filename, appName: brands[config.club].appName, packageId: app.android.package, version: app.version, apiUrl: config.publicEnv.EXPO_PUBLIC_API_URL, club: config.club, tenantSlug: config.publicEnv.EXPO_PUBLIC_TENANT_SLUG, sha256, createdAt: new Date().toISOString() }, null, 2) + '\n');
-  console.log(`\nArquivo gerado: ${destination}\nSHA-256: ${sha256}\nO app inclui o JavaScript e acessa diretamente a API HTTPS configurada.`);
+  console.log(`\nArquivo gerado: ${displayedDestination}\nSHA-256: ${sha256}\nO app inclui o JavaScript e acessa diretamente a API HTTPS configurada.`);
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch(error => { console.error(`\nNão foi possível gerar o app: ${error.message}`); process.exitCode = 1; });
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch(error => {
+  const action = process.argv.includes('--setup') ? 'preparar o ambiente Android' : process.argv.includes('--check') ? 'concluir a verificação Android' : 'gerar o app';
+  console.error(`\nNão foi possível ${action}: ${error.message}`); process.exitCode = 1;
+});

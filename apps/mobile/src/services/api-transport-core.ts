@@ -19,7 +19,13 @@ export function createApiTransport(apiUrl: string | (() => string), fetcher: typ
       const requestId = response.headers.get('x-request-id') || undefined;
       let result;
       try { result = await response.json(); }
-      catch { throw new ApiError(response.ok ? 502 : response.status, 'O servidor respondeu em um formato inesperado. Confira a URL da API e tente novamente.', 'INVALID_API_RESPONSE', requestId); }
+      catch {
+        const host = new URL(baseUrl).origin;
+        const isHtml = response.headers.get('content-type')?.includes('text/html');
+        throw new ApiError(response.ok ? 502 : response.status, isHtml
+          ? `O endereço ${host} retornou uma página do servidor (HTTP ${response.status}), em vez da API. A equipe precisa corrigir a conexão do serviço. Seu acesso não foi confirmado; tente mais tarde.`
+          : 'O servidor respondeu em um formato inesperado. Tente novamente em instantes.', isHtml ? 'API_PROXY_ERROR' : 'INVALID_API_RESPONSE', requestId);
+      }
       if (!response.ok) {
         const details = Array.isArray(result?.error?.details) ? result.error.details.filter((item: unknown): item is { message: string } => typeof item === 'object' && item !== null && 'message' in item && typeof item.message === 'string').map((item: { message: string }) => item.message).join(' ') : '';
         throw new ApiError(response.status, [result?.error?.message || 'Não foi possível concluir a operação.', details].filter(Boolean).join(' '), result?.error?.code, result?.error?.requestId || requestId);

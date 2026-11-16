@@ -1,5 +1,7 @@
 # VPS Ubuntu: três containers e Nginx existente
 
+Se os domínios Esporte já têm o certificado `esporte-app`, mas a API retorna HTML 404 porque o Certbot os colocou no site `default`, use o [reparo isolado dos hosts Esporte](login-social-e-acesso.md#corrigir-o-404-do-nginx-na-vps-existente). Ele preserva os hosts Escala e faz backup antes de alterar blocos exclusivos do Esporte.
+
 A implantação escolhida usa **PostgreSQL + API + frontend em três containers separados**. O Nginx já instalado no Ubuntu termina o HTTPS e encaminha aos dois serviços web. O PM2 e os outros projetos da VPS não são alterados por estes arquivos.
 
 | Serviço | Container Compose | Acesso no host |
@@ -142,7 +144,7 @@ Na zona `testes-techcode.shop`, configure os registros A para a VPS informada:
 | `esporte` | `170.79.179.234` |
 | `api-esporte` | `170.79.179.234` |
 
-Na consulta feita durante esta preparação, ambos retornaram `ENOTFOUND`; a propagação precisa ser conferida antes de emitir certificado.
+Na consulta feita em 13/11/2026, o resolvedor local do PC retornou `ENOTFOUND`, mas a verificação independente pelo DNS público do Google confirmou os dois registros A em `170.79.179.234`. Confira também a resolução na VPS antes de emitir certificado. Registros AAAA devem apontar para um IPv6 realmente configurado nessa VPS; um IPv6 incorreto pode direcionar a validação para outro servidor.
 
 ```bash
 getent ahostsv4 esporte.testes-techcode.shop
@@ -151,13 +153,51 @@ getent ahostsv4 api-esporte.testes-techcode.shop
 
 O arquivo `deploy/nginx/nacional.conf` contém os dois virtual hosts HTTP iniciais. Ele encaminha API para `127.0.0.1:3333` e frontend para `127.0.0.1:8080`. O Nginx do container do frontend trata as rotas SPA, para atualizar `/admin` e `/portaria` sem erro 404.
 
+Como os três containers já foram iniciados, não é necessário reinstalar Docker nem recriar o volume. No Ubuntu da VPS, instale Nginx e Certbot com o plugin Nginx:
+
+```bash
+cd /var/www/esporte_app/APP_ESPORTE
+sudo apt update && sudo apt install -y nginx certbot python3-certbot-nginx
+sudo docker compose ps
+curl -fsS http://127.0.0.1:3333/ready
+curl -I http://127.0.0.1:8080
+```
+
+Esses acessos locais devem responder antes de configurar o proxy. As portas públicas 80/TCP e 443/TCP devem estar liberadas no firewall da VPS/provedor para Nginx e validação HTTP do Let's Encrypt. As portas 3333, 8080 e 55432 permanecem publicadas somente em loopback. Não é necessário ativar ou reinicializar o firewall existente.
+
+Se usa UFW e ele está ativo, acrescente somente as regras web:
+
+```bash
+sudo ufw status
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+```
+
+Não execute `ufw enable`/reset para este deploy: preserve as regras do SSH na porta 22570 e dos outros projetos.
+
 Se esses domínios já tiverem configurações no Nginx existente, ajuste os blocos correspondentes em vez de criar nomes duplicados. Para a instalação inicial de um arquivo dedicado:
 
 ```bash
-sudo install -m 644 deploy/nginx/nacional.conf /etc/nginx/sites-available/nacional
-sudo ln -s /etc/nginx/sites-available/nacional /etc/nginx/sites-enabled/nacional
-sudo nginx -t
-sudo systemctl reload nginx
+sudo grep -R -n -E 'server_name.*(api-esporte|esporte)\.testes-techcode\.shop' /etc/nginx/sites-enabled /etc/nginx/conf.d
+```
+
+Se a busca já encontrar esses domínios em outro arquivo, use aquele site e não crie virtual hosts duplicados. Para um primeiro cadastro dedicado, os comandos abaixo preservam um arquivo já existente, inclusive se o Certbot já o tiver convertido para HTTPS:
+
+```bash
+if ! sudo test -e /etc/nginx/sites-available/nacional && ! sudo test -L /etc/nginx/sites-available/nacional; then
+  sudo install -m 644 deploy/nginx/nacional.conf /etc/nginx/sites-available/nacional
+fi
+if ! sudo test -e /etc/nginx/sites-enabled/nacional && ! sudo test -L /etc/nginx/sites-enabled/nacional; then
+  sudo ln -s /etc/nginx/sites-available/nacional /etc/nginx/sites-enabled/nacional
+fi
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Confira a seleção de cada host HTTP antes de emitir certificado:
+
+```bash
+curl -fsS --resolve api-esporte.testes-techcode.shop:80:127.0.0.1 http://api-esporte.testes-techcode.shop/ready
+curl -I --resolve esporte.testes-techcode.shop:80:127.0.0.1 http://esporte.testes-techcode.shop/admin
 ```
 
 O teste deve passar antes do reload. Não substitua `nginx.conf` nem apague os sites do outro projeto. O template não contém certificados públicos inexistentes; assim o Nginx pode responder em HTTP antes de emitir HTTPS.
@@ -165,11 +205,34 @@ O teste deve passar antes do reload. Não substitua `nginx.conf` nem apague os s
 Com DNS e acesso público às portas 80/443 corretos, e Certbot/plugin Nginx disponíveis, configure HTTPS para os dois domínios:
 
 ```bash
-sudo certbot --nginx --redirect -d esporte.testes-techcode.shop -d api-esporte.testes-techcode.shop
-sudo nginx -t
+sudo certbot --nginx --redirect --cert-name esporte-app -d esporte.testes-techcode.shop -d api-esporte.testes-techcode.shop
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
+O Certbot solicitará um e-mail de contato e a aceitação dos termos do Let's Encrypt. O comando solicita um certificado com os dois nomes e instala o redirecionamento HTTP → HTTPS nos hosts correspondentes. Os arquivos ficam em `/etc/letsencrypt/live/esporte-app/`, administrados pelo Certbot. Não copie chaves/certificados HTTPS para dentro das imagens Docker.
+
+Ative a rotina de renovação do pacote Ubuntu e teste somente este certificado:
+
+```bash
+sudo systemctl enable --now certbot.timer
+sudo certbot renew --cert-name esporte-app --dry-run
+sudo systemctl list-timers --all certbot.timer
+```
+
+O timer faz as verificações periódicas e a configuração de renovação do plugin Nginx mantém a instalação do certificado. `--dry-run` testa a renovação no ambiente de testes do Let's Encrypt, sem substituir o certificado público pelo de testes. Se já usa outra instalação do Certbot (por exemplo, Snap) para os demais sites, mantenha a instalação e o agendador existentes e confira a renovação com esse mesmo cliente.
+
 Use as [instruções oficiais Certbot/Nginx](https://eff-certbot.readthedocs.io/en/stable/using.html#nginx) se o cliente ainda não estiver instalado. Não copie novamente o template HTTP sobre a configuração após o Certbot configurar TLS; preserve os blocos HTTPS existentes nas atualizações.
+
+Os valores públicos correspondentes no `.env` da raiz são:
+
+```dotenv
+CORS_ORIGINS=https://esporte.testes-techcode.shop
+EXPO_PUBLIC_API_URL=https://api-esporte.testes-techcode.shop/v1
+PASSWORD_RESET_PUBLIC_URL=https://esporte.testes-techcode.shop/reset-password
+SICREDI_PIX_WEBHOOK_URL=https://api-esporte.testes-techcode.shop/v1/payments/webhooks/sicredi
+```
+
+Se alterar esses valores, aplique `sudo docker compose up -d --build`. A URL pública compilada no frontend e no APK só muda com um novo build. Esse comando aplica somente este projeto e mantém o volume do PostgreSQL.
 
 O certificado público dos domínios e o certificado de cliente Sicredi são materiais diferentes. A imagem de frontend não recebe nenhum deles; o HTTPS público fica no Nginx da VPS. Validação mTLS de entrada exigida pela cooperativa para o webhook deve ser configurada com a cadeia apropriada antes do cadastro bancário; não reutilize automaticamente o certificado de cliente da API para isso.
 

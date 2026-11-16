@@ -3,7 +3,7 @@ import { hashPassword, verifyPassword, hashToken, newSessionToken } from '../lib
 import { AppError } from '../lib/errors.js';
 import { toMember } from '../lib/serializers.js';
 
-export async function createAuthService({ users, sessions, accessTokens, ttlDays = 7, now = () => new Date() }) {
+export async function createAuthService({ users, sessions, accessTokens, socialSessions, ttlDays = 7, now = () => new Date() }) {
   const dummyHash = await hashPassword('timing-only-password-not-an-account');
   const invalidLogin = () => new AppError(401, 'INVALID_CREDENTIALS', 'E-mail ou senha inválidos.');
   function newSession() {
@@ -15,6 +15,13 @@ export async function createAuthService({ users, sessions, accessTokens, ttlDays
     return { ...access, refreshToken, refreshTokenExpiresAt: session.expiresAt.toISOString(), tokenType: 'Bearer', member: toMember(user) };
   }
   return {
+    async socialLogin({ ticketHash, challenge }) {
+      const fresh = newSession();
+      let result;
+      try { result = await socialSessions.redeem({ ticketHash, challenge, session: fresh.session, passwordHash: await hashPassword(newSessionToken()), now: now() }); }
+      catch (error) { if (error.code === 'P2002') throw new AppError(409, 'SOCIAL_CONFLICT', 'A conta foi atualizada. Tente entrar novamente.'); if (error.code === 'P2025') throw new AppError(401, 'SOCIAL_TICKET_INVALID', 'O login já foi utilizado. Tente novamente.'); throw error; }
+      return credentials(result.user, result.session, fresh.refreshToken);
+    },
     async register({ name, email, password }) {
       if (await users.byEmail(email)) throw new AppError(409, 'EMAIL_IN_USE', 'Este e-mail já está cadastrado.');
       const fresh = newSession();

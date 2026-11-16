@@ -1,5 +1,16 @@
 // Applied only by local:app. Native files can be regenerated without losing signing.
 gradle.beforeProject { appProject ->
+    if (System.getProperty('os.name').toLowerCase().contains('windows')) {
+        ['com.android.application', 'com.android.library'].each { androidPlugin ->
+            appProject.pluginManager.withPlugin(androidPlugin) {
+                appProject.extensions.getByName('androidComponents').finalizeDsl { android ->
+                    // All modules, including dependencies, use the SDK's modern Ninja.
+                    // A short SUBST root alone cannot shorten physical junction targets.
+                    android.externalNativeBuild.cmake.version = appProject.providers.gradleProperty('android.cmakeVersion').get()
+                }
+            }
+        }
+    }
     if (appProject.path == ':app') {
         appProject.pluginManager.withPlugin('com.android.application') {
             appProject.extensions.getByName('androidComponents').finalizeDsl { android ->

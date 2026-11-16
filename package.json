@@ -11,6 +11,7 @@
   },
   "scripts": {
     "local:app": "node scripts/local-app.mjs",
+    "local:app:setup": "node scripts/local-app.mjs --setup",
     "build:web": "npm run export:web --workspace @nacional/mobile",
     "dev:api": "npm run dev --workspace @nacional/api",
     "dev:api:watch": "npm run dev:watch --workspace @nacional/api",
@@ -36,6 +37,7 @@
     "payments:webhook": "npm run payments:webhook --workspace @nacional/api",
     "sicredi:diagnostic": "npm run sicredi:diagnostic --workspace @nacional/api",
     "sicredi:token": "npm run sicredi:token --workspace @nacional/api",
+    "test:sicredi": "node apps/api/scripts/sicredi-tests.mjs",
     "api:check": "node scripts/check-api.mjs",
     "web:clear": "npm run web --workspace @nacional/mobile -- --clear"
   }

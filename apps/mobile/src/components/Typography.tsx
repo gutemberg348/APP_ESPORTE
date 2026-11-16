@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, forwardRef } from 'react';
 import { Text as NativeText, TextInput as NativeInput, StyleSheet, type TextProps, type TextInputProps } from 'react-native';
 import { maskInput, type InputMask } from '@nacional/shared/forms';
 export const fonts = {
@@ -18,9 +18,9 @@ export function Text({ style, heading = false, ...props }: TextProps & { heading
   const fontFamily = weight >= 800 && family.extra ? family.extra : weight >= 700 ? family.bold : weight >= 600 ? family.semibold : weight >= 500 ? family.medium : family.regular;
   return <NativeText {...props} style={[{ fontSize: compact ? 14 : 16, lineHeight: compact ? 22 : 24 }, style, { fontFamily, fontWeight: 'normal' }]} />;
 }
-export function TextInput({ style, mask, onChangeText, value, ...props }: TextInputProps & { mask?: InputMask }) {
+export const TextInput = forwardRef<React.ComponentRef<typeof NativeInput>, TextInputProps & { mask?: InputMask }>(function TextInput({ style, mask, onChangeText, value, ...props }, ref) {
   const { families, compact } = useContext(TypographyContext);
   const label = `${props.accessibilityLabel || ''} ${props.placeholder || ''}`;
   const kind = mask || (/CPF|CNPJ/i.test(label) ? 'document' : /\bCEP\b/i.test(label) ? 'postalCode' : props.keyboardType === 'phone-pad' ? 'phone' : undefined);
-  return <NativeInput {...props} value={value === undefined ? undefined : kind ? maskInput(value, kind) : value} onChangeText={(text) => onChangeText?.(maskInput(text, kind))} style={[{ fontFamily: families.body.regular, fontSize: compact ? 14 : 16 }, style]} />;
-}
+  return <NativeInput ref={ref} {...props} value={value === undefined ? undefined : kind ? maskInput(value, kind) : value} onChangeText={(text) => onChangeText?.(maskInput(text, kind))} style={[{ fontFamily: families.body.regular, fontSize: compact ? 14 : 16 }, style]} />;
+});

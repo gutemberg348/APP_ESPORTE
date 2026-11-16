@@ -2291,4 +2291,27 @@ Comandos executados somente quando o responsável os invoca:
   npm run auth:cleanup --workspace @nacional/api -> limpar sessões vencidas e códigos expirados.
 
 Ao mudar schema/migrations, atualizar este TXT. Nenhum registro de usuário ou credencial foi exportado.
+ADICAO - LOGIN SOCIAL (migration 20261116010000_social_auth)
+
+SocialIdentity: vincula uma identidade Google/Apple a User.
+  id UUID PK; provider VARCHAR(16); subject VARCHAR(255); userId UUID FK User;
+  createdAt TIMESTAMP. UNIQUE(provider, subject); INDEX(userId).
+  Relacao User 1:N SocialIdentity; exclusao do usuario remove suas identidades.
+  O email retornado nao vincula automaticamente contas existentes.
+
+SocialAuthAttempt: tentativa temporaria OAuth, independente de sessao/usuario.
+  id UUID PK; provider VARCHAR(16); stateHash TEXT UNIQUE; nonce TEXT;
+  providerVerifier TEXT; challenge TEXT; ticketHash TEXT UNIQUE nullable;
+  profile JSONB nullable; claimedAt TIMESTAMP nullable; expiresAt TIMESTAMP;
+  createdAt TIMESTAMP. INDEX(expiresAt).
+  stateHash: hash SHA-256/base64url do state; callback consumido uma vez.
+  providerVerifier: prova PKCE Google; apagada com nonce ao concluir callback.
+  challenge: hash da prova aleatoria mantida pelo aplicativo.
+  profile: somente subject, email verificado e nome; nunca tokens dos provedores.
+  ticketHash: hash do ticket que expira em 60 segundos. Resgate atomico cria
+  Session/RefreshToken existentes e remove a tentativa. Criacao de novas contas
+  sociais exige email ainda nao cadastrado e atribui somente role USER.
+  Tentativas pendentes expiram em 10 minutos; novas tentativas limpam vencidas.
+  Nenhum usuario, ingresso, venda ou dado existente e removido pela migration.
+
 FIM DO DOCUMENTO.

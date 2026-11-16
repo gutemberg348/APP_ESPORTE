@@ -6,6 +6,8 @@ O guia de outro projeto foi adaptado à estrutura deste repositório, conferindo
 
 ## Preparar o ambiente
 
+Para verificar as credenciais na VPS antes de habilitar pagamentos, use os [testes isolados Sicredi](testes-sicredi-vps.md). O comando `test:sicredi` confere certificado/OAuth/leitura sem iniciar o servidor ou usar o banco do app. Criação, consulta e remoção de cobranças `TST` são comandos separados, com valor informado pelo operador.
+
 O bloco `SICREDI_PIX_*` já está em `apps/api/.env` com campos privados vazios e um token de webhook aleatório. O modo de pagamento existente não foi ativado/trocado automaticamente sem as credenciais. O modelo versionado fica em `apps/api/.env.example`.
 
 Na VPS, a pasta definida é **`/etc/nacional/certificados`**, criada com proprietário `server` e modo `700`. Os arquivos enviados à VPS foram identificados com os nomes `sicredi-multipag.cer`, `sicredi-multipag.key` e `sicredi-multipag-chain.cer`; ajuste o nome no caminho se os arquivos enviados tiverem outros nomes:

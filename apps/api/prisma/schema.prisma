@@ -57,6 +57,7 @@ model User {
   updatedAt               DateTime             @updatedAt
   membership              Membership?
   sessions                Session[]
+  socialIdentities        SocialIdentity[]
   tickets                 Ticket[]
   predictions             Prediction[]
   referrals               Referral[]
@@ -82,6 +83,34 @@ model User {
   shopImages              ShopImage[]
   passwordResets          PasswordResetToken[]
   pedidosIngressoV1       PedidoIngressoV1[]
+}
+
+model SocialIdentity {
+  id        String   @id @default(uuid()) @db.Uuid
+  provider  String   @db.VarChar(16)
+  subject   String   @db.VarChar(255)
+  userId    String   @db.Uuid
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, subject])
+  @@index([userId])
+}
+
+model SocialAuthAttempt {
+  id               String    @id @default(uuid()) @db.Uuid
+  provider         String    @db.VarChar(16)
+  stateHash        String    @unique
+  nonce            String
+  providerVerifier String
+  challenge        String
+  ticketHash       String?   @unique
+  profile          Json?
+  claimedAt        DateTime?
+  expiresAt        DateTime
+  createdAt        DateTime  @default(now())
+
+  @@index([expiresAt])
 }
 
 model PasswordResetToken {

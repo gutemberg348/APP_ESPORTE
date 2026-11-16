@@ -1,5 +1,7 @@
 # App de clubes • Esporte de Patos
 
+[Login/cadastro, Google e Apple e correção do HTTPS da API](docs/login-social-e-acesso.md): configuração dos provedores, migration aditiva e reparo do Nginx sem substituir os hosts de outros projetos.
+
 Identidade inicial: **Esporte Clube de Patos**, em vermelho/vinho e com escudo transparente no cabeçalho. A apresentação fica centralizada em `packages/shared/brands.json`, com perfis `esporte` e `nacional`; o app seleciona por `EXPO_PUBLIC_CLUB`. [Configuração por clube e limites desta base](docs/identidade-clubes.md).
 
 App React Native/Expo com TypeScript, API JavaScript com **Express 5**, Prisma 7 e PostgreSQL 17 em Docker. O padrão é **login e dados reais**, com administração de jogos, setores, planos, associações e ingressos.
@@ -82,6 +84,8 @@ Detalhes de uso e limites: [contas e ingressos](docs/real-accounts-ticketing.md)
 Carteira em reais separada dos pontos Zezito. O modelo B gera a venda no caixa e vincula o torcedor por código da carteira ou QR da venda. O modelo A com QR fixo usa o mesmo motor e começa desativado por loja.
 
 Para o Pix de ingressos e loja, a integração Sicredi está preparada. A API Pix de recebimento não executa split de parceiros: o cashback real fica bloqueado nesse modo. A simulação continua exclusiva de `PAYMENT_MODE=demo` fora de produção. [Pix Sicredi e limites](docs/sicredi-pix.md).
+
+**`npm run test:sicredi`** executa o diagnóstico isolado de certificado/OAuth e leitura do webhook, sem usar o banco do app nem emitir ingressos. [Comandos para rodar na VPS e testar cobrança/pagamento com TXID separado](docs/testes-sicredi-vps.md).
 
 ## Estrutura
 

@@ -4,9 +4,12 @@ import demo from '../config/demo';
 import { config } from '../config/env';
 import { request, ApiError } from '../services/api';
 import { authClient } from '../services/auth-client';
+import { socialLogin } from '../services/social-login';
+import type { SocialProvider } from '../services/social-login-core';
 interface Session {
   member: Member | null; token: string | null; loading: boolean; bootError: string | null; demoMode: boolean;
   signIn: (email: string, password: string, name?: string, portal?: 'APP' | 'ADMIN' | 'GATE') => Promise<void>;
+  signInSocial: (provider: SocialProvider) => Promise<void>;
   signOut: () => Promise<void>; logoutAll: () => Promise<void>; clearSession: () => Promise<void>;
   retry: () => Promise<void>; updateMember: (member: Member) => void; resumeDemo: () => void;
 }
@@ -42,6 +45,11 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
     const result = await request<AuthResponse>(name ? '/auth/register' : '/auth/login', { method: 'POST', body: { email, password, ...(name ? { name } : portal !== 'APP' ? { portal } : {}) } });
     await authClient.accept(result); setToken(result.accessToken); setMember(result.member);
   }
+  async function signInSocial(provider: SocialProvider) {
+    const result = await socialLogin(provider);
+    if (!result) return;
+    await authClient.accept(result); setToken(result.accessToken); setMember(result.member);
+  }
   const signOut = useCallback(async () => {
     const access = authClient.current()?.accessToken;
     if (access) {
@@ -55,6 +63,6 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
     if (access) await request('/auth/logout-all', { token: access, method: 'POST' });
     await clearSession();
   }, [clearSession]);
-  return <Context.Provider value={{ member, token, loading, bootError, demoMode: config.demo, signIn, signOut, logoutAll, clearSession, retry, updateMember: setMember, resumeDemo: () => { if (config.demo) setMember(demo.member as Member); } }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ member, token, loading, bootError, demoMode: config.demo, signIn, signInSocial, signOut, logoutAll, clearSession, retry, updateMember: setMember, resumeDemo: () => { if (config.demo) setMember(demo.member as Member); } }}>{children}</Context.Provider>;
 }
 export function useSession() { const context = useContext(Context); if (!context) throw new Error('SessionProvider ausente'); return context; }

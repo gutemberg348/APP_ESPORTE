@@ -11,6 +11,13 @@ const { resolveApiUrl } = await moduleFrom('../src/config/api-url.ts');
 const { createApiTransport, ApiError } = await moduleFrom('../src/services/api-transport-core.ts');
 const { checkApiConnection } = await moduleFrom('../src/services/api-connection.ts');
 
+test('HTML from a reverse proxy is explained without exposing its body or replaying registration', async () => {
+  let calls = 0;
+  const send = createApiTransport('https://api.example.test/v1', async () => { calls++; return new Response('<html>private server details</html>', { status: 404, headers: { 'content-type': 'text/html' } }); });
+  await assert.rejects(send('/auth/register', { method: 'POST', body: { email: 'test@example.test', password: 'fixture-only' } }), error => error.code === 'API_PROXY_ERROR' && error.message.includes('HTTP 404') && error.message.includes('https://api.example.test') && !error.message.includes('private server details'));
+  assert.equal(calls, 1);
+});
+
 test('physical phones replace development localhost with the Expo computer and preserve API port/path', () => {
   assert.equal(resolveApiUrl('http://localhost:3333/v1/', 'ios', '192.168.0.100:8081', true), 'http://192.168.0.100:3333/v1');
   assert.equal(resolveApiUrl('http://127.0.0.1:3333/v1', 'android', 'exp://192.168.0.100:8081', true), 'http://192.168.0.100:3333/v1');

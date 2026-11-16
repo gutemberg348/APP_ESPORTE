@@ -8,13 +8,23 @@ npm run local:app
 
 O resultado padrão é `dist/android/socio-esporte-release.apk`, instalável no Android. O comando não instala o app nem inicia emulador, API ou servidor de desenvolvimento. A API de produção precisa estar acessível por HTTPS para login, compras e validações.
 
+No Windows, se `--check` indicar caminhos longos desativados ou CMake/Ninja ausente, execute no terminal normal, na raiz do repositório:
+
+```powershell
+npm run local:app:setup
+```
+
+Se necessário, o comando abre a confirmação de administrador do Windows (UAC): confirme **Sim**. Apenas a operação fixa que habilita `LongPathsEnabled` é executada com elevação; npm, SDK Manager e build continuam com as permissões do terminal original. Se cancelar, o comando explica como repetir; se a política já estiver ligada, não pede elevação. Uma política corporativa pode impedir a alteração mesmo após autorizar.
+
+Esse preparo instala somente o CMake 3.31.6/Ninja 1.12.1 pelo SDK Manager oficial, caso ausentes, ao lado das versões existentes. Não move Java/SDK, não altera variáveis persistentes (`PATH`, `JAVA_HOME`, `ANDROID_HOME`) nem configurações globais do Gradle. A seleção do CMake acontece somente no build deste projeto. `LongPathsEnabled` é uma configuração global do Windows para ferramentas compatíveis com caminhos longos; não é uma mudança na localização das ferramentas. Reinicie o Windows quando essa política tiver sido alterada e depois use `npm run local:app` no terminal normal. O script não reinicia o computador nem compila o app durante o setup. Referência: [elevação de processo no PowerShell](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/start-process?view=powershell-5.1).
+
 ## Como funciona
 
 1. Confere Java, Android SDK, Build Tools e NDK usando os requisitos do React Native instalado.
 2. Cria uma assinatura privada local na primeira execução e reutiliza a mesma chave nas seguintes.
 3. Executa o CLI do Expo instalado no projeto para gerar/atualizar `apps/mobile/android`, usando o template incluído no SDK, sem apagar a pasta e sem reinstalar dependências.
 4. Executa o Gradle Wrapper desse projeto com `:app:assembleRelease`. A versão do Gradle vem do wrapper, independentemente do Gradle global usado por outros projetos.
-5. O Gradle compila o app nativo e inclui JavaScript, fontes e imagens no APK. A assinatura é conferida com `apksigner` antes de copiar o resultado para `dist/android`.
+5. O Gradle compila o app nativo e inclui JavaScript, fontes e imagens no APK. A assinatura é conferida com o `apksigner.jar` do Build Tools via Java antes de copiar o resultado para `dist/android`. Os caminhos são passados diretamente como argumentos, sem o interpretador `cmd.exe` ou o wrapper `.bat` do verificador. Falha de verificação preserva o APK no diretório de saída do Gradle e é reportada separadamente de falha na compilação.
 
 O app funciona sem Expo Go, sem conta Expo/EAS, sem build na nuvem e sem Metro aberto. As bibliotecas Expo continuam no código porque o app usa câmera, arquivos, armazenamento seguro e outras funcionalidades delas. O prebuild e o empacotamento usam ferramentas Expo **localmente**, e a compilação final usa Gradle. Referências: [geração nativa do Expo](https://docs.expo.dev/workflow/continuous-native-generation/) e [compilação Android por linha de comando](https://developer.android.com/build/building-cmdline).
 
@@ -48,6 +58,10 @@ O script não substitui chaves incompletas ou de outro pacote. Se detectar somen
 # Conferir ferramentas, sem gerar projeto nativo, chave ou APK
 npm run local:app -- --check
 
+# Preparação única no Windows: CMake/Ninja recente e política de caminhos longos
+# Execute no terminal normal e confirme o pedido do Windows, se aparecer.
+npm run local:app:setup
+
 # Ver etapas e destino sem executar ferramentas
 npm run local:app -- --plan
 
@@ -59,7 +73,21 @@ O AAB é salvo em `dist/android/socio-esporte-release.aab`; para instalar direta
 
 ## Ferramentas
 
-O script lê `node_modules/react-native/gradle/libs.versions.toml`; com as dependências atuais, são necessários SDK 37, Build Tools 37.0.0 e NDK 27.1.12297006, além de JDK 17 ou superior. `ANDROID_JAVA_HOME` permite escolher um JDK só para este app; caso ausente, usa `JAVA_HOME` ou o Java disponível. `ANDROID_SDK_ROOT`/`ANDROID_HOME` selecionam o SDK, com detecção do caminho padrão do Android Studio quando necessário.
+### Caminhos longos no Windows
+
+O comando cria automaticamente uma unidade virtual temporária com `SUBST`, usando uma letra livre (por exemplo, `R:\`). Ela aponta para a raiz do repositório sem mover ou copiar arquivos. O prebuild, autolinking e Gradle executam por esse caminho curto; a unidade criada pelo comando é liberada ao terminar, inclusive quando o build falha. Unidades já existentes não são substituídas.
+
+O `apps/mobile/metro.config.js` mantém a configuração automática de monorepo do Expo e acrescenta o caminho físico de `packages/shared` às pastas visíveis do Metro. Isso permite seguir a junction do npm para `@nacional/shared` mesmo quando a compilação usa `R:\` e o destino real permanece em `C:\`. A resolução continua usando os exports do pacote; não é necessário trocar imports ou reinstalar o workspace por causa do atalho. Veja [configuração de workspaces](https://docs.expo.dev/guides/monorepos/) e [visibilidade de links no Metro](https://metrobundler.dev/docs/configuration/#watchfolders).
+
+Na primeira tentativa com o caminho curto, ou quando a letra de build mudar, o script invalida somente saídas geradas do Android (`app/.cxx`, `app/build`, `android/build` e caches `.cxx` de módulos dentro do repositório). Isso remove referências absolutas da tentativa anterior. A limpeza confere os destinos antes de remover qualquer pasta e recusa junctions/destinos externos. Código-fonte, `.env`, chaves e caches globais do Gradle/SDK são preservados. Com o mesmo caminho, os próximos builds continuam incrementais.
+
+O atalho sozinho não basta quando uma junction nativa continua apontando para o caminho físico longo. Por isso o comando Windows exige **CMake 3.31.6, Ninja >= 1.12 e a política `LongPathsEnabled=1`** antes de executar Gradle. O init script aplica essa versão do CMake a todos os módulos Android e a propriedade `android.cmakeVersion` é passada somente neste build. O limite artificial anterior de 200 caracteres foi retirado. A atualização da configuração invalida os caches CMake antigos na próxima compilação.
+
+Essas configurações ficam nos scripts versionados e não dependem de editar arquivos gerados ou `node_modules`. Referências: [limites de caminhos no Expo](https://docs.expo.dev/troubleshooting/windows-long-paths/), [SUBST do Windows](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/subst) e [instalação de CMake pelo SDK Manager](https://developer.android.com/tools/sdkmanager).
+
+Após um erro `Filename longer than 260 characters`, execute `npm run local:app -- --check` com o script atualizado e conclua a preparação indicada antes de compilar novamente. Não é necessário mover o repositório ou trocar de branch. Se o terminal for encerrado à força e deixar uma unidade virtual, confira com `subst` e remova somente o atalho desse build com `subst R: /D` (substituindo a letra indicada no log).
+
+O script lê `node_modules/react-native/gradle/libs.versions.toml`; com as dependências atuais, são necessários SDK 37, Build Tools 37.0.0 e NDK 27.1.12297006, além de JDK 17 ou superior. No Windows também verifica CMake/Ninja e a política de caminhos longos. `ANDROID_JAVA_HOME` permite escolher um JDK só para este app; caso ausente, usa `JAVA_HOME` ou o Java disponível. `ANDROID_SDK_ROOT`/`ANDROID_HOME` selecionam o SDK, com detecção do caminho padrão do Android Studio quando necessário.
 
 Se faltar algum componente, instale a versão indicada pelo SDK Manager do Android Studio e aceite as licenças. Não é necessário alterar o Gradle de outros projetos. O primeiro build pode baixar a distribuição do wrapper e dependências Maven; portanto, **build local não significa build sem internet**. As seguintes execuções reaproveitam o cache nativo.
 

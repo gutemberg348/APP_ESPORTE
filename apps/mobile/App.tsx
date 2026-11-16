@@ -1,5 +1,6 @@
 import React from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { ThemeProvider } from './src/theme/ThemeProvider';
 import { SessionProvider } from './src/providers/SessionProvider';
 import { AppNavigator } from './src/navigation/AppNavigator';
@@ -12,5 +13,5 @@ import { Inter_700Bold } from '@expo-google-fonts/inter/700Bold';
 export default function App() {
   const [loaded, error] = useFonts({ DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold, Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold, Manrope_800ExtraBold, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold });
   if (!loaded && !error) return null;
-  return <SafeAreaProvider><ThemeProvider><SessionProvider><AppNavigator /></SessionProvider></ThemeProvider></SafeAreaProvider>;
+  return <SafeAreaProvider><KeyboardProvider preload={false}><ThemeProvider><SessionProvider><AppNavigator /></SessionProvider></ThemeProvider></KeyboardProvider></SafeAreaProvider>;
 }

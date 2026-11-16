@@ -1,14 +1,38 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { resolveBuildSettings, buildChildEnv, parseRequirements, prepareSigning } from '../../../scripts/local-app.mjs';
+import { resolveBuildSettings, buildChildEnv, parseRequirements, prepareSigning, verifyAndroidApk } from '../../../scripts/local-app.mjs';
 
 const brands = { esporte: { appName: 'Sócio Esporte' }, nacional: { appName: 'Sócio Canário' } };
 const defaults = { EXPO_PUBLIC_API_URL: 'https://api-esporte.testes-techcode.shop/v1', EXPO_PUBLIC_CLUB: 'esporte', EXPO_PUBLIC_TENANT_SLUG: 'nacional-patos' };
+
+test('APK verification passes Windows paths literally to Java and propagates verification failures', async t => {
+  const temporary = await mkdtemp(join(tmpdir(), 'nacional-apk-verifier-'));
+  t.after(async () => { const target = resolve(temporary); assert.ok(!relative(resolve(tmpdir()), target).startsWith('..') && basename(target).startsWith('nacional-apk-verifier-')); await rm(target, { recursive: true, force: true }); });
+  const buildTools = join(temporary, 'Android SDK (test) & tools');
+  const artifact = join(temporary, 'app (release) & %PATH%.apk');
+  const java = join(temporary, 'Java 17', 'bin', 'java.exe');
+  let calls = 0;
+  const options = { artifact, buildTools, java, env: { JAVA_HOME: 'unchanged' }, execute: (command, args, execution) => {
+    calls++;
+    assert.equal(command, java);
+    assert.deepEqual(args, ['-Xmx1024M', '-Xss1m', '-jar', join(buildTools, 'lib', 'apksigner.jar'), 'verify', '--verbose', '--print-certs', artifact]);
+    assert.equal(execution.stage, 'verify');
+    assert.equal(execution.cwd, buildTools);
+    assert.equal(execution.env.JAVA_HOME, 'unchanged');
+  } };
+  await assert.rejects(verifyAndroidApk(options), /apksigner.jar/);
+  assert.equal(calls, 0);
+  await mkdir(join(buildTools, 'lib'), { recursive: true });
+  await writeFile(join(buildTools, 'lib', 'apksigner.jar'), 'fixture, never executed');
+  await verifyAndroidApk(options);
+  assert.equal(calls, 1);
+  await assert.rejects(verifyAndroidApk({ ...options, execute: () => { throw new Error('signature verification failed'); } }), /signature verification failed/);
+});
 
 test('installed app resolves public build settings with explicit precedence and blocks localhost/credentials', () => {
   const build = resolveBuildSettings([defaults, { EXPO_PUBLIC_API_URL: 'https://api.example.com/v1/' }, { EXPO_PUBLIC_CLUB: 'nacional', DATABASE_URL: 'private-database', EXPO_PUBLIC_DEMO_MODE: 'true' }], brands);

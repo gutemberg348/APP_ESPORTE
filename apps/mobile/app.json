@@ -11,7 +11,8 @@
       "bundleIdentifier": "br.com.nacional.sociocanario"
     },
     "android": {
-      "package": "br.com.nacional.sociocanario"
+      "package": "br.com.nacional.sociocanario",
+      "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
       "bundler": "metro"

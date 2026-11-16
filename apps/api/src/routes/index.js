@@ -2,6 +2,7 @@ import { gateV1Controller } from '../controllers/gate-v1.controller.js';
 import { shopImageController } from '../controllers/shop-image.controller.js';
 import { settingsController } from '../controllers/settings.controller.js';
 import { authController } from '../controllers/auth.controller.js';
+import { socialAuthController } from '../controllers/social-auth.controller.js';
 import { memberController } from '../controllers/member.controller.js';
 import { clubController } from '../controllers/club.controller.js';
 import { engagementController } from '../controllers/engagement.controller.js';
@@ -16,6 +17,11 @@ import { passwordRecoveryController } from '../controllers/password-recovery.con
 import { partnerController } from '../controllers/partner.controller.js';
 import { ingressoV1Controller } from '../controllers/ingresso-v1.controller.js';
 export const routes = [
+  { method: 'GET', path: '/v1/auth/social/providers', handler: socialAuthController.providers },
+  { method: 'POST', path: '/v1/auth/social/start', handler: socialAuthController.start, authLimit: true },
+  { method: 'GET', path: '/v1/auth/social/:provider/callback', handler: socialAuthController.callback, binary: true, authLimit: true },
+  { method: 'POST', path: '/v1/auth/social/:provider/callback', handler: socialAuthController.callback, binary: true, formBody: true, authLimit: true },
+  { method: 'POST', path: '/v1/auth/social/exchange', handler: socialAuthController.exchange, authLimit: true },
   { method: 'POST', path: '/v1/payments/webhooks/sicredi/:webhookToken', handler: pixController.sicrediWebhook },
   { method: 'POST', path: '/v1/payments/webhooks/sicredi/:webhookToken/pix', handler: pixController.sicrediWebhook },
   { method: 'GET', path: '/v1/gate/v1/matches', handler: gateV1Controller.matches, private: true, gate: true },

@@ -4,6 +4,9 @@ export function cors(origins, allowDevelopmentOrigin = () => false) {
   const allowed = new Set(origins);
   return (req, res, next) => {
     const origin = req.headers.origin;
+    // Only Apple's browser form callback. It is authenticated by one-use state + OIDC nonce.
+    // No CORS permission is granted to other API endpoints or to credentialed requests.
+    if (origin === 'https://appleid.apple.com' && req.method === 'POST' && req.path === '/v1/auth/social/apple/callback') return next();
     if (origin) {
       if (!allowed.has(origin) && !allowDevelopmentOrigin(origin)) throw new AppError(403, 'ORIGIN_DENIED', 'Origem não permitida.');
       res.set({
