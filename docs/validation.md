@@ -228,3 +228,11 @@ Diagnostico Pix na VPS (16/11/2026): ampliado runner isolado com comando diagnos
 - App: chamada de associação, catálogo/Pix/histórico, carteirinha com contador/reloginho sincronizados e movimento discreto, Vantagens com benefício do plano e ofertas reais de parceiros.
 - Não executados: APK/Gradle/prebuild, serviços locais ou VPS, migrations no banco real, pagamento real, captura visual do aparelho. Imagem do QR permanece potencialmente válida dentro da janela de 30 segundos; animação não substitui validação online.
 - Guia de estrutura/uso/deploy: docs/banco/associacao-pix.txt.
+
+
+## 2026-11-17 — Plano inicial de R$ 40 e prévia da carteirinha
+
+- Migration aditiva 20261117190000_default_membership_plan cria Sócio Esporte, R$ 40,00 / 30 dias, ativo, sem desconto adicional. INSERT com conflito ignorado preserva configuração anterior e edições do admin.
+- Quatro testes passaram em membership-pix/app-demo, incluindo todas as migrations em banco descartável, criação do plano padrão, preservação de edição anterior, fluxo Pix e seed idempotente de jogos/produtos. TypeScript mobile aprovado.
+- Carteira inativa reaproveita a carteirinha com nome/status, matriz decorativa bloqueada e cadeado, brilho suave e CTA de ativação. Apenas a associação ativa recebe QR assinado. Animações respeitam reduzir movimento.
+- Não executados: migration/seed no banco real, serviços, APK, verificação visual no aparelho. Comandos de atualização e seed em docs/banco/associacao-pix.txt e docs/testes-app-loja-google.md.

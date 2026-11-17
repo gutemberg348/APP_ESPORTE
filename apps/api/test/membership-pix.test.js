@@ -33,6 +33,13 @@ test('membership routes require authentication and checkout reaches validation w
 test('membership Pix activates only confirmed payments, preserves snapshots and handles replay, late payments, manual changes and refunds', { timeout: 120000 }, async t => {
   const pg = await PGlite.create(), migrations = new URL('../prisma/migrations/', import.meta.url);
   for (const entry of (await readdir(migrations, { withFileTypes: true })).filter(row => row.isDirectory()).sort((a,b) => a.name.localeCompare(b.name))) await pg.exec(await readFile(new URL(`${entry.name}/migration.sql`, migrations), 'utf8'));
+  const defaultPlan = (await pg.query('SELECT * FROM "Plan" WHERE "name" = $1', ['Sócio Esporte'])).rows[0];
+  assert.equal(defaultPlan.priceCents,4000); assert.equal(defaultPlan.durationDays,30); assert.equal(defaultPlan.active,true);
+  const defaultSql = await readFile(new URL('../prisma/migrations/20261117190000_default_membership_plan/migration.sql', import.meta.url),'utf8');
+  await pg.query('UPDATE "Plan" SET "priceCents" = 4500, "active" = false WHERE "id" = $1',[defaultPlan.id]);
+  await pg.exec(defaultSql);
+  const keptPlan = (await pg.query('SELECT * FROM "Plan" WHERE "id" = $1',[defaultPlan.id])).rows[0];
+  assert.equal(keptPlan.priceCents,4500); assert.equal(keptPlan.active,false);
   const socket = new PGLiteSocketServer({ db: pg, port: 0, host: '127.0.0.1', maxConnections: 1 }); await socket.start();
   const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: `postgresql://postgres:postgres@${socket.getServerConn()}/postgres`, max: 1 }) });
   t.after(async () => { await db.$disconnect(); await socket.stop(); await pg.close(); });

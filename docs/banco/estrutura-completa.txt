@@ -1,3 +1,5 @@
+ATUALIZACAO PLANO INICIAL 17/11/2026: migration 20261117190000_default_membership_plan cadastra plano Socio Esporte R$ 40,00 / 30 dias se ausente. Detalhes e comandos de jogos/produtos em docs/banco/associacao-pix.txt.
+
 ATUALIZACAO ASSOCIACAO PIX 17/11/2026: MembershipOrder, planos publicados/duracao, vinculo do periodo ao pagamento e prazo configuravel. Detalhes em docs/banco/associacao-pix.txt. Migration preparada e testada em banco descartavel; nao aplicada na VPS pelo agente.
 
 ATUALIZACAO INDICACOES POR LINK 17/11/2026: User.referralCode (UUID publico unico) e User.referredById (FK para User.id). Detalhes em docs/banco/indicacoes-link.txt. Migration preparada e testada em banco descartavel; nao aplicada na VPS pelo agente.

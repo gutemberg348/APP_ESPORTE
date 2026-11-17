@@ -8,10 +8,11 @@ Execute na pasta `/var/www/esporte_app/APP_ESPORTE`, depois de enviar estas alte
 git pull
 sudo docker compose up -d --build api web
 sudo docker compose ps
+sudo docker compose exec -T api npx prisma migrate status
 sudo docker compose exec -T api node prisma/seed-app-demo.js --confirm-test-data --enable-shop
 ```
 
-O entrypoint aplica as migrations de estrutura. Os exemplos ficam em um **seed explícito**, separado das migrations, para não publicar jogos fictícios em toda atualização de produção.
+O entrypoint aplica as migrations de estrutura. A migration `20261117190000_default_membership_plan` também publica o plano inicial Sócio Esporte por **R$ 40,00 / 30 dias**, preservando um plano de mesmo nome que já exista. O valor e a duração continuam editáveis no admin. Os exemplos ficam em um **seed explícito**, separado das migrations, para não publicar jogos fictícios em toda atualização de produção.
 
 O seed cria:
 

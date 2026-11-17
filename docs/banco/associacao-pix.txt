@@ -63,3 +63,18 @@ HOMOLOGACAO
 Usar ambiente adequado: Sicredi de producao movimenta dinheiro real. Conferir webhook e notificacao conforme docs/testes-sicredi-vps.md.
 Criar plano, entrar como torcedor sem associacao, gerar Pix, pagar e aguardar confirmacao. Conferir carteirinha e Vantagens. Validar QR em outra conta ADMIN/GATE; esperar 30s e verificar rejeicao do QR anterior. Testar ativacao manual e expiracao.
 Testes automatizados usam banco descartavel e Sicredi simulado. Pagamento real da associacao e layout/teclado no aparelho ainda precisam de validacao pelo operador.
+
+
+ATUALIZACAO: PLANO INICIAL E PREVIA INATIVA
+Migration 20261117190000_default_membership_plan cadastra Socio Esporte (R$ 40,00 / 30 dias), ativo, sem desconto de ingresso automatico. Se ja existir plano com o mesmo nome, preserva configuracao anterior. Preco/duracao continuam editaveis no admin. Nao ativa usuarios nem gera cobrancas sozinha.
+Carteirinha inativa mantem previa visual animada, com matriz decorativa e cadeado: nao usa encoder QR, URL, identificacao ou token. Somente associacao ativa consulta token assinado. Movimento respeita a preferencia de reduzir animacoes do aparelho.
+
+PARA APARECER PLANO, JOGOS E PRODUTOS NA VPS
+Na pasta /var/www/esporte_app/APP_ESPORTE, depois de enviar estas alteracoes ao Git:
+  git pull
+  sudo docker compose up -d --build api web
+  sudo docker compose exec -T api npx prisma migrate status
+  sudo docker compose exec -T api node prisma/seed-app-demo.js --confirm-test-data --enable-shop
+
+A inicializacao da API ja executa prisma migrate deploy. A migration cria o plano inicial; o ultimo comando publica seis jogos de teste a cada tres dias e cinco camisas de teste. Repetir nao duplica nem repoe estoque vendido. Se os exemplos ja existirem e estiverem vencidos/ocultos, edite no admin: o seed preserva alteracoes anteriores. Jogos alimentam o catalogo atual do app (Match/Sector), nao Partidas V1.
+Depois atualize a tela do app. A nova previa visual exige novo APK (npm run local:app). Nao foi executado seed/migration na VPS nem gerado APK pelo agente.
