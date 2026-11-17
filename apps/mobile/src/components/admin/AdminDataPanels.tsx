@@ -33,7 +33,7 @@ export function AdminAccountsPanel({ users, search, onSearchChange, onSearch, lo
   const desktop = useDesktopAdmin();
   const actions = (user: Member) => <AdminMenu disabled={busy} items={[
     { label: user.role === 'USER' ? 'Editar torcedor' : 'Editar funcionário', onPress: () => onEdit(user) },
-    { label: 'Gerenciar associação', onPress: () => onMembership(user) },
+    { label: 'Ativar / gerenciar plano', onPress: () => onMembership(user) },
     ...(onRecovery ? [{ label: 'Enviar recuperação por email', onPress: () => onRecovery(user) }] : []),
     ...(user.id !== currentUserId ? [{ label: user.active ? 'Desativar acesso' : 'Reativar conta', danger: user.active, onPress: () => onAccount(user) }] : []),
   ]} />;
@@ -46,7 +46,7 @@ export function AdminAccountsPanel({ users, search, onSearchChange, onSearch, lo
 export function AdminPlanGrid({ plans, onEdit, busy }: { plans: ClubPlan[]; onEdit: (plan: ClubPlan) => void; busy: boolean }) {
   const { colors } = useTheme();
   const desktop = useDesktopAdmin();
-  return <View style={{ flexDirection: desktop ? 'row' : 'column', flexWrap: 'wrap', gap: 18 }}>{plans.map((plan) => <Panel key={plan.id} style={{ flexBasis: desktop ? 270 : undefined, flexGrow: desktop ? 1 : undefined, minWidth: 0, borderRadius: 10, padding: 24, gap: 18 }}><Text heading style={{ color: colors.text, fontSize: 19, fontWeight: '600' }}>{plan.name}</Text><View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 5 }}><Text heading style={{ color: colors.primary, fontSize: 28, lineHeight: 38, fontWeight: '600' }}>{money(plan.priceCents)}</Text><Text style={{ color: colors.muted, fontSize: 12 }}>/ mês</Text></View><View style={{ paddingVertical: 16, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border, gap: 4 }}><Text style={{ color: colors.text, fontSize: 13 }}>{plan.discountPercent}% de desconto em ingressos</Text><Text style={{ color: colors.subtle, fontSize: 11 }}>Aplicado para associações ativas e válidas.</Text></View><AdminAction label="Editar plano" icon={Pencil} disabled={busy} onPress={() => onEdit(plan)} /></Panel>)}</View>;
+  return <View style={{ flexDirection: desktop ? 'row' : 'column', flexWrap: 'wrap', gap: 18 }}>{plans.map((plan) => <Panel key={plan.id} style={{ flexBasis: desktop ? 270 : undefined, flexGrow: desktop ? 1 : undefined, minWidth: 0, borderRadius: 10, padding: 24, gap: 18 }}><Text heading style={{ color: colors.text, fontSize: 19, fontWeight: '600' }}>{plan.name}</Text><View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 5 }}><Text heading style={{ color: colors.primary, fontSize: 28, lineHeight: 38, fontWeight: '600' }}>{money(plan.priceCents)}</Text><Text style={{ color: colors.muted, fontSize: 12 }}>/ {plan.durationDays || 30} dias</Text></View><View style={{ paddingVertical: 16, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border, gap: 4 }}><Text style={{ color: colors.text, fontSize: 13 }}>{plan.discountPercent}% de desconto em ingressos</Text><Text style={{ color: colors.subtle, fontSize: 11 }}>Aplicado para associações ativas e válidas.</Text></View><Text style={{ color: colors.muted, fontSize: 12 }}>{plan.active === false ? 'Oculto no aplicativo' : 'Disponível no aplicativo'}</Text><AdminAction label="Editar plano" icon={Pencil} disabled={busy} onPress={() => onEdit(plan)} /></Panel>)}</View>;
 }
 
 export function AdminAuditPanel({ audit, loading }: { audit: AuditEvent[]; loading: boolean }) {

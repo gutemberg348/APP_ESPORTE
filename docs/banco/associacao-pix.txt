@@ -1,0 +1,65 @@
+ASSOCIACAO PIX E CARTEIRINHA — 17/11/2026
+
+Migration: 20261117170000_membership_pix. Aditiva, sem remover planos ou socios.
+
+Plan:
+- active: controla publicacao no aplicativo; desativar nao revoga periodos ja comprados.
+- description: beneficios e condicoes escritos pelo administrador (ate 1000 caracteres).
+- durationDays: duracao do periodo, 1 a 3660 dias; planos antigos recebem 30 dias.
+- priceCents e discountPercent: valor em centavos e desconto de ingressos ja existentes.
+
+MembershipOrder:
+- id, userId (FK User), planId (FK Plan).
+- planName, priceCents, durationDays: copia dos dados da oferta na compra.
+- requestKey unico por usuario: repeticao de tentativa retorna o mesmo pedido.
+- beforeSignature: assinatura do estado anterior da associacao; evita sobrescrever ativacao manual/novo periodo.
+- status: PENDING, PAID, EXPIRED, REFUNDING, PARTIAL_REFUND ou REFUNDED.
+- expiresAt: prazo de pagamento; appliedAt: primeira ativacao; validUntil: validade concedida.
+- intent: relacao 1:1 com GatewayIntent.membershipOrderId.
+
+Membership.lastOrderId: identifica o pedido que concedeu o periodo atual. Ativacao manual limpa este vinculo; estorno de pedido antigo nao revoga uma concessao manual posterior.
+GatewayIntent.membershipOrderId: FK unica. Constraint exige exatamente um destino entre ingresso, venda, loja e associacao.
+BusinessSettings.membershipPaymentMinutes: prazo do Pix da associacao, editavel em Configuracoes, de 1 a 1440 minutos. Inicial 15.
+
+ROTAS AUTENTICADAS
+GET /v1/membership/plans: planos ativos.
+GET /v1/membership/orders: ultimos 30 pedidos da propria conta.
+POST /v1/membership/checkout: planId, expectedPriceCents, requestKey.
+GET /v1/payments/intent: consulta Pix somente do titular; suporta associacao.
+POST /v1/membership/verify: token do QR. Exige ADMIN, GATE ou CASHIER ativo. Nao concede entrada em partida.
+
+PAGAMENTO
+Somente contas USER ativas e planos pagos/ativos geram Pix. Plano gratuito e ativacao manual continuam disponiveis no admin.
+Um pedido pendente vigente por conta; repeticao nao duplica TXID. Nova compra bloqueada durante associacao ativa: renovacao disponivel apos a validade. Nao e debito recorrente automatico.
+Worker e webhook Sicredi usam a conciliacao existente: confirma TXID, valor e E2E diretamente no banco antes de ativar. Notificacao isolada nao ativa plano.
+Validade comeca na primeira conciliacao confirmada; reprocessar nao estende o periodo. Valores e duracao sao preservados no pedido mesmo se o admin editar o plano.
+Pagamento fora do prazo, usuario inativo/perfil alterado ou associacao modificada antes da confirmacao inicia devolucao. Sem sobrescrever a associacao atual.
+Estorno parcial/total suspende o periodo vinculado ao pedido. Ativacao manual posterior e periodos de outro pedido sao preservados.
+Pedidos e recebimentos aparecem em Pagamentos Pix como Associacao, com consulta/reconciliacao/estorno existentes. Nao entram automaticamente no calculo de comissao e repasses de INGRESSOS: regras financeiras de mensalidades sao separadas e ainda nao configuradas.
+
+CARTEIRINHA
+Token HMAC SHA-256 de 30 segundos (limitado pela validade do plano), com assinatura do estado da associacao. Versao membership-v2; tokens antigos sem essa versao sao rejeitados pelo novo leitor.
+O app mostra relogio em segundos no horario de Patos, contagem de renovacao e movimento discreto a cada segundo. Ao ir para segundo plano, oculta o QR; ao voltar, consulta outro.
+O leitor consulta usuario e associacao atuais no banco; bloqueia vencimento, desativacao, adulteracao e alteracao do periodo. Disponivel na Portaria e em Admin > Planos.
+A animacao NAO prova autenticidade. Uma imagem pode ser reutilizada dentro dos 30 segundos; nao ha prova de presenca nem consumo unico, pois uma carteirinha pode ser apresentada em varios parceiros. Para acesso a jogos, usar ingresso e validacao V1. Nunca autorizar somente pela animacao/relogio.
+
+ADMIN E APP
+Admin > Planos: editar valor do periodo, duracao, descricao, desconto e publicacao.
+Admin > Torcedores > Acoes > Ativar / gerenciar plano: escolher plano, situacao e validade; gera auditoria. Esta acao concede acesso, nao confirma recebimento bancario nem registra receita ficticia.
+Home e Carteira sem plano: chamada Seja socio. Meu plano abre catalogo, historico e Pix.
+Vantagens: beneficio real do plano, parceiros/ofertas ativas, busca e atualizacao. Sem parceiros cadastrados, explica como aparecerao; nao inventa beneficios/cupons.
+Para publicar vantagens: Admin > Parceiros, criar/editar parceiro ativo, cadastrar ofertas ativas com datas vigentes. Descricao e condicoes aparecem ao abrir o parceiro.
+
+DEPLOY
+Depois de enviar os arquivos para Git e atualizar a VPS, na pasta DESTE projeto:
+  git pull
+  sudo docker compose up -d --build api web
+  sudo docker compose ps
+O entrypoint aplica a migration antes da API iniciar. Nao usar reset ou down -v.
+Depois configurar/publicar planos no admin. No computador, operador gera o APK: npm run local:app.
+Nenhum APK gerado, servico iniciado ou banco real alterado pelo agente nesta tarefa.
+
+HOMOLOGACAO
+Usar ambiente adequado: Sicredi de producao movimenta dinheiro real. Conferir webhook e notificacao conforme docs/testes-sicredi-vps.md.
+Criar plano, entrar como torcedor sem associacao, gerar Pix, pagar e aguardar confirmacao. Conferir carteirinha e Vantagens. Validar QR em outra conta ADMIN/GATE; esperar 30s e verificar rejeicao do QR anterior. Testar ativacao manual e expiracao.
+Testes automatizados usam banco descartavel e Sicredi simulado. Pagamento real da associacao e layout/teclado no aparelho ainda precisam de validacao pelo operador.

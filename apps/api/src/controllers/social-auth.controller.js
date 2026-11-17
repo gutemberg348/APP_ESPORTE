@@ -13,6 +13,6 @@ export const socialAuthController = {
   callback: async ({ req, url, body }) => ({ status: 303, headers: { Location: await service.callback(req.params.provider, body || Object.fromEntries(url.searchParams)) }, body: '' }),
   exchange: async ({ body }) => {
     const input = socialExchangeSchema.parse(body);
-    return { data: await authService.socialLogin({ ticketHash: socialHash(input.ticket), challenge: socialHash(input.verifier) }) };
+    return { data: await authService.socialLogin({ ticketHash: socialHash(input.ticket), challenge: socialHash(input.verifier), referralCode: input.referralCode }) };
   },
 };

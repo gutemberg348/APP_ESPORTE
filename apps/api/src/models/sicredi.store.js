@@ -1,3 +1,4 @@
+import { settleMembership, reverseMembership } from './membership.store.js';
 import { randomUUID, createHash, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { AppError } from '../lib/errors.js';
@@ -11,7 +12,7 @@ import { ticketGeneration, publicIntent } from '../payments/pix-contract.js';
 const fault = (code, message, status = 409) => new AppError(status, code, message);
 const webhookSchema = z.object({ pix: z.array(z.object({ txid: z.string().regex(txidPattern), endToEndId: z.string().regex(e2ePattern) }).passthrough()).max(100) }).passthrough();
 const receiptRef = (intent) => `SICREDI:${intent.providerReference}`;
-const owner = (userId) => ({ OR: [{ ticket: { userId } }, { shopOrder: { userId } }] });
+const owner = (userId) => ({ OR: [{ ticket: { userId } }, { shopOrder: { userId } }, { membershipOrder: { userId } }] });
 const opaque = (prefix) => `${prefix}${randomUUID().replace(/-/g, '')}`;
 export function createSicrediStore(db, { settings, api, now = () => new Date() }) {
   const environment = settings.SICREDI_PIX_ENV;
@@ -117,6 +118,16 @@ export function createSicrediStore(db, { settings, api, now = () => new Date() }
           }
         }
       }
+      if (intent.membershipOrderId) {
+        if (blocked) {
+          await reverseMembership(tx, intent);
+          if (['REFUNDED', 'PARTIAL_REFUND'].includes(state)) await tx.membershipOrder.update({ where: { id: intent.membershipOrderId }, data: { status: state } });
+        } else if (state === 'RECEIVED' && !await settleMembership(tx, intent, received, now)) {
+          state = 'REFUNDING';
+          await tx.gatewayIntent.update({ where: { id }, data: { refundRequestedAt: intent.refundRequestedAt || now(), failureCode: 'MEMBERSHIP_NO_LONGER_PAYABLE' } });
+          await reverseMembership(tx, intent);
+        } else if (state === 'CANCELED') await tx.membershipOrder.updateMany({ where: { id: intent.membershipOrderId, status: 'PENDING' }, data: { status: 'EXPIRED' } });
+      }
       if (intent.state !== state || refunds.total !== intent.refundedCents || (received && !intent.pixEndToEndId)) await audit(tx, intent.snapshot.userId, 'SICREDI_PAYMENT_RECONCILED', id, { state, txid: intent.providerReference, endToEndId: received?.endToEndId || null, refundedCents: refunds.total });
       // Fence again after stock/finance waits; losing a lease rolls back issuance.
       if ((await tx.gatewayIntent.updateMany({ where: { id, ...scope, lockToken: token, lockedUntil: { gt: now() } }, data: { state, refundedCents: refunds.total, ...(received ? { pixEndToEndId: received.endToEndId } : {}), pixPayload: state === 'PENDING' && !intent.cancelRequestedAt ? charge.pixCopiaECola || intent.pixPayload || null : null } })).count !== 1) throw fault('SICREDI_LEASE_LOST', 'A conciliação perdeu sua autorização.');
@@ -155,6 +166,7 @@ export function createSicrediStore(db, { settings, api, now = () => new Date() }
           const ticket = await tx.ticket.findUnique({ where: { id: intent.ticketId }, include: { payment: true } });
           if (ticket?.payment?.reference === receiptRef(intent)) { await tx.ticket.update({ where: { id: ticket.id }, data: { status: 'CANCELED', voidedQuantity: ticket.quantity - ticket.usedQuantity, entryVersion: { increment: 1 }, entryToken: null } }); await tx.ticketAccessCode.deleteMany({ where: { ticketId: ticket.id } }); await recordTicketFinancial(tx, ticket, { blocked: true, reason: 'Devolução Sicredi solicitada' }); }
         } else if (intent.shopOrderId) await reverseShopOrder(tx, intent, intent.refundedCents, now);
+        if (intent.membershipOrderId) await reverseMembership(tx, intent);
         await audit(tx, actorId, 'SICREDI_REFUND_REQUESTED', id, { reason }); return { requested: true };
       });
     },
@@ -187,13 +199,14 @@ export function createSicrediStore(db, { settings, api, now = () => new Date() }
         let remote = await checkedRemote(intent);
         const ticket = intent.ticketId ? await db.ticket.findUnique({ where: { id: intent.ticketId }, include: { payment: true } }) : null;
         const order = intent.shopOrderId ? await db.shopOrder.findUnique({ where: { id: intent.shopOrderId }, include: { payment: true } }) : null;
-        const settled = (ticket?.payment || order?.payment)?.reference === receiptRef(intent);
+        const membershipOrder = intent.membershipOrderId ? await db.membershipOrder.findUnique({ where: { id: intent.membershipOrderId } }) : null;
+        const settled = Boolean(membershipOrder?.appliedAt) || (ticket?.payment || order?.payment)?.reference === receiptRef(intent);
         const cancel = intent.cancelRequestedAt || (!settled && (intent.expiresAt <= now() || (ticket && (ticket.deletedAt || ticket.status !== 'PENDING' || intent.snapshot.reservationGeneration !== ticketGeneration(ticket))) || (order && order.status !== 'PENDING')));
         if (!remote) {
           if (intent.pixEndToEndId || intent.creationStartedAt) throw fault('SICREDI_CREATION_UNCERTAIN', 'O banco ainda não confirmou esta referência. Nenhuma segunda cobrança será criada.');
           if (cancel) { await write(id, token, { state: 'CANCELED', pixPayload: null }); delay = 86400000; return; }
           intent = await write(id, token, { state: 'CREATING', creationStartedAt: now() });
-          const created = await api.create(intent.providerReference, intent.amountCents, Math.ceil((intent.expiresAt - now()) / 1000), intent.ticketId ? `Ingresso ${intent.ticketId}` : `Pedido da loja ${order.number}`);
+          const created = await api.create(intent.providerReference, intent.amountCents, Math.ceil((intent.expiresAt - now()) / 1000), intent.ticketId ? `Ingresso ${intent.ticketId}` : membershipOrder ? `Associacao ${membershipOrder.id}` : `Pedido da loja ${order.number}`);
           remote = await checkedRemote(intent);
           if (!remote) throw fault('SICREDI_CREATION_UNCERTAIN', 'Cobrança em conciliação pelo mesmo TXID.');
           if (!remote.charge.pixCopiaECola && created?.txid === intent.providerReference && typeof created.pixCopiaECola === 'string' && created.pixCopiaECola.startsWith('000201') && created.pixCopiaECola.length <= 4096) remote.charge.pixCopiaECola = created.pixCopiaECola;

@@ -7,7 +7,7 @@ export const socialHash = value => createHash('sha256').update(value).digest('ba
 const random = () => randomBytes(32).toString('base64url');
 export const socialProviderSchema = z.enum(['google', 'apple']);
 export const socialStartSchema = z.object({ provider: socialProviderSchema, challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }).strict();
-export const socialExchangeSchema = z.object({ ticket: z.string().regex(/^[A-Za-z0-9_-]{43}$/), verifier: z.string().regex(/^[A-Za-z0-9_-]{43,128}$/) }).strict();
+export const socialExchangeSchema = z.object({ ticket: z.string().regex(/^[A-Za-z0-9_-]{43}$/), verifier: z.string().regex(/^[A-Za-z0-9_-]{43,128}$/), referralCode: z.uuid().optional() }).strict();
 const definitions = {
   google: { authorization: 'https://accounts.google.com/o/oauth2/v2/auth', token: 'https://oauth2.googleapis.com/token', keys: 'https://www.googleapis.com/oauth2/v3/certs', issuer: ['https://accounts.google.com', 'accounts.google.com'] },
   apple: { authorization: 'https://appleid.apple.com/auth/authorize', token: 'https://appleid.apple.com/auth/token', keys: 'https://appleid.apple.com/auth/keys', issuer: 'https://appleid.apple.com' },

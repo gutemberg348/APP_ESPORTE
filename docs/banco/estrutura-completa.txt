@@ -1,3 +1,7 @@
+ATUALIZACAO ASSOCIACAO PIX 17/11/2026: MembershipOrder, planos publicados/duracao, vinculo do periodo ao pagamento e prazo configuravel. Detalhes em docs/banco/associacao-pix.txt. Migration preparada e testada em banco descartavel; nao aplicada na VPS pelo agente.
+
+ATUALIZACAO INDICACOES POR LINK 17/11/2026: User.referralCode (UUID publico unico) e User.referredById (FK para User.id). Detalhes em docs/banco/indicacoes-link.txt. Migration preparada e testada em banco descartavel; nao aplicada na VPS pelo agente.
+
 ATUALIZACAO SICREDI PIX 11/11/2026: migration 20261111020000_sicredi_pix preparada; novos campos e relacoes em docs/banco/sicredi.txt. Nao aplicada nesta revisao: banco local localhost:55432 recusou conexao (ECONNREFUSED). Ha 30 diretorios de migrations; isso nao confirma execucao no banco. Levantamentos seguintes sao historicos.
 
 ATUALIZACAO PORTARIA UNIFICADA V1 11/11/2026: GateAssignmentV1, AdmissionV1, codigoPortaria em IngressoV1 e abertura da portaria em PartidaIngressoV1 detalhados em docs/banco/portaria-v1.txt. Migration 20261111010000_unified_gate_v1 aplicada localmente; 29 migrations. Os levantamentos seguintes sao historicos.

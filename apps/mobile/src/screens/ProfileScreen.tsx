@@ -1,7 +1,7 @@
 import { club } from '../config/club';
 import React, { useState } from 'react';
 import { View, Pressable, Switch } from 'react-native';
-import { Star, User, Wallet, Clock, Info, ChevronRight, LogOut, Settings, ShoppingBag, Tv, GraduationCap, RefreshCw } from 'lucide-react-native';
+import { Star, CircleDot, User, Wallet, Clock, Info, ChevronRight, LogOut, Settings, ShoppingBag, Tv, GraduationCap, RefreshCw } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { Preferences } from '@nacional/shared/types';
 import { Page, Panel, DemoFooter, Button } from '../components/ui';
@@ -26,6 +26,7 @@ export function ProfileScreen({ onFeature }: { onFeature: (name: string) => void
     <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4, gap: 10 }}><View style={{ marginBottom: 5 }}><LinearGradient colors={['#ebcb77', tone('#288f65'), tone('#174a34')]} style={{ width: 94, height: 94, borderRadius: 47, padding: 3 }}><View style={{ flex: 1, borderRadius: 47, backgroundColor: tone('#0a2216'), borderWidth: 3, borderColor: tone('#0a160e'), alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: tone('#d8e9dd'), fontSize: 28, lineHeight: 36, fontWeight: '600' }}>{initials}</Text></View></LinearGradient><View style={{ position: 'absolute', right: -1, bottom: 0, padding: 6, borderRadius: 20, borderWidth: 2, borderColor: colors.background, backgroundColor: '#d9b257' }}><Star size={15} color={tone('#1b281b')} /></View></View><Text heading style={{ color: colors.text, fontSize: 24, lineHeight: 34, fontWeight: '800', textAlign: 'center' }}>{member.name}</Text><Text style={{ color: isDark ? '#e6cc80' : colors.gold, fontSize: 14, letterSpacing: 0.8, textAlign: 'center' }}>{(member.membership?.plan.name || 'Torcedor').toUpperCase()} · {member.membership?.status === 'ACTIVE' ? 'ATIVO' : 'INATIVO'}</Text></View>
     <Pressable accessibilityRole="button" onPress={() => onFeature('Prêmios')}><Panel style={{ borderRadius: 19, backgroundColor: colors.soft, borderColor: isDark ? '#3b3c2b' : colors.border, flexDirection: 'row', alignItems: 'center' }}><View style={{ flex: 1, gap: 5 }}><Text style={{ color: colors.muted, fontSize: 12, letterSpacing: 1 }}>SEUS PONTOS ZEZITO</Text><Text heading style={{ color: colors.text, fontSize: 28, lineHeight: 36, fontWeight: '800' }}>{member.points.toLocaleString('pt-BR')}</Text><Text style={{ color: colors.primary, fontSize: 14 }}>Troque por experiências</Text></View><ChevronRight size={22} color={colors.muted} /></Panel></Pressable>
     <View>{[
+      { icon: CircleDot, title: 'Fan Zone', sub: 'Missões, pontos, prêmios e ranking', feature: 'Fan Zone' },
       { icon: Wallet, title: 'Meus ingressos', sub: 'Comprar, acompanhar e apresentar QR', feature: 'Meus ingressos' },
       { icon: Wallet, title: 'Meu cashback', sub: 'Compras, saldo e extrato em reais', feature: 'Cashback' },
       { icon: User, title: 'Meus dados', sub: 'Nome, cidade e contato', feature: 'Meus Dados' },

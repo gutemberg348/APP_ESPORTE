@@ -39,6 +39,8 @@
     "sicredi:token": "npm run sicredi:token --workspace @nacional/api",
     "test:sicredi": "node apps/api/scripts/sicredi-tests.mjs",
     "api:check": "node scripts/check-api.mjs",
-    "web:clear": "npm run web --workspace @nacional/mobile -- --clear"
+    "web:clear": "npm run web --workspace @nacional/mobile -- --clear",
+    "app:seed-demo": "npm run app:seed-demo --workspace @nacional/api --",
+    "google:check": "npm run google:check --workspace @nacional/api"
   }
 }

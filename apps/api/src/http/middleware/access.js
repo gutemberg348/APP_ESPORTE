@@ -14,6 +14,7 @@ export function createAccessMiddleware(authenticate) {
     checkout: createRateLimiter({ max: 10 }),
     qr: createRateLimiter({ max: 20 }),
   };
+  const membershipLimits = { checkout: createRateLimiter({ max: 10 }), verify: createRateLimiter({ max: 90 }) };
   const shopLimits = { upload: createRateLimiter({ max: 20 }), quote: createRateLimiter({ max: 20 }), checkout: createRateLimiter({ max: 10 }) };
   function enforce(res, accepted, seconds, code, message) {
     if (accepted) return;
@@ -36,6 +37,11 @@ export function createAccessMiddleware(authenticate) {
         const limiter = ticketLimits[route.ticketLimit];
         if (!limiter || !auth.user?.id) throw new Error('Limite de ingresso exige rota privada e escopo válido.');
         enforce(res, limiter(auth.user.id), 60, 'TICKET_RATE_LIMIT', 'Muitas tentativas com ingressos. Aguarde um minuto.');
+      }
+      if (route.membershipLimit) {
+        const limiter = membershipLimits[route.membershipLimit];
+        if (!limiter || !auth.user?.id) throw new Error('Limite de associação exige rota privada e escopo válido.');
+        enforce(res, limiter(auth.user.id), 60, 'MEMBERSHIP_RATE_LIMIT', 'Muitas consultas de associação. Aguarde um minuto.');
       }
       if (route.shopLimit) {
         const limiter = shopLimits[route.shopLimit];

@@ -53,6 +53,7 @@ const schema = z.object({
   SMTP_FROM_NAME: z.string().max(100).default('Sócio Esporte'),
   MAIL_DATA_SECRET: z.string().default(''),
   PASSWORD_RESET_PUBLIC_URL: z.url().default('http://localhost:8081/reset-password'),
+  INVITATION_PUBLIC_URL: z.url().refine(value => { const u = new URL(value); return ['http:', 'https:'].includes(u.protocol) && !u.username && !u.password && !u.search && !u.hash && u.pathname === '/app'; }, 'Use a URL pública do aplicativo terminada em /app.').default('http://localhost:8081/app'),
   PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().min(5).max(30).default(15),
   MAIL_WORKER_INTERVAL_MS: z.coerce.number().int().min(1000).max(60000).default(3000),
   TICKET_PAYMENT_INSTRUCTIONS: z.string().min(10).max(1000).default('Após reservar, apresente o número da reserva no atendimento do clube. O ingresso é emitido quando o administrador confirmar o pagamento recebido.'),

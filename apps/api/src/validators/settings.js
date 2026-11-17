@@ -1,6 +1,7 @@
 import { z } from 'zod';
 export const businessSettingsSchema = z.object({
   version: z.number().int().nonnegative(),
+  membershipPaymentMinutes: z.number().int().min(1).max(1440).optional(),
   ticketReservationMinutes: z.number().int().min(1).max(1440),
   shopReservationMinutes: z.number().int().min(1).max(1440),
   shopQuoteMinutes: z.number().int().min(1).max(60),

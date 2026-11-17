@@ -197,3 +197,34 @@ Login/cadastro, social e hosts Esporte (15/11/2026): tela reorganizada com cabec
 Codegen com raizes R:/C: (16/11/2026): erro confirmado no codigo instalado do RNGP, que usa File.relativeTo(nodeWorkingDir) em GenerateCodegenSchemaTask/GenerateCodegenArtifactsTask. Init script local agora normaliza somente caminhos dessas tarefas (codegenDir/reactNativeDir/jsRootDir/generatedSrcDir/packageJsonFile/nodeWorkingDir e workingDir) para o workspace original, apos configuracao dos plugins. CMake e demais tarefas mantem o atalho curto. Nenhum arquivo de node_modules, caminho global de Java/SDK/Gradle, cache real ou assinatura foi alterado. Novo teste executa o init script real no runtime Groovy local com tarefas simuladas: reproduz erro entre discos, cobre biblioteca/app, classes decoradas, processo Node com base coerente, idempotencia, preservacao de tarefas alheias e rejeicao de dependencia externa em outro disco. 17 testes de build local passaram, sem skips. Nao foram executados Gradle, prebuild, codegen real ou APK; compilacao fica para o usuario.
 
 Diagnostico Pix na VPS (16/11/2026): ampliado runner isolado com comando diagnostico. Verifica certificado, solicita cinco escopos OAuth separadamente e consulta webhook, preservando resultados quando uma etapa falha. Resumo distingue autenticacao de pagamento e entrega de webhook, informa cadastro ausente/divergente/nao comparado e nunca altera recursos bancarios ou DB. Falha em alguma etapa retorna saida 1. Guia recebeu roteiro inicial para VPS, checks publicos health/ready, explicacao do ambiente fresco do Compose versus API ja em execucao e captura segura do relatorio. 32 testes Sicredi passaram, incluindo dois novos cenarios de diagnostico; sintaxe e ajuda CLI passaram. Nenhuma credencial real usada, chamada Sicredi real, cobranca, pagamento, cancelamento, devolucao, cadastro de webhook ou alteracao na VPS executada pelo agente.
+
+
+## 2026-11-17 — Loja na home, missões, CEP e testes do app
+
+- TypeScript mobile e verificação de sintaxe da API passaram.
+- 30 testes distintos passaram: app-demo (2), shop (18 incluindo subtestes), social-auth (4), máscaras (2), callback social mobile (1) e settings (3). As suítes PostgreSQL usam PGlite descartável, sem banco real.
+- Seed validado com todas as migrations: datas futuras a cada três dias, rollback integral, imagens existentes, idempotência, preservação de estoque/datas/edições e configuração da loja.
+- Consulta pública somente leitura: /health respondeu 200 e /v1/auth/social/providers informou google=false e apple=false. Operador confirmou que ainda criará as credenciais Google.
+- Sem APK, prebuild, Gradle, alteração na VPS, cadastro no banco real ou cobrança Pix. Login Google real, teclado/layout no aparelho e pagamento ponta a ponta dependem da configuração do operador e validação no APK novo.
+- Procedimento operacional: docs/testes-app-loja-google.md.
+
+
+## 2026-11-17 — Indicações por link e navegação
+
+- Loja assume a quarta aba inferior; Fan Zone fica no atalho da home e no Perfil. Indicar amigo abre copiar/compartilhar link, com contador de cadastros, sem formulário de dados do amigo.
+- Migration aditiva 20261117150000_friend_invitation_links, UUID público individual e autorrelação User.referredById. Cadastro por senha/social atribui somente contas novas, dentro da transação. Não credita pontos ou dinheiro.
+- Prisma Client gerado localmente, TypeScript e sintaxe da API aprovados. 34 testes distintos passaram: auth-service (8), social-auth (4), friend-invitation (1), HTTP (18), invitation mobile (2) e callback social mobile (1).
+- Testes em banco descartável cobrem rollback, duplicidade, indicador inativo/funcionário, cadastro social e imutabilidade da indicação em logins posteriores. Parser mobile cobre URLs inválidas/ambíguas e expiração em 30 dias.
+- Não executados: migration no banco real/VPS, build APK e validação visual no aparelho. O link compartilhado abre /app na web; não há atribuição automática após instalação nem Universal Links/App Links.
+- Configuração e implantação em docs/banco/indicacoes-link.txt.
+
+
+## 2026-11-17 — Associação via Pix e carteirinha temporária
+
+- Prisma Client gerado, TypeScript mobile e sintaxe da API aprovados. Rodada final: 33 testes passaram (HTTP, membership-pix e sicredi-flow incluindo subtestes). Settings, recovery-partners e gate-rules também passaram nas verificações direcionadas.
+- Banco descartável com todas as migrations; nenhum banco real ou provedor real utilizado. Testes cobrem concorrência/idempotência, prazo configurado, snapshot de preço/duração, ativação única, conta/plano indisponível, valor divergente, pagamento atrasado, mudança manual, estorno e preservação de concessão manual posterior.
+- QR: assinatura, expiração, autorização da equipe, consulta da associação atual e bloqueio após estorno. As rotas de consulta de carteirinha estão explicitamente autorizadas para portaria/caixa, com limite próprio de requisições. Consulta não libera ingresso.
+- Admin: preço, dias, descrição e publicação do plano; ativação manual; cobrança identificada como Associação em Pagamentos Pix. Prazo de pagamento independente em Configurações.
+- App: chamada de associação, catálogo/Pix/histórico, carteirinha com contador/reloginho sincronizados e movimento discreto, Vantagens com benefício do plano e ofertas reais de parceiros.
+- Não executados: APK/Gradle/prebuild, serviços locais ou VPS, migrations no banco real, pagamento real, captura visual do aparelho. Imagem do QR permanece potencialmente válida dentro da janela de 30 segundos; animação não substitui validação online.
+- Guia de estrutura/uso/deploy: docs/banco/associacao-pix.txt.

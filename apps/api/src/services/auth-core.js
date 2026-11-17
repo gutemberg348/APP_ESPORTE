@@ -15,18 +15,18 @@ export async function createAuthService({ users, sessions, accessTokens, socialS
     return { ...access, refreshToken, refreshTokenExpiresAt: session.expiresAt.toISOString(), tokenType: 'Bearer', member: toMember(user) };
   }
   return {
-    async socialLogin({ ticketHash, challenge }) {
+    async socialLogin({ ticketHash, challenge, referralCode }) {
       const fresh = newSession();
       let result;
-      try { result = await socialSessions.redeem({ ticketHash, challenge, session: fresh.session, passwordHash: await hashPassword(newSessionToken()), now: now() }); }
+      try { result = await socialSessions.redeem({ ticketHash, challenge, referralCode, session: fresh.session, passwordHash: await hashPassword(newSessionToken()), now: now() }); }
       catch (error) { if (error.code === 'P2002') throw new AppError(409, 'SOCIAL_CONFLICT', 'A conta foi atualizada. Tente entrar novamente.'); if (error.code === 'P2025') throw new AppError(401, 'SOCIAL_TICKET_INVALID', 'O login já foi utilizado. Tente novamente.'); throw error; }
       return credentials(result.user, result.session, fresh.refreshToken);
     },
-    async register({ name, email, password }) {
+    async register({ name, email, password, referralCode }) {
       if (await users.byEmail(email)) throw new AppError(409, 'EMAIL_IN_USE', 'Este e-mail já está cadastrado.');
       const fresh = newSession();
       let result;
-      try { result = await sessions.register({ name, email, passwordHash: await hashPassword(password) }, fresh.session); }
+      try { result = await sessions.register({ name, email, passwordHash: await hashPassword(password) }, fresh.session, referralCode); }
       catch (error) { if (error.code === 'P2002') throw new AppError(409, 'EMAIL_IN_USE', 'Este e-mail já está cadastrado.'); throw error; }
       return credentials(result.user, result.session, fresh.refreshToken);
     },

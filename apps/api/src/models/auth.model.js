@@ -1,12 +1,14 @@
 import { db } from '../config/database.js';
 import { serializable } from '../lib/business-rules.js';
+import { invitationOwner } from './friend-invitation.js';
 export const authUserInclude = { membership: { include: { plan: true } } };
 
 export function createAuthModel(client = db) {
   return {
-    async register(data, session) {
+    async register(data, session, referralCode) {
       return serializable(client, async (tx) => {
-        const user = await tx.user.create({ data, include: authUserInclude });
+        const referredById = await invitationOwner(tx, referralCode);
+        const user = await tx.user.create({ data: { ...data, ...(referredById ? { referredById } : {}) }, include: authUserInclude });
         const stored = await tx.session.create({ data: { ...session, userId: user.id, refreshTokens: { create: { tokenHash: session.tokenHash, expiresAt: session.expiresAt } } } });
         return { user, session: stored };
       });

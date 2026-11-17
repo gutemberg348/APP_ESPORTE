@@ -13,7 +13,7 @@ export function createPixQueries(client, settings = env) {
     const active = row.provider === 'sicredi' && settings.PAYMENT_MODE === 'sicredi' && row.environment === settings.SICREDI_PIX_ENV;
     return active ? value : { ...value, pixPayload: null, failureCode: value.state === 'PENDING' ? 'PAYMENT_PROVIDER_NOT_ACTIVE' : value.failureCode };
   };
-  const owned = (userId) => ({ OR: [{ ticket: { userId } }, { shopOrder: { userId } }, { charge: { wallet: { userId } } }] });
+  const owned = (userId) => ({ OR: [{ ticket: { userId } }, { shopOrder: { userId } }, { membershipOrder: { userId } }, { charge: { wallet: { userId } } }] });
   return {
     async ownIntent(userId, id) {
       const intent = await client.gatewayIntent.findFirst({ where: { id, ...owned(userId) } });

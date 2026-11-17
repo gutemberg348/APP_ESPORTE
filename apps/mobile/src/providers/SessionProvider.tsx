@@ -1,3 +1,5 @@
+import { Linking } from 'react-native';
+import { captureInitialInvitation, captureInvitation, clearInvitation, readInvitation } from '../services/invitation';
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { Member, AuthResponse } from '@nacional/shared/types';
 import demo from '../config/demo';
@@ -29,6 +31,7 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
         // when needed, avoiding needless consumption of rotating refresh tokens.
         const profile = await request<Member>('/me', { token: saved.accessToken });
         if (!authClient.current() || !authClient.owns(saved.accessToken)) return;
+        await clearInvitation();
         setMember(profile); setToken(authClient.current()?.accessToken || null);
       }
     } catch (error) {
@@ -39,16 +42,21 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
   useEffect(() => {
     const unsubscribe = authClient.subscribe((tokens) => { setToken(tokens?.accessToken || null); if (!tokens && !config.demo) setMember(null); });
     if (!config.demo) void retry();
-    return unsubscribe;
+    void captureInitialInvitation();
+    const links = Linking.addEventListener('url', ({ url }) => { if (!authClient.current()) void captureInvitation(url); });
+    return () => { unsubscribe(); links.remove(); };
   }, []);
   async function signIn(email: string, password: string, name?: string, portal: 'APP' | 'ADMIN' | 'GATE' = 'APP') {
-    const result = await request<AuthResponse>(name ? '/auth/register' : '/auth/login', { method: 'POST', body: { email, password, ...(name ? { name } : portal !== 'APP' ? { portal } : {}) } });
-    await authClient.accept(result); setToken(result.accessToken); setMember(result.member);
+    await captureInitialInvitation();
+    const referralCode = name ? await readInvitation() : undefined;
+    const result = await request<AuthResponse>(name ? '/auth/register' : '/auth/login', { method: 'POST', body: { email, password, ...(name ? { name, ...(referralCode ? { referralCode } : {}) } : portal !== 'APP' ? { portal } : {}) } });
+    await authClient.accept(result); await clearInvitation(); setToken(result.accessToken); setMember(result.member);
   }
   async function signInSocial(provider: SocialProvider) {
-    const result = await socialLogin(provider);
+    await captureInitialInvitation();
+    const result = await socialLogin(provider, await readInvitation());
     if (!result) return;
-    await authClient.accept(result); setToken(result.accessToken); setMember(result.member);
+    await authClient.accept(result); await clearInvitation(); setToken(result.accessToken); setMember(result.member);
   }
   const signOut = useCallback(async () => {
     const access = authClient.current()?.accessToken;

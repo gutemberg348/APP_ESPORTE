@@ -91,3 +91,6 @@ Instale o novo APK sobre a versão atual, usando a mesma chave guardada em `.sec
 - O cadastro continua com uma senha e botão de visibilidade; rolagem acompanha o campo focado, inclusive senha, com rótulos e validação por campo. Biblioteca: [KeyboardAwareScrollView](https://kirillzyusko.github.io/react-native-keyboard-controller/docs/api/components/keyboard-aware-scroll-view).
 
 Os testes usam identidades assinadas fictícias e banco descartável, sem contas reais nos provedores. Login real e comportamento do teclado no aparelho precisam ser conferidos no APK novo, com a API corrigida e as credenciais configuradas.
+
+
+Passo a passo do Google Cloud e diagnóstico sem expor chaves: [testes do app, loja e Google](testes-app-loja-google.md).

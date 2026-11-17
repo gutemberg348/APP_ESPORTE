@@ -55,12 +55,17 @@ model User {
   schoolInterested        Boolean              @default(false)
   createdAt               DateTime             @default(now())
   updatedAt               DateTime             @updatedAt
+  membershipOrders        MembershipOrder[]
   membership              Membership?
   sessions                Session[]
   socialIdentities        SocialIdentity[]
   tickets                 Ticket[]
   predictions             Prediction[]
   referrals               Referral[]
+  referralCode            String               @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  referredById            String?              @db.Uuid
+  referredBy              User?                @relation("FriendInvitations", fields: [referredById], references: [id], onDelete: SetNull)
+  invitedUsers            User[]               @relation("FriendInvitations")
   pointEntries            PointEntry[]
   redemptions             Redemption[]
   cashWallets             CashWallet[]
@@ -83,6 +88,7 @@ model User {
   shopImages              ShopImage[]
   passwordResets          PasswordResetToken[]
   pedidosIngressoV1       PedidoIngressoV1[]
+  @@index([referredById])
 }
 
 model SocialIdentity {
@@ -182,12 +188,18 @@ model Plan {
   priceCents      Int
   discountPercent Int          @default(0)
   memberships     Membership[]
+  active          Boolean @default(true)
+  description     String @default("") @db.VarChar(1000)
+  durationDays    Int @default(30)
+  orders          MembershipOrder[]
 }
 
 model Membership {
   id         String           @id @default(uuid()) @db.Uuid
   userId     String           @unique @db.Uuid
   planId     String           @db.Uuid
+  lastOrderId String? @unique @db.Uuid
+  lastOrder MembershipOrder? @relation(fields: [lastOrderId], references: [id])
   memberId   String           @unique
   status     MembershipStatus @default(PENDING)
   validUntil DateTime
@@ -341,6 +353,7 @@ model PointEntry {
 
 model BusinessSettings {
   id String @id @default("main")
+  membershipPaymentMinutes Int @default(15)
   ticketReservationMinutes Int @default(15)
   shopReservationMinutes Int @default(30)
   shopQuoteMinutes Int @default(10)
@@ -689,6 +702,8 @@ model GatewayIntent {
   ticketId          String?           @db.Uuid
   chargeId          String?           @unique @db.Uuid
   shopOrderId       String?           @unique @db.Uuid
+  membershipOrderId String? @unique @db.Uuid
+  membershipOrder MembershipOrder? @relation(fields: [membershipOrderId], references: [id])
   customerId        String?           @db.Uuid
   generation        String            @unique
   snapshot          Json
@@ -1411,4 +1426,26 @@ model AdmissionV1 {
   actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
   @@unique([actorId, requestKey])
   @@index([createdAt, actorId])
+}
+
+model MembershipOrder {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  planId String @db.Uuid
+  planName String
+  priceCents Int
+  durationDays Int
+  status String @default("PENDING") @db.VarChar(24)
+  requestKey String @db.VarChar(100)
+  beforeSignature String
+  expiresAt DateTime
+  appliedAt DateTime?
+  validUntil DateTime?
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id])
+  plan Plan @relation(fields: [planId], references: [id])
+  intent GatewayIntent?
+  membership Membership?
+  @@unique([userId, requestKey])
+  @@index([userId, createdAt])
 }

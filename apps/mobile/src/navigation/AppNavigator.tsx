@@ -1,9 +1,10 @@
+import { MembershipScreen } from '../screens/MembershipScreen';
 import React, { useState, useEffect } from 'react';
 import { View, Pressable, ActivityIndicator, StyleSheet, useWindowDimensions, Linking, Platform } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Home, Gift, QrCode, CircleDot, User, Sun, Moon, Bell, Ellipsis, Crown } from 'lucide-react-native';
+import { Home, Gift, QrCode, ShoppingBag, User, Sun, Moon, Bell, Ellipsis, Crown } from 'lucide-react-native';
 import type { Tab, Partner } from '@nacional/shared/types';
 import type { TicketSection } from '../utils/ticket-state';
 import { useTheme } from '../theme/ThemeProvider';
@@ -61,7 +62,7 @@ function MainNavigator() {
   const [tab, setTab] = useState<Tab>('home');
   const [school, setSchool] = useState(false);
   const [admin, setAdmin] = useState(member?.role === 'ADMIN');
-  const [paymentPage, setPaymentPage] = useState<'cashback' | 'merchant' | 'tickets' | 'security' | 'shop' | null>(null);
+  const [paymentPage, setPaymentPage] = useState<'cashback' | 'merchant' | 'tickets' | 'security' | 'membership' | null>(null);
   const [initialQr, setInitialQr] = useState('');
   const [fanTab, setFanTab] = useState('Jogar');
   const [ticketSection, setTicketSection] = useState<TicketSection>('catalog');
@@ -77,7 +78,9 @@ function MainNavigator() {
     return () => subscription.remove();
   }, []);
   function open(name: string) {
-    if (name === 'Loja') { setPaymentPage('shop'); setSchool(false); return; }
+    if (['Seja sócio', 'Meu plano'].includes(name)) { setPaymentPage('membership'); setSchool(false); return; }
+    if (['Loja', 'Boutique'].includes(name)) { setTab('shop'); setPaymentPage(null); setSchool(false); return; }
+    if (name === 'Fan Zone') { setTab('fanzone'); setFanTab('Missões'); setPaymentPage(null); setSchool(false); return; }
     if (name === 'Segurança') { setPaymentPage('security'); setSchool(false); return; }
     if (name === 'Administração') { setAdmin(true); return; }
     if (['Meus ingressos', 'Ingressos', 'Tabela'].includes(name)) { setTicketSection(name === 'Meus ingressos' ? 'orders' : 'catalog'); setPaymentPage('tickets'); setSchool(false); setAdmin(false); return; }
@@ -85,10 +88,11 @@ function MainNavigator() {
     else if (name === 'Caixa do parceiro') { setPaymentPage('merchant'); setSchool(false); }
     else if (name === club.schoolName || name === 'Ninho do Canário') { setPaymentPage(null); setSchool(true); }
     else if (name === 'Indicar') setReferral('FRIEND');
-    else if (name === 'Prêmios') { setSchool(false); setFanTab('Prêmios'); setTab('fanzone'); }
+    else if (name === 'Prêmios') { setPaymentPage(null); setSchool(false); setFanTab('Prêmios'); setTab('fanzone'); }
     else setFeature(name);
   }
-  const nav = [{ id: 'home' as const, icon: Home, label: 'Início' }, { id: 'benefits' as const, icon: Gift, label: 'Vantagens' }, { id: 'card' as const, icon: QrCode, label: 'Carteira' }, { id: 'fanzone' as const, icon: CircleDot, label: 'Fan Zone' }, { id: 'profile' as const, icon: User, label: 'Perfil' }];
+  const nav = [{ id: 'home' as const, icon: Home, label: 'Início' }, { id: 'benefits' as const, icon: Gift, label: 'Vantagens' }, { id: 'card' as const, icon: QrCode, label: 'Carteira' }, { id: 'shop' as const, icon: ShoppingBag, label: 'Loja' }, { id: 'profile' as const, icon: User, label: 'Perfil' }];
+  const activeTab = paymentPage || school ? null : tab === 'fanzone' ? 'profile' : tab;
   const compact = height < 720;
   const roundButton = { width: width <= 360 ? 34 : 39, height: width <= 360 ? 34 : 39, borderRadius: 24, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.soft, alignItems: 'center' as const, justifyContent: 'center' as const };
   if (admin && member?.role === 'ADMIN') return <AdminScreen onBack={() => { setAdmin(false); void refresh(); }} />;
@@ -102,11 +106,11 @@ function MainNavigator() {
       <View style={{ flexDirection: 'row', gap: 6 }}><Pressable onPress={toggle} accessibilityRole="button" accessibilityLabel={isDark ? 'Ativar tema claro' : 'Ativar tema escuro'} style={roundButton}>{isDark ? <Sun size={21} color={colors.gold} strokeWidth={1.6} /> : <Moon size={21} color={colors.muted} strokeWidth={1.6} />}</Pressable><Pressable onPress={() => open(tab === 'card' ? 'Opções da carteira' : 'Notificações')} accessibilityRole="button" accessibilityLabel={tab === 'card' ? 'Opções da carteira' : 'Notificações'} style={roundButton}>{tab === 'card' ? <Ellipsis size={21} color={colors.muted} /> : <Bell size={21} color={colors.muted} strokeWidth={1.6} />}</Pressable></View>
     </View>
     {error && data ? <Pressable onPress={() => void refresh()}><Text style={{ color: colors.danger, padding: 12, fontSize: 12 }}>{error} Toque para tentar novamente.</Text></Pressable> : null}
-    <View style={{ flex: 1, minHeight: 0 }}>{!data ? <View style={[layout.center, { padding: 24, gap: 16 }]}>{loading ? <ActivityIndicator color={colors.primary} /> : <><Text style={{ color: colors.danger, textAlign: 'center' }}>{error}</Text><Button label="Tentar novamente" onPress={() => void refresh()} /></>}</View> : paymentPage === 'shop' ? <ShopScreen onBack={() => setPaymentPage(null)} /> : paymentPage === 'security' ? <SecurityScreen onBack={() => setPaymentPage(null)} /> : paymentPage === 'tickets' ? <TicketsScreen initialSection={ticketSection} onBack={() => setPaymentPage(null)} /> : paymentPage === 'cashback' ? <CashbackScreen key={initialQr || 'wallet'} initialQr={initialQr} onBack={() => setPaymentPage(null)} /> : paymentPage === 'merchant' ? <MerchantScreen onBack={() => setPaymentPage(null)} onOpenSale={openSale} /> : school ? <SchoolScreen onBack={() => setSchool(false)} /> : tab === 'home' ? <HomeScreen onTicket={() => open('Ingressos')} onStadium={() => setStadium(true)} onFeature={open} /> : tab === 'benefits' ? <BenefitsScreen onRefer={setReferral} onFeature={open} onPartner={setPartner} /> : tab === 'card' ? <CardScreen /> : tab === 'fanzone' ? <FanZoneScreen key={fanTab} initialTab={fanTab} onStadium={() => setStadium(true)} onFeature={open} /> : <ProfileScreen onFeature={open} />}</View>
+    <View style={{ flex: 1, minHeight: 0 }}>{!data ? <View style={[layout.center, { padding: 24, gap: 16 }]}>{loading ? <ActivityIndicator color={colors.primary} /> : <><Text style={{ color: colors.danger, textAlign: 'center' }}>{error}</Text><Button label="Tentar novamente" onPress={() => void refresh()} /></>}</View> : paymentPage === 'membership' ? <MembershipScreen onBack={() => { setPaymentPage(null); void refresh(); }} /> : paymentPage === 'security' ? <SecurityScreen onBack={() => setPaymentPage(null)} /> : paymentPage === 'tickets' ? <TicketsScreen initialSection={ticketSection} onBack={() => setPaymentPage(null)} /> : paymentPage === 'cashback' ? <CashbackScreen key={initialQr || 'wallet'} initialQr={initialQr} onBack={() => setPaymentPage(null)} /> : paymentPage === 'merchant' ? <MerchantScreen onBack={() => setPaymentPage(null)} onOpenSale={openSale} /> : school ? <SchoolScreen onBack={() => setSchool(false)} /> : tab === 'home' ? <HomeScreen onTicket={() => open('Ingressos')} onStadium={() => setStadium(true)} onFeature={open} /> : tab === 'benefits' ? <BenefitsScreen onRefer={setReferral} onFeature={open} onPartner={setPartner} /> : tab === 'card' ? <CardScreen onPlans={() => open('Seja sócio')} /> : tab === 'shop' ? <ShopScreen onBack={() => setTab('home')} /> : tab === 'fanzone' ? <FanZoneScreen key={fanTab} initialTab={fanTab} onStadium={() => setStadium(true)} onFeature={open} /> : <ProfileScreen onFeature={open} />}</View>
     <View style={{ marginHorizontal: 12, marginBottom: Math.max(insets.bottom, 10), padding: 7, borderRadius: 40, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.nav, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 18, elevation: 5 }}>
-      {nav.map(({ id, icon: Icon, label }) => <Pressable key={id} onPress={() => { setTab(id); setSchool(false); setPaymentPage(null); setAdmin(false); if (id === 'fanzone') setFanTab('Jogar'); }} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: tab === id }} style={{ flex: 1, minHeight: compact ? 56 : 60, justifyContent: 'center', alignItems: 'center', paddingVertical: 5, gap: 4, borderRadius: 30, borderWidth: 1, borderColor: tab === id ? colors.brandBorder : 'transparent', backgroundColor: tab === id ? colors.navActive : 'transparent' }}>
-        <Icon size={24} color={tab === id ? colors.primary : colors.muted} fill={id === 'home' && tab === id ? colors.primary : 'none'} strokeWidth={1.7} />
-        <Text style={{ fontSize: width <= 360 ? 10 : 11, lineHeight: 16, fontWeight: tab === id ? '700' : '500', color: tab === id ? colors.primary : colors.muted }}>{label}</Text>
+      {nav.map(({ id, icon: Icon, label }) => <Pressable key={id} onPress={() => { setTab(id); setSchool(false); setPaymentPage(null); setAdmin(false); }} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: activeTab === id }} style={{ flex: 1, minHeight: compact ? 56 : 60, justifyContent: 'center', alignItems: 'center', paddingVertical: 5, gap: 4, borderRadius: 30, borderWidth: 1, borderColor: activeTab === id ? colors.brandBorder : 'transparent', backgroundColor: activeTab === id ? colors.navActive : 'transparent' }}>
+        <Icon size={24} color={activeTab === id ? colors.primary : colors.muted} fill={id === 'home' && activeTab === id ? colors.primary : 'none'} strokeWidth={1.7} />
+        <Text style={{ fontSize: width <= 360 ? 10 : 11, lineHeight: 16, fontWeight: activeTab === id ? '700' : '500', color: activeTab === id ? colors.primary : colors.muted }}>{label}</Text>
       </Pressable>)}
     </View>
     {referral && <ReferralSheet kind={referral} onClose={() => setReferral(null)} />}{feature && <FeatureSheet key={feature} feature={feature} onClose={() => setFeature(null)} onNavigate={open} />}{partner && <PartnerSheet partner={partner} onClose={() => setPartner(null)} />}{stadium && <StadiumModal onClose={() => setStadium(false)} />}

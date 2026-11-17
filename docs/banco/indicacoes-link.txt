@@ -1,0 +1,36 @@
+INDICACAO DE AMIGOS POR LINK — 17/11/2026
+
+Migration: 20261117150000_friend_invitation_links.
+Tabela existente User, sem remover usuarios ou indicacoes anteriores:
+- referralCode: UUID publico, unico e obrigatorio. DEFAULT gen_random_uuid() no PostgreSQL. Usuarios existentes recebem um codigo proprio na migration.
+- referredById: UUID opcional, FK para User.id. ON DELETE SET NULL. Indice para contar os cadastros indicados.
+- Prisma referredBy / invitedUsers: autorrelacao FriendInvitations, um indicador pode ter varias contas indicadas.
+
+GET /v1/me/invitation exige autenticacao e conta USER. Retorna somente o link pessoal e a quantidade de cadastros; nao lista nomes/emails dos amigos.
+INVITATION_PUBLIC_URL define o destino publico, terminado em /app. Docker Compose usa https://esporte.testes-techcode.shop/app por padrao.
+Exemplo: https://esporte.testes-techcode.shop/app?ref=UUID_PUBLICO.
+O codigo nao e token de login nem permite acessar a conta.
+
+POST /v1/auth/register e POST /v1/auth/social/exchange aceitam referralCode opcional.
+Na transacao que cria um novo usuario, a API busca o indicador pelo codigo e exige conta USER ativa. Codigo desconhecido, inativo ou de funcionario nao gera vinculo. Formato invalido e rejeitado pelo validador.
+Somente cadastro novo recebe referredById. Login normal ou social existente nao altera indicacao. Falha no cadastro/sessao desfaz o vinculo junto com a transacao.
+Nao concede pontos, cashback, dinheiro ou associacao automaticamente.
+
+O app guarda o primeiro convite valido por ate 30 dias no dispositivo/navegador. Limpa depois de login/cadastro bem-sucedido. Link abre a versao web /app. Tambem reconhece nacional://invite?ref=UUID quando recebido pelo app instalado; nao implementa atribuicao apos instalar pela loja nem Android App Links/iOS Universal Links.
+BUSINESS e PARTNER continuam no formulario de indicacao comercial. Registros FRIEND antigos em Referral sao preservados.
+
+DEPLOY (apos subir estas alteracoes e dar git pull na pasta deste projeto):
+sudo docker compose up -d --build api web
+O entrypoint da API aplica a migration antes de iniciar. Nao executar reset nem down -v.
+Para ambiente local: npm run db:deploy e npm run db:generate, com banco configurado.
+Para atualizar o aparelho: npm run local:app (operador gera o APK).
+
+TESTE MANUAL:
+1. Entrar como torcedor A, abrir Indicar e copiar o link.
+2. Abrir em janela anonima; o cadastro informa que ha convite.
+3. Criar conta B e conferir na base User.referredById = A.id.
+4. Reabrir Indicar na conta A: contador aumenta uma vez.
+5. Abrir outro convite e entrar como B: indicacao permanece a original.
+6. Conferir Loja na quarta posicao da barra inferior; Fan Zone no atalho do inicio e em Perfil.
+
+Migration e fluxos validados com Prisma/PGlite descartavel. Nenhum banco real foi modificado pelo agente.

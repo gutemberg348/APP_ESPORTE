@@ -1,4 +1,5 @@
-import React, { useRef, useState } from 'react';
+import { captureInitialInvitation, readInvitation } from '../services/invitation';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Pressable, Platform, Keyboard, ActivityIndicator, TextInput as NativeInput } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,6 +29,12 @@ export function LoginScreen({ onAdminLogin, gateOnly = false }: { onAdminLogin?:
   const insets = useSafeAreaInsets();
   const emailRef = useRef<React.ComponentRef<typeof NativeInput>>(null), passwordRef = useRef<React.ComponentRef<typeof NativeInput>>(null);
   const [registerRequested, setRegister] = useState(false);
+  const [invited, setInvited] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    if (!gateOnly) void captureInitialInvitation().then(readInvitation).then(code => { if (alive && code) { setInvited(true); setRegister(true); } });
+    return () => { alive = false; };
+  }, [gateOnly]);
   const registering = registerRequested && !gateOnly;
   const [forgot, setForgot] = useState(false);
   const [name, setName] = useState(''), [email, setEmail] = useState(''), [password, setPassword] = useState('');
@@ -63,6 +70,7 @@ export function LoginScreen({ onAdminLogin, gateOnly = false }: { onAdminLogin?:
         <Crest size={48} />
         <View style={{ flex: 1 }}><Text heading style={{ fontWeight: '800', color: colors.text, fontSize: 17, lineHeight: 24 }}>{club.programName}</Text><Text style={{ color: colors.muted, fontSize: 11, lineHeight: 17 }}>{club.name}</Text></View>
       </View>
+      {invited && registering && <Text style={{ color: colors.primary, fontSize: 13 }}>Você chegou por um convite. Sua indicação será registrada ao criar a conta.</Text>}
       <View style={{ gap: 8, paddingTop: 8 }}>
         <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 11, letterSpacing: 1.8 }}>{gateOnly ? 'EQUIPE DE PORTARIA' : 'JUNTOS PELO TIME'}</Text>
         <Text heading accessibilityRole="header" style={{ fontSize: 30, lineHeight: 39, fontWeight: '800', letterSpacing: -0.8, color: colors.text }}>{registering ? 'Sua torcida começa aqui.' : gateOnly ? 'Entrar na portaria' : 'Bom ter você aqui.'}</Text>

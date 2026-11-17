@@ -13,7 +13,7 @@ export const matchCreateSchema = z.object({ ...matchFields, entryEnabled: z.bool
 export const matchUpdateSchema = z.object({ id: z.uuid(), ...Object.fromEntries(Object.entries(matchFields).map(([key, value]) => [key, value.optional()])) }).strict();
 export const sectorCreateSchema = z.object({ matchId: z.uuid(), name: label, priceCents: money, capacity: z.number().int().min(0).max(1000000), salesEnabled: z.boolean().default(true) }).strict();
 export const sectorUpdateSchema = z.object({ id: z.uuid(), name: label.optional(), priceCents: money.optional(), capacity: z.number().int().min(0).max(1000000).optional(), salesEnabled: z.boolean().optional() }).strict();
-export const planCreateSchema = z.object({ name: label, priceCents: money, discountPercent: z.number().int().min(0).max(100) }).strict();
+export const planCreateSchema = z.object({ name: label, priceCents: money, active: z.boolean().default(true), description: z.string().trim().max(1000).default(''), durationDays: z.number().int().min(1).max(3660).default(30), discountPercent: z.number().int().min(0).max(100) }).strict();
 export const planUpdateSchema = planCreateSchema.extend({ id: z.uuid() }).strict();
 export const membershipSchema = z.object({ userId: z.uuid(), planId: z.uuid(), status: z.enum(['ACTIVE', 'PENDING', 'EXPIRED']), validUntil: date }).strict();
 export const accountStatusSchema = z.object({ userId: z.uuid(), active: z.boolean() }).strict();

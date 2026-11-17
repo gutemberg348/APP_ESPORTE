@@ -11,6 +11,7 @@ import { AdminButton, AdminField, AdminFormGrid, AdminNotice, AdminSection, Admi
 import { useShopAction } from './shop/useShopAction';
 
 const fields = [
+  ['membershipPaymentMinutes', 'Pagamento da associação (minutos)', 1, 1440],
   ['ticketReservationMinutes', 'Reserva de ingresso (minutos)', 1, 1440],
   ['shopReservationMinutes', 'Reserva de produtos (minutos)', 1, 1440],
   ['shopQuoteMinutes', 'Validade da cotação de frete (minutos)', 1, 60],

@@ -1,3 +1,5 @@
+import { membershipController } from '../controllers/membership.controller.js';
+import { invitationController } from '../controllers/invitation.controller.js';
 import { gateV1Controller } from '../controllers/gate-v1.controller.js';
 import { shopImageController } from '../controllers/shop-image.controller.js';
 import { settingsController } from '../controllers/settings.controller.js';
@@ -17,6 +19,11 @@ import { passwordRecoveryController } from '../controllers/password-recovery.con
 import { partnerController } from '../controllers/partner.controller.js';
 import { ingressoV1Controller } from '../controllers/ingresso-v1.controller.js';
 export const routes = [
+  { method: 'GET', path: '/v1/membership/plans', handler: membershipController.plans, private: true },
+  { method: 'GET', path: '/v1/membership/orders', handler: membershipController.orders, private: true },
+  { method: 'POST', path: '/v1/membership/checkout', handler: membershipController.checkout, private: true, membershipLimit: 'checkout' },
+  { method: 'POST', path: '/v1/membership/verify', handler: membershipController.verify, private: true, membershipCard: true, membershipLimit: 'verify' },
+  { method: 'GET', path: '/v1/me/invitation', handler: invitationController.link, private: true },
   { method: 'GET', path: '/v1/auth/social/providers', handler: socialAuthController.providers },
   { method: 'POST', path: '/v1/auth/social/start', handler: socialAuthController.start, authLimit: true },
   { method: 'GET', path: '/v1/auth/social/:provider/callback', handler: socialAuthController.callback, binary: true, authLimit: true },

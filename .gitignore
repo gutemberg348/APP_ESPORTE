@@ -28,3 +28,4 @@ __pycache__/
 *.p12
 *.jks
 *.keystore
+/ss.txt

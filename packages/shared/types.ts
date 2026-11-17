@@ -1,4 +1,4 @@
-export type Tab = 'home' | 'card' | 'fanzone' | 'benefits' | 'profile';
+export type Tab = 'home' | 'card' | 'shop' | 'fanzone' | 'benefits' | 'profile';
 export interface Preferences { family: boolean; personalize: boolean; notifications: boolean; ranking: boolean }
 export interface AuthTokens {
   accessToken: string; refreshToken: string; accessTokenExpiresAt: string;
@@ -65,7 +65,7 @@ export interface Ticket {
   match: Match;
   sector: Sector;
 }
-export interface CardToken { token: string; expiresAt: string }
+export interface CardToken { token: string; expiresAt: string; serverTime?: string; issuedAt?: string }
 export interface TicketQr { token: string; qr: string; code: string; ticketId: string; expiresAt: string; serverTime: string; remainingQuantity: number }
 export interface TicketQuote {
   match: Match; sector: Sector; quantity: number; available: number;
@@ -105,7 +105,7 @@ export interface AdminSaleQuote {
   revision: string; sector: Sector; quantity: number; available: number; discountPercent: number;
   totalCents: number; unitPriceCents: number | null; priceLocked: boolean; serverTime: string; expiresAt: string;
 }
-export interface ClubPlan { id: string; name: string; priceCents: number; discountPercent: number }
+export interface ClubPlan { active?: boolean; description?: string; durationDays?: number; id: string; name: string; priceCents: number; discountPercent: number }
 export interface AuditEvent { id: string; action: string; entityId: string; createdAt: string; actor: { name: string }; details: Record<string, unknown> }
 export interface CashCharge {
   paymentIntentId?: string | null;
@@ -118,6 +118,7 @@ export interface CashCharge {
 export interface PixIntent {
   provider?: 'asaas' | 'sicredi';
   shopOrderId?: string | null;
+  membershipOrderId?: string | null;
   id: string; ticketId: string | null; chargeId: string | null; environment: 'sandbox' | 'production';
   state: 'QUEUED' | 'CREATING' | 'PENDING' | 'PROCESSING' | 'RECEIVED' | 'REFUNDING' | 'REFUNDED' | 'CANCELED' | 'REVIEW' | 'PARTIAL_REFUND';
   amountCents: number; refundedCents: number; pixPayload: string | null; expiresAt: string; failureCode: string | null; serverTime: string;

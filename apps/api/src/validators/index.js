@@ -2,7 +2,7 @@ import { z } from 'zod';
 const email = z.string().trim().toLowerCase().email().max(254);
 const password = z.string().min(10, 'Use pelo menos 10 caracteres.').max(128);
 const name = z.string().trim().min(2).max(100);
-export const registerSchema = z.object({ name, email, password }).strict();
+export const registerSchema = z.object({ name, email, password, referralCode: z.uuid().optional() }).strict();
 export const loginSchema = z.object({ email, password: z.string().min(1).max(128), portal: z.enum(['APP', 'GATE', 'ADMIN']).default('APP') }).strict();
 export const refreshSchema = z.object({ refreshToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }).strict();
 export const changePasswordSchema = z.object({ currentPassword: z.string().min(1).max(128), newPassword: password }).strict();

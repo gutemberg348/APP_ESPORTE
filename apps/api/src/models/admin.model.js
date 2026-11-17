@@ -84,7 +84,7 @@ export const adminModel = {
     return serializable(db, async (tx) => {
       if (!await tx.user.findUnique({ where: { id: userId } }) || !await tx.plan.findUnique({ where: { id: planId } })) throw new AppError(404, 'MEMBER_OR_PLAN_NOT_FOUND', 'Conta ou plano não encontrado.');
       if (status === 'ACTIVE' && validUntil <= new Date()) throw new AppError(422, 'INVALID_MEMBERSHIP_DATE', 'Uma associação ativa exige validade futura.');
-      const membership = await tx.membership.upsert({ where: { userId }, update: { planId, status, validUntil }, create: { userId, planId, status, validUntil, memberId: `NC-${randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase()}` } });
+      const membership = await tx.membership.upsert({ where: { userId }, update: { planId, status, validUntil, lastOrderId: null }, create: { userId, planId, status, validUntil, memberId: `NC-${randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase()}` } });
       await writeAudit(tx, actorId, 'MEMBERSHIP_UPDATED', membership.id, { userId, planId, status, validUntil: validUntil.toISOString() });
       return toMember(await tx.user.findUnique({ where: { id: userId }, include: { membership: { include: { plan: true } } } }));
     });
