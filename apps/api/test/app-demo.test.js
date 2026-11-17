@@ -1,3 +1,4 @@
+import { createShopStore } from '../src/models/shop.store.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readdir, readFile, access } from 'node:fs/promises';
@@ -29,10 +30,21 @@ test('app demo is atomic, repeatable, audited and preserves admin edits, stock a
   await db.user.create({ data: { name: 'Admin', email: 'demo@test.local', role: 'ADMIN', passwordHash: 'not-a-real-hash' } });
   await assert.rejects(seedAppDemo(db, { images: {} }));
   assert.equal(await db.match.count(), 0, 'invalid product must roll back games');
+  assert.equal(await db.estadioIngressoV1.count(), 0, 'V1 fixtures must also roll back');
   await db.shopSettings.create({ data: { id: 'main' } });
   for (const key of ['camisa-torcedor', 'camisa-treino']) await access(new URL(`../public/shop/${images[key].split('/').pop()}`, import.meta.url));
   const first = await seedAppDemo(db, { images, enableShop: true, now: new Date('2026-11-17T12:00:00Z') });
   assert.equal(first.matchesCreated, 6); assert.equal(first.productsCreated, 5);
+  assert.deepEqual(first.v1, { templatesCreated: 2, stadiumsCreated: 1, salesTemplatesCreated: 1, matchesCreated: 6 });
+  assert.equal(await db.assentoIngressoV1.count(), 20);
+  const v1 = await db.partidaIngressoV1.findFirst({ include: { alocacoesSetor: { include: { lotes: true } } } });
+  assert.equal(v1.status, 'PUBLICADA'); assert.equal(v1.vendasAtivas, true); assert.equal(v1.alocacoesSetor.length, 2);
+  assert.ok(v1.alocacoesSetor.every(row => row.lotes.length === 2 && row.lotes.reduce((sum,lote) => sum + lote.quantidadeMaxima,0) === row.capacidadeLiberada));
+  const catalog = await createShopStore(db, { settings: {} }).products({ limit: 24, offset: 0 }, false);
+  assert.equal(catalog.items.length, 5); assert.ok(catalog.items.every(row => row.images.length && row.variants.some(size => size.available > 0)));
+  const stadium = await db.estadioIngressoV1.findFirst();
+  await db.estadioIngressoV1.update({ where: { id: stadium.id }, data: { nome: 'Editado pelo admin', ativo: false } });
+  await db.partidaIngressoV1.update({ where: { id: v1.id }, data: { vendasAtivas: false } });
   assert.equal(await db.stockMovement.count(), 20);
   assert.equal((await db.shopSettings.findUnique({ where: { id: 'main' } })).enabled, true);
   assert.ok((await db.shopSettings.findUnique({ where: { id: 'main' } })).pickupAddress.includes('teste'));
@@ -42,6 +54,10 @@ test('app demo is atomic, repeatable, audited and preserves admin edits, stock a
   await db.shopSettings.update({ where: { id: 'main' }, data: { enabled: false, mode: 'EXTERNAL', externalUrl: 'https://example.com', supportPhone: '83999999999' } });
   const second = await seedAppDemo(db, { images, now: new Date('2027-01-20T12:00:00Z') });
   assert.equal(second.matchesCreated, 0); assert.equal(second.productsCreated, 0);
+  assert.deepEqual(second.v1, { templatesCreated: 0, stadiumsCreated: 0, salesTemplatesCreated: 0, matchesCreated: 0 });
+  assert.equal((await db.estadioIngressoV1.findUnique({ where: { id: stadium.id } })).nome, 'Editado pelo admin');
+  assert.equal((await db.partidaIngressoV1.findUnique({ where: { id: v1.id } })).vendasAtivas, false);
+  assert.equal(await db.templateSetorIngressoV1.count(), 2); assert.equal(await db.assentoIngressoV1.count(), 20);
   assert.equal(await db.stockMovement.count(), 20);
   assert.equal((await db.productVariant.findUnique({ where: { id: variant.id } })).stock, 3);
   assert.equal((await db.product.findUnique({ where: { id: variant.productId } })).active, false);

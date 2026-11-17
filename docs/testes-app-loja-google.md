@@ -8,16 +8,16 @@ Execute na pasta `/var/www/esporte_app/APP_ESPORTE`, depois de enviar estas alte
 git pull
 sudo docker compose up -d --build api web
 sudo docker compose ps
-sudo docker compose exec -T api npx prisma migrate status
-sudo docker compose exec -T api node prisma/seed-app-demo.js --confirm-test-data --enable-shop
+sudo docker compose exec -T api npm run db:seed:test
 ```
 
 O entrypoint aplica as migrations de estrutura. A migration `20261117190000_default_membership_plan` também publica o plano inicial Sócio Esporte por **R$ 40,00 / 30 dias**, preservando um plano de mesmo nome que já exista. O valor e a duração continuam editáveis no admin. Os exemplos ficam em um **seed explícito**, separado das migrations, para não publicar jogos fictícios em toda atualização de produção.
 
-O seed cria:
+O comando `db:seed:test` aplica as migrations pendentes e executa o seed completo na mesma chamada. O seed cria:
 
 - Seis jogos de teste, em 3, 6, 9, 12, 15 e 18 dias a partir da primeira execução, às 19h de Patos. Arquibancada R$ 1,00 / 100 lugares e cadeiras R$ 2,00 / 30 lugares. Publicados com venda aberta até uma hora antes do jogo.
 - Cinco camisas de teste, com imagens conceituais já servidas pela API, preços de R$ 1,00 a R$ 5,00, tamanhos P/M/G/GG e dez unidades por tamanho. Editáveis em Loja → Produtos e Estoque.
+- Admin V1: estádio **[TESTE APP] Arena Esporte**, dois templates de setor (arquibancada e cadeiras), dois setores, 20 cadeiras numeradas, um template de venda com inteira/meia e seis partidas publicadas, nas mesmas datas dos jogos do app.
 - Movimentos de estoque e registro de auditoria. Não cria contas, pagamentos ou ingressos emitidos.
 
 `--enable-shop` habilita a loja interna. Omita essa opção se quiser preservar uma loja fechada ou externa. Ela mantém telefone, endereço, regras de frete e configurações financeiras existentes; revise o endereço de retirada no painel. Em uma loja nova, cria retirada de teste. Nenhuma tarifa de transportadora é inventada.
@@ -26,7 +26,11 @@ Repetir o seed não duplica produtos/jogos, repõe estoque, reativa produtos arq
 
 **Em Sicredi de produção, mesmo os valores de teste geram cobranças e pagamentos reais.** Os registros ficam identificados como TESTE. Depois de validar, encerre as vendas desses jogos e arquive os produtos pelo painel; preserve pedidos e histórico.
 
-Os jogos são criados em `Match`/`Sector`, catálogo atualmente consultado pela compra no app. Não são duplicados em Partidas V1: esse módulo tem modelos próprios e a integração do checkout V1 com o app/Pix ainda precisa ser feita. Este seed não é teste da portaria V1.
+O seed preenche os dois cadastros: `Match`/`Sector` alimenta a compra atual no app; as partidas V1 permitem testar a gestão no admin. Eles são registros distintos: comprar um ingresso no app ainda não cria ingresso V1. A unificação desse checkout continua pendente. O seed não simula pagamento nem libera portaria antecipadamente.
+
+Ao terminar, a saída informa `matchesCreated`, `productsCreated` e `v1` (templates, estádio, template de venda e partidas criados). Na primeira execução completa: 6 jogos do app, 5 produtos, 2 templates de setor, 1 estádio, 1 template de venda e 6 partidas V1. Em reexecuções, os contadores podem ser zero porque os registros já existem. Atualize o app/painel depois.
+
+O seed completo é `prisma/seed-app-demo.js`. O antigo `seed-ingresso-v1-demo.js` continua exclusivo de desenvolvimento local e não é o comando para esta VPS.
 
 ## Google: configurar uma vez
 

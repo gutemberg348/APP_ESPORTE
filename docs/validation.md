@@ -236,3 +236,11 @@ Diagnostico Pix na VPS (16/11/2026): ampliado runner isolado com comando diagnos
 - Quatro testes passaram em membership-pix/app-demo, incluindo todas as migrations em banco descartável, criação do plano padrão, preservação de edição anterior, fluxo Pix e seed idempotente de jogos/produtos. TypeScript mobile aprovado.
 - Carteira inativa reaproveita a carteirinha com nome/status, matriz decorativa bloqueada e cadeado, brilho suave e CTA de ativação. Apenas a associação ativa recebe QR assinado. Animações respeitam reduzir movimento.
 - Não executados: migration/seed no banco real, serviços, APK, verificação visual no aparelho. Comandos de atualização e seed em docs/banco/associacao-pix.txt e docs/testes-app-loja-google.md.
+
+
+## 2026-11-17 — Lista estável e seed completo de compras/admin
+
+- Vídeo de 7,27s analisado por quadros: durante atualização, o estado vazio sumia e os filtros horizontais cresciam. TicketsScreen usa atualização silenciosa no polling/retorno ao app; estados vazios permanecem montados e filtros não crescem para ocupar espaço livre. Pull-to-refresh manual continua disponível.
+- db:seed:test aplica migrate deploy e roda o seed completo com habilitação da loja. Seed integrado em uma transação com trava: jogos do app, produtos/estoque/imagens, templates de setor V1, estádio/setores/assentos, template de venda e partidas V1. TENANT_SLUG vem da configuração da API. Não depende do antigo seed V1 local.
+- Dois testes app-demo passaram em PostgreSQL descartável com todas as migrations: grade de datas, rollback conjunto, dois templates, 20 assentos, capacidades/lotes, produtos visíveis para torcedor, repetição sem duplicidade e preservação de edição administrativa/estoque. TypeScript mobile e sintaxe dos scripts aprovados.
+- Sem execução na VPS, banco real, serviços ou APK. Dados continuam dependendo da execução do comando pelo operador na VPS. Partidas V1 e checkout atual do app permanecem distintos; este seed popula ambos, sem simular pagamentos.

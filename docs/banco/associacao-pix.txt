@@ -78,3 +78,10 @@ Na pasta /var/www/esporte_app/APP_ESPORTE, depois de enviar estas alteracoes ao 
 
 A inicializacao da API ja executa prisma migrate deploy. A migration cria o plano inicial; o ultimo comando publica seis jogos de teste a cada tres dias e cinco camisas de teste. Repetir nao duplica nem repoe estoque vendido. Se os exemplos ja existirem e estiverem vencidos/ocultos, edite no admin: o seed preserva alteracoes anteriores. Jogos alimentam o catalogo atual do app (Match/Sector), nao Partidas V1.
 Depois atualize a tela do app. A nova previa visual exige novo APK (npm run local:app). Nao foi executado seed/migration na VPS nem gerado APK pelo agente.
+
+
+SEED COMPLETO PARA VPS (ATUALIZADO)
+Agora usar: sudo docker compose exec -T api npm run db:seed:test
+Executa migrations e o seed integrado: 6 jogos do catalogo do app, 5 camisas, estadio V1, 2 templates/2 setores, 20 assentos, template de venda e 6 partidas V1. Tudo em transacao; sem emitir ingressos pagos ou modificar configuracoes de registros existentes. Usa TENANT_SLUG da API.
+As referencias anteriores a seed somente local sao historicas. O comando integrado funciona no container de producao mediante execucao explicita pelo operador.
+Atualizacao automatica da lista de ingressos agora e silenciosa: nao liga o pull-to-refresh nem remove o estado vazio durante a consulta.

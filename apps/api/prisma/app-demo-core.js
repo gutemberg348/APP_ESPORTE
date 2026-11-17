@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { productSchema } from '../src/validators/shop.js';
+import { seedDemoV1 } from './app-demo-v1.js';
 
 const idFor = (key) => { const h = createHash('sha256').update(key).digest('hex'); return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`; };
 export function demoMatches(now = new Date()) {
@@ -15,13 +16,15 @@ export function demoMatches(now = new Date()) {
 }
 
 // Explicit operator seed, never part of migrate deploy. One transaction prevents partial fixtures.
-export async function seedAppDemo(db, { images, enableShop = false, now = new Date() }) {
+export async function seedAppDemo(db, { images, enableShop = false, tenantSlug = 'nacional-patos', now = new Date() }) {
   return db.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(78216403)`;
     const actor = await tx.user.findFirst({ where: { role: 'ADMIN', active: true }, orderBy: { createdAt: 'asc' }, select: { id: true } });
     if (!actor) throw new Error('Cadastre um administrador ativo antes de executar o seed.');
     let matchesCreated = 0, productsCreated = 0;
-    for (const data of demoMatches(now)) {
+    const schedule = demoMatches(now);
+    const v1 = await seedDemoV1(tx, { tenantSlug, schedule });
+    for (const data of schedule) {
       if (await tx.match.findUnique({ where: { slug: data.slug } })) continue;
       await tx.match.create({ data }); matchesCreated++;
     }
@@ -49,7 +52,7 @@ export async function seedAppDemo(db, { images, enableShop = false, now = new Da
         create: { id: 'main', name: 'Loja do Esporte', enabled: true, mode: 'INTERNAL', pickupEnabled: true, pickupAddress },
         update: { enabled: true, mode: 'INTERNAL', ...(previous?.pickupEnabled && !previous.pickupAddress.trim() ? { pickupAddress } : {}) } });
     }
-    const result = { matchesCreated, productsCreated, shopEnabledByCommand: enableShop };
+    const result = { matchesCreated, productsCreated, shopEnabledByCommand: enableShop, v1 };
     await tx.auditLog.create({ data: { actorId: actor.id, action: 'APP_DEMO_SEEDED', entityId: 'app-demo-v1', details: result } });
     return result;
   }, { timeout: 30000 });

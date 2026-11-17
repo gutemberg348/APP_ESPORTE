@@ -27,7 +27,8 @@
     "sicredi:token": "node scripts/sicredi-pix.mjs token",
     "test:sicredi": "node scripts/sicredi-tests.mjs",
     "app:seed-demo": "node prisma/seed-app-demo.js",
-    "google:check": "node scripts/google-login-check.mjs"
+    "google:check": "node scripts/google-login-check.mjs",
+    "db:seed:test": "prisma migrate deploy && node prisma/seed-app-demo.js --confirm-test-data --enable-shop"
   },
   "dependencies": {
     "@nacional/shared": "0.1.0",

@@ -7,7 +7,7 @@ import { ApiError } from '../services/api';
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Fortaleza', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 interface Club {
   data: Dashboard | null; loading: boolean; error: string | null; preseason: boolean;
-  toggleSeason: () => void; refresh: () => Promise<void>;
+  toggleSeason: () => void; refresh: (options?: { silent?: boolean }) => Promise<void>;
   requestTicket: (sectorId: string, quantity: number, matchId?: string, expectedTotalCents?: number) => Promise<Ticket>;
   predict: (home: number, away: number) => Promise<void>;
   refer: (kind: string, name: string, contact: string) => Promise<void>;
@@ -28,11 +28,11 @@ export function ClubProvider({ children }: React.PropsWithChildren) {
     mutations.current.add(key);
     try { return await work(); } finally { mutations.current.delete(key); }
   }
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (demoMode || !token) return;
     const requestId = ++revision.current;
-    setLoading(true); setError(null);
-    try { const fresh = await clubApi.dashboard(token); if (requestId === revision.current) { setData(fresh); updateMember(fresh.member); } }
+    if (!silent) { setLoading(true); setError(null); }
+    try { const fresh = await clubApi.dashboard(token); if (requestId === revision.current) { setData(fresh); updateMember(fresh.member); setError(null); } }
     catch (err) {
       if (requestId !== revision.current) return;
       if (err instanceof ApiError && err.status === 401) await signOut();

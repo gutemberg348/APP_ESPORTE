@@ -41,6 +41,7 @@
     "api:check": "node scripts/check-api.mjs",
     "web:clear": "npm run web --workspace @nacional/mobile -- --clear",
     "app:seed-demo": "npm run app:seed-demo --workspace @nacional/api --",
-    "google:check": "npm run google:check --workspace @nacional/api"
+    "google:check": "npm run google:check --workspace @nacional/api",
+    "db:seed:test": "npm run db:seed:test --workspace @nacional/api"
   }
 }
