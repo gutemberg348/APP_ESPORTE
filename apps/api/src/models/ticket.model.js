@@ -65,5 +65,7 @@ export const ticketModel = {
       return toTicket(updated);
     });
   },
-  paymentInstructions: () => env.PAYMENT_MODE === 'asaas' ? 'Pague com Pix pelo app do seu banco. O ingresso será emitido automaticamente após a confirmação do Asaas. Não pague depois do vencimento da reserva.' : env.TICKET_PAYMENT_INSTRUCTIONS,
+  paymentInstructions: () => env.PAYMENT_MODE === 'sicredi'
+    ? 'Gere o Pix e pague pelo app do seu banco dentro do prazo. O ingresso será emitido após a confirmação do Sicredi.'
+    : env.TICKET_PAYMENT_INSTRUCTIONS,
 };

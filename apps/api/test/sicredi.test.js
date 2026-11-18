@@ -9,10 +9,41 @@ import { join, resolve, relative, basename } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createSicrediClient, pixCents, pixDecimal } from '../src/payments/sicredi/client.js';
 import { createSicrediTransport, loadSicrediCertificate } from '../src/payments/sicredi/transport.js';
+import { registerSicrediWebhook } from '../src/payments/sicredi/webhook-registration.js';
 import { parseEnv } from '../src/config/env.js';
 import { createApp } from '../src/http/app.js';
 import { inject } from './helpers/inject.js';
 const base = { SICREDI_PIX_API_URL: 'https://bank.test/api/v2', SICREDI_PIX_AUTH_URL: 'https://bank.test/oauth/token', SICREDI_PIX_CLIENT_ID: 'test-client', SICREDI_PIX_CLIENT_SECRET: 'test-secret', SICREDI_PIX_RECEIVING_KEY: 'test-receiving-key', SICREDI_PIX_TIMEOUT_MS: 500 };
+
+test('webhook registration checks public HTTPS and refuses to replace a different project', async () => {
+  const settings = { SICREDI_PIX_WEBHOOK_URL: 'https://club.test/v1/payments/webhooks/sicredi', SICREDI_PIX_WEBHOOK_TOKEN: 'a'.repeat(64) };
+  let record = null, writes = 0, enabled = false;
+  const api = {
+    webhook: async () => record,
+    configureWebhook: async (webhookUrl) => { writes++; record = { webhookUrl }; },
+  };
+  const target = `${settings.SICREDI_PIX_WEBHOOK_URL}/${settings.SICREDI_PIX_WEBHOOK_TOKEN}`;
+  const urls = [];
+  const simulate = async (url, options) => {
+    urls.push(url);
+    assert.equal(options.redirect, 'error');
+    assert.deepEqual(JSON.parse(options.body), { pix: [] });
+    if (!enabled) return Response.json({ error: { code: 'SICREDI_DISABLED' } }, { status: 503 });
+    if (url !== target && url !== `${target}/pix`) {
+      return Response.json({ error: { code: 'SICREDI_WEBHOOK_UNAUTHORIZED' } }, { status: 401 });
+    }
+    return Response.json({ data: { received: true } });
+  };
+  await assert.rejects(registerSicrediWebhook(settings, api, simulate), { code: 'SICREDI_DISABLED' });
+  assert.equal(writes, 0);
+  enabled = true;
+  assert.deepEqual(await registerSicrediWebhook(settings, api, simulate), { webhookRegistered: true, changed: true, publicCallback: 'ok' });
+  assert.ok(urls.includes(target) && urls.includes(`${target}/pix`));
+  assert.equal((await registerSicrediWebhook(settings, api, simulate)).changed, false);
+  record = { webhookUrl: 'https://another-project.test/callback' };
+  await assert.rejects(registerSicrediWebhook(settings, api, simulate), { code: 'SICREDI_WEBHOOK_CONFLICT' });
+  assert.equal(writes, 1);
+});
 
 test('Sicredi OAuth coalesces concurrent calls, caches by scope and uses expires_in without unsafe POST retries', async () => {
   let instant = 0, count = 0, operations = [];

@@ -63,9 +63,14 @@ test('Sicredi durable Pix saga with isolated PostgreSQL, refunds and legacy isol
   await t.test('webhook is only a wakeup, repeated and forged values cannot issue tickets, E2E reconciliation settles once', async () => {
     const { user, ticket, intent } = await purchase(); await store.process(intent.id);
     const received = await pay(intent);
-    const body = { pix: [{ txid: received.txid, endToEndId: received.endToEndId, valor: '0.01' }] };
+    const body = { pix: [
+      { endToEndId: `E${'b'.repeat(31)}`, valor: '0.01' },
+      { txid: 'X'.repeat(35), endToEndId: `E${'c'.repeat(31)}` },
+      { txid: received.txid, endToEndId: received.endToEndId, valor: '0.01' },
+    ] };
     await assert.rejects(store.webhook('wrong', body), { code: 'SICREDI_WEBHOOK_UNAUTHORIZED' });
     await store.webhook(settings.SICREDI_PIX_WEBHOOK_TOKEN, body); await store.webhook(settings.SICREDI_PIX_WEBHOOK_TOKEN, body);
+    assert.equal((await db.gatewayIntent.findUnique({ where: { id: intent.id } })).nextAttemptAt.getTime(), instant.getTime());
     assert.equal(await db.ticketPayment.count({ where: { ticketId: ticket.id } }), 0);
     await Promise.all([store.process(intent.id), store.process(intent.id)]);
     const paid = await db.ticket.findUnique({ where: { id: ticket.id }, include: { payment: true, user: true } });
@@ -89,12 +94,39 @@ test('Sicredi durable Pix saga with isolated PostgreSQL, refunds and legacy isol
     api.create = original; await store.process(intent.id);
     const after = await db.gatewayIntent.findUnique({ where: { id: intent.id } }); assert.equal(after.providerReference, before.providerReference); assert.equal(after.state, 'PENDING');
   });
-  await t.test('bank QR from creation is retained when later charge queries omit pixCopiaECola', async () => {
-    const { user, intent } = await purchase(), original = api.create;
-    api.create = async (...args) => { const result = await original(...args); delete charges.get(args[0]).pixCopiaECola; return result; };
-    await store.process(intent.id); api.create = original;
-    assert.equal((await store.ownIntent(user.id, intent.id)).pixPayload, '000201TEST_ONLY');
-    await store.process(intent.id); assert.equal((await store.ownIntent(user.id, intent.id)).pixPayload, '000201TEST_ONLY');
+  await t.test('transient bank failure hides the QR and rechecking the same TXID restores the code from creation', async () => {
+    const { user, intent } = await purchase(), create = api.create, charge = api.charge;
+    const before = created;
+    let failRead = false;
+    api.create = async (...args) => {
+      const result = await create(...args);
+      delete charges.get(args[0]).pixCopiaECola;
+      delete charges.get(args[0]).valor.modalidadeAlteracao;
+      failRead = true;
+      return result;
+    };
+    api.charge = async (...args) => {
+      if (failRead) throw new AppError(503, 'SICREDI_REJECTED', 'test read failure');
+      return charge(...args);
+    };
+    try {
+      await store.process(intent.id);
+      assert.equal((await store.ownIntent(user.id, intent.id)).pixPayload, null);
+      assert.ok((await db.gatewayIntent.findUnique({ where: { id: intent.id } })).creationStartedAt);
+      failRead = false;
+      await store.process(intent.id);
+      assert.equal((await store.ownIntent(user.id, intent.id)).pixPayload, '000201TEST_ONLY');
+      failRead = true;
+      await store.process(intent.id);
+      assert.equal((await store.ownIntent(user.id, intent.id)).pixPayload, null);
+      failRead = false;
+      await store.process(intent.id);
+      assert.equal((await store.ownIntent(user.id, intent.id)).pixPayload, '000201TEST_ONLY');
+      assert.equal(created, before + 1);
+    } finally {
+      api.create = create;
+      api.charge = charge;
+    }
   });
   await t.test('mismatched charge, E2E, amount, account, paid state and QR cannot issue or expose a stale QR', async () => {
     for (const tamper of ['value', 'e2e', 'key', 'qr']) {

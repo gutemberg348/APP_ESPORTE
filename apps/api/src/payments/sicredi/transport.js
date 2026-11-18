@@ -48,7 +48,7 @@ export function createSicrediTransport(settings, { request = https.request, cert
           res.on('end', () => {
             clearTimeout(deadline); if (settled) return;
             const status = res.statusCode || 0;
-            if (status === 404) { settled = true; accept({ status, data: null }); return; }
+            if (status === 404 && method === 'GET') { settled = true; accept({ status, data: null }); return; }
             if (status < 200 || status >= 300) { fail(status === 401 || status === 403 ? 'SICREDI_ACCESS_DENIED' : status === 400 || status === 422 ? 'SICREDI_REJECTED' : 'SICREDI_UNAVAILABLE', 'A operação não foi confirmada pelo Sicredi. Confira a configuração e consulte novamente a mesma referência.'); return; }
             try { const raw = Buffer.concat(parts).toString('utf8'); const data = raw ? JSON.parse(raw) : null; settled = true; accept({ status, data }); }
             catch { fail('SICREDI_INVALID_RESPONSE', 'Resposta bancária inválida.'); }

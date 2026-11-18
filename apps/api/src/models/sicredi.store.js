@@ -10,10 +10,12 @@ import { pixCents, txidPattern, e2ePattern } from '../payments/sicredi/client.js
 import { ticketGeneration, publicIntent } from '../payments/pix-contract.js';
 
 const fault = (code, message, status = 409) => new AppError(status, code, message);
-const webhookSchema = z.object({ pix: z.array(z.object({ txid: z.string().regex(txidPattern), endToEndId: z.string().regex(e2ePattern) }).passthrough()).max(100) }).passthrough();
+const webhookSchema = z.object({ pix: z.array(z.unknown()).max(100) });
+const webhookEvent = z.object({ txid: z.string().regex(txidPattern), endToEndId: z.string().regex(e2ePattern) });
 const receiptRef = (intent) => `SICREDI:${intent.providerReference}`;
 const owner = (userId) => ({ OR: [{ ticket: { userId } }, { shopOrder: { userId } }, { membershipOrder: { userId } }] });
 const opaque = (prefix) => `${prefix}${randomUUID().replace(/-/g, '')}`;
+const isPixPayload = (value) => typeof value === 'string' && value.length <= 4096 && value.startsWith('000201');
 export function createSicrediStore(db, { settings, api, now = () => new Date() }) {
   const environment = settings.SICREDI_PIX_ENV;
   const scope = { provider: 'sicredi', environment };
@@ -48,12 +50,12 @@ export function createSicrediStore(db, { settings, api, now = () => new Date() }
   async function checkedRemote(intent) {
     const charge = await api.charge(intent.providerReference);
     if (!charge) return null;
-    if (charge.txid !== intent.providerReference || charge.chave !== settings.SICREDI_PIX_RECEIVING_KEY || pixCents(charge.valor?.original) !== intent.amountCents || charge.valor.modalidadeAlteracao !== 0 || !['ATIVA', 'CONCLUIDA', 'REMOVIDA_PELO_USUARIO_RECEBEDOR', 'REMOVIDA_PELO_PSP'].includes(charge.status)) throw fault('SICREDI_PAYMENT_MISMATCH', 'A cobrança bancária diverge do pedido.');
+    if (charge.txid !== intent.providerReference || charge.chave !== settings.SICREDI_PIX_RECEIVING_KEY || pixCents(charge.valor?.original) !== intent.amountCents || (charge.valor.modalidadeAlteracao !== undefined && charge.valor.modalidadeAlteracao !== 0) || !['ATIVA', 'CONCLUIDA', 'REMOVIDA_PELO_USUARIO_RECEBEDOR', 'REMOVIDA_PELO_PSP'].includes(charge.status)) throw fault('SICREDI_PAYMENT_MISMATCH', 'A cobrança bancária diverge do pedido.');
     const expectedKey = createHash('sha256').update(settings.SICREDI_PIX_RECEIVING_KEY).digest('hex');
     if (intent.snapshot.receivingKeyHash !== expectedKey) throw fault('SICREDI_ACCOUNT_CHANGED', 'A conta recebedora desta cobrança foi alterada. Concilie na conta original.');
     const receipts = charge.pix || [];
     if (receipts.length > 1 || (charge.status === 'CONCLUIDA' && receipts.length !== 1)) throw fault('SICREDI_RECEIPT_REVIEW', 'Recebimentos divergentes exigem conferência no banco.');
-    if (charge.status === 'ATIVA' && charge.pixCopiaECola != null && (typeof charge.pixCopiaECola !== 'string' || charge.pixCopiaECola.length > 4096 || !charge.pixCopiaECola.startsWith('000201'))) throw fault('SICREDI_QR_UNAVAILABLE', 'O banco ainda não forneceu um Pix copia e cola válido.');
+    if (charge.status === 'ATIVA' && charge.pixCopiaECola != null && !isPixPayload(charge.pixCopiaECola)) throw fault('SICREDI_QR_UNAVAILABLE', 'O banco ainda não forneceu um Pix copia e cola válido.');
     if (receipts.length && charge.status !== 'CONCLUIDA') throw fault('SICREDI_RECEIPT_REVIEW', 'O banco ainda não concluiu esta cobrança.');
     let received = null;
     if (receipts.length) {
@@ -174,13 +176,31 @@ export function createSicrediStore(db, { settings, api, now = () => new Date() }
       active();
       const expected = Buffer.from(settings.SICREDI_PIX_WEBHOOK_TOKEN || ''), supplied = Buffer.from(typeof token === 'string' ? token : '');
       if (!expected.length || supplied.length !== expected.length || !timingSafeEqual(expected, supplied)) throw fault('SICREDI_WEBHOOK_UNAUTHORIZED', 'Notificação não autorizada.', 401);
-      const events = webhookSchema.parse(body).pix;
-      for (const event of events) {
-        const id = createHash('sha256').update(`${environment}:${event.txid}:${event.endToEndId}`).digest('hex');
-        // Only known references wake the worker. Webhook values never settle money.
-        await db.gatewayIntent.updateMany({ where: { ...scope, providerReference: event.txid }, data: { nextAttemptAt: now(), wakeVersion: { increment: 1 } } });
-        await db.gatewayWebhook.upsert({ where: { environment_externalId: { environment, externalId: `sicredi:${id}` } }, create: { environment, provider: 'sicredi', externalId: `sicredi:${id}`, fingerprint: id, event: 'PIX_RECEIVED', paymentId: event.txid, externalReference: null, processedAt: now() }, update: {} });
+      const events = new Map();
+      for (const raw of webhookSchema.parse(body).pix) {
+        const event = webhookEvent.safeParse(raw);
+        if (!event.success) continue; // A direct Pix can have no TXID. Keep other events in the same batch.
+        const { txid, endToEndId } = event.data;
+        const id = createHash('sha256').update(`${environment}:${txid}:${endToEndId}`).digest('hex');
+        events.set(id, txid);
       }
+      if (!events.size) return { received: true };
+
+      await serializable(db, async (tx) => {
+        const references = [...new Set(events.values())];
+        const known = await tx.gatewayIntent.findMany({ where: { ...scope, providerReference: { in: references } }, select: { providerReference: true } });
+        if (!known.length) return;
+        const knownReferences = new Set(known.map(({ providerReference }) => providerReference));
+        const at = now();
+        // Payment and refund notifications may use the same E2E. Wake the worker even if already recorded.
+        await tx.gatewayIntent.updateMany({ where: { ...scope, providerReference: { in: [...knownReferences] } }, data: { nextAttemptAt: at, wakeVersion: { increment: 1 } } });
+        await tx.gatewayWebhook.createMany({
+          data: [...events].filter(([, txid]) => knownReferences.has(txid)).map(([id, txid]) => ({
+            environment, provider: 'sicredi', externalId: `sicredi:${id}`, fingerprint: id, event: 'PIX_RECEIVED', paymentId: txid, processedAt: at,
+          })),
+          skipDuplicates: true,
+        });
+      });
       return { received: true };
     },
     async tick() {
@@ -206,10 +226,21 @@ export function createSicrediStore(db, { settings, api, now = () => new Date() }
           if (intent.pixEndToEndId || intent.creationStartedAt) throw fault('SICREDI_CREATION_UNCERTAIN', 'O banco ainda não confirmou esta referência. Nenhuma segunda cobrança será criada.');
           if (cancel) { await write(id, token, { state: 'CANCELED', pixPayload: null }); delay = 86400000; return; }
           intent = await write(id, token, { state: 'CREATING', creationStartedAt: now() });
-          const created = await api.create(intent.providerReference, intent.amountCents, Math.ceil((intent.expiresAt - now()) / 1000), intent.ticketId ? `Ingresso ${intent.ticketId}` : membershipOrder ? `Associacao ${membershipOrder.id}` : `Pedido da loja ${order.number}`);
+          const description = ticket ? `Ingresso ${ticket.id}` : membershipOrder ? `Associacao ${membershipOrder.id}` : `Pedido da loja ${order.number}`;
+          let created;
+          try {
+            created = await api.create(intent.providerReference, intent.amountCents, Math.ceil((intent.expiresAt - now()) / 1000), description);
+          } catch (err) {
+            if (err.sicrediAuthenticationFailure || ['SICREDI_ACCESS_DENIED', 'SICREDI_REJECTED'].includes(err.code)) {
+              await write(id, token, { state: 'QUEUED', creationStartedAt: null });
+            }
+            throw err;
+          }
+          if (created?.txid === intent.providerReference && isPixPayload(created.pixCopiaECola)) {
+            intent = await write(id, token, { pixPayload: created.pixCopiaECola });
+          }
           remote = await checkedRemote(intent);
           if (!remote) throw fault('SICREDI_CREATION_UNCERTAIN', 'Cobrança em conciliação pelo mesmo TXID.');
-          if (!remote.charge.pixCopiaECola && created?.txid === intent.providerReference && typeof created.pixCopiaECola === 'string' && created.pixCopiaECola.startsWith('000201') && created.pixCopiaECola.length <= 4096) remote.charge.pixCopiaECola = created.pixCopiaECola;
         }
         if (cancel && !remote.received && remote.charge.status === 'ATIVA') { await write(id, token, { cancelRequestedAt: intent.cancelRequestedAt || now() }); await api.cancel(intent.providerReference); remote = await checkedRemote(intent); if (!remote) throw fault('SICREDI_CANCEL_UNCERTAIN', 'Cancelamento em conciliação.'); }
         await apply(id, token, remote);
@@ -222,13 +253,14 @@ export function createSicrediStore(db, { settings, api, now = () => new Date() }
           remote = await checkedRemote(intent); if (remote) await apply(id, token, remote);
         }
         intent = await db.gatewayIntent.findUnique({ where: { id } });
-        if (intent.state === 'PENDING' && (!intent.pixPayload || typeof intent.pixPayload !== 'string' || intent.pixPayload.length > 4096 || !intent.pixPayload.startsWith('000201'))) throw fault('SICREDI_QR_UNAVAILABLE', 'O banco ainda não forneceu um Pix copia e cola válido.');
+        if (intent.state === 'PENDING' && !isPixPayload(intent.pixPayload)) throw fault('SICREDI_QR_UNAVAILABLE', 'O banco ainda não forneceu um Pix copia e cola válido.');
         delay = ['RECEIVED', 'PARTIAL_REFUND', 'CANCELED', 'REFUNDED'].includes(intent.state) ? 3600000 : 10000;
         await write(id, token, { failureCode: null });
       } catch (err) {
         delay = 30000;
-        if (err.sicrediAuthenticationFailure || ['SICREDI_ACCESS_DENIED', 'SICREDI_REJECTED'].includes(err.code)) await db.gatewayIntent.updateMany({ where: { id, ...scope, state: 'CREATING', lockToken: token, lockedUntil: { gt: now() } }, data: { state: 'QUEUED', creationStartedAt: null } });
-        await db.gatewayIntent.updateMany({ where: { id, ...scope, lockToken: token, lockedUntil: { gt: now() } }, data: { failureCode: typeof err.code === 'string' && /^(SICREDI_|P[0-9])/.test(err.code) ? err.code : 'SICREDI_RECONCILIATION_FAILED', pixPayload: null } });
+        // Hide payment data while reconciliation is failing, but keep the validated QR
+        // so a later successful COB query that omits pixCopiaECola can restore it.
+        await db.gatewayIntent.updateMany({ where: { id, ...scope, lockToken: token, lockedUntil: { gt: now() } }, data: { failureCode: typeof err.code === 'string' && /^(SICREDI_|P[0-9])/.test(err.code) ? err.code : 'SICREDI_RECONCILIATION_FAILED' } });
       } finally {
         const nextAttemptAt = new Date(now().getTime() + delay);
         await db.gatewayIntent.updateMany({ where: { id, ...scope, lockToken: token }, data: { lockedUntil: null, lockToken: null } });

@@ -1,8 +1,46 @@
 # Pix Sicredi — recebimentos, webhook e devolução
 
-A Sicredi está integrada ao checkout Pix existente de ingressos (`Ticket`) e pedidos da loja. Selecione `PAYMENT_MODE=sicredi`. O app mantém geração de QR local, copia e cola e acompanhamento automático; o painel mantém conciliação e solicitação de devolução. Sicredi é a única integração bancária ativa. Os modos disponíveis são `disabled`, `demo` (local) e `sicredi`. Não há opção de ativar Asaas.
+A Sicredi está integrada ao checkout Pix de ingressos do catálogo atual do app (`Ticket`), pedidos da loja e associação de sócios. Selecione `PAYMENT_MODE=sicredi`. O app mantém geração de QR local, copia e cola e acompanhamento automático; o painel mantém conciliação e solicitação de devolução. Sicredi é a única integração bancária ativa. Os modos disponíveis são `disabled`, `demo` (local) e `sicredi`. Não há opção de ativar Asaas.
 
 O guia de outro projeto foi adaptado à estrutura deste repositório, conferindo os contratos de mTLS/OAuth/COB na [documentação oficial Sicredi](https://developers.sicredi.com.br/public/docs/getting-started-pix) e no [schema Pix do Banco Central](https://github.com/bacen/pix-api/blob/master/openapi.yaml). Certificados, credenciais e nomes de arquivos do outro projeto não foram copiados.
+
+## Ativar Pix na VPS do Sócio Esporte
+
+Use o `.env` da raiz na VPS, onde já estão os dados privados. Confira estes campos:
+
+```dotenv
+PAYMENT_MODE=sicredi
+SICREDI_PIX_ENV=production
+SICREDI_CERTS_DIRECTORY=/etc/nacional/certificados
+SICREDI_PIX_WEBHOOK_URL=https://api-esporte.testes-techcode.shop/v1/payments/webhooks/sicredi
+```
+
+Mantenha o Client ID, o Client Secret, a chave Pix recebedora e o token do webhook já configurados. O caminho acima é a base pública. O comando de registro anexa o token em memória.
+
+Na pasta `/var/www/esporte_app/APP_ESPORTE`, depois de subir a atualização ao Git:
+
+```bash
+git pull
+sudo docker compose up -d --build api web
+sudo docker compose exec -T api node scripts/sicredi-pix.mjs verificar
+sudo docker compose exec -T api npm run payments:webhook
+```
+
+`verificar` confere OAuth nos seis escopos e testa o HTTPS público com um lote vazio, usando ambas as rotas do webhook. Se aparecer `SICREDI_DISABLED`, a API pública ainda está com Pix desligado. Se a API aceitar apenas um token diferente do .env atual, confira se o container foi recriado com o arquivo certo. O registro verifica novamente o callback e confirma o endereço com uma leitura no Sicredi. A saída omite a URL privada e o token.
+
+Depois, faça uma compra de cada tipo no app. Confira o resultado também em **Admin → Pagamentos Pix**.
+
+- **Ingresso**. Escolha um jogo do catálogo do app, reserve um lugar, gere o Pix e aguarde o ingresso em **Meus ingressos**.
+- **Loja**. Confirme um pedido, gere o Pix e aguarde a atualização em **Meus pedidos**. Confira a baixa de estoque.
+- **Sócio**. Escolha um plano e pague o Pix gerado. A associação deve mudar para ativa e liberar o QR na Carteira.
+
+Em produção, essas três compras movimentam dinheiro real. O diagnóstico confirma configuração e alcance do callback. Para verificar a entrega pelo Sicredi após pagar, confira um POST com status 200 no log da API:
+
+```bash
+sudo docker compose logs --since 15m api | grep -F '/v1/payments/webhooks/sicredi/[redacted]'
+```
+
+O teste do próprio comando também produz POST 200, então confira o horário posterior ao pagamento. A conciliação por consultas pode confirmar um pagamento mesmo quando a notificação ainda não chegou.
 
 ## Preparar o ambiente
 
@@ -63,7 +101,7 @@ npm run payments:webhook
 
 O backend atende POST tanto em `/v1/payments/webhooks/sicredi/:token` como em `/v1/payments/webhooks/sicredi/:token/pix`, cobrindo a entrega com sufixo `/pix`. Os logs internos ocultam o token desse caminho. A publicação exige HTTPS e a configuração do proxy/mTLS de entrada requerida pela cooperativa; proteja também os logs do proxy, que não usam o sanitizador do Express.
 
-O comando consulta o cadastro antes de escrever. **Se a chave Pix já estiver apontada para outro projeto, não sobrescreve o webhook.** Nesse caso, mantenha o receptor central existente encaminhando notificações por TXID ou use o polling já incluído aqui. O worker consulta automaticamente as cobranças conhecidas mesmo sem webhook. A assinatura/segredo de webhook do Asaas não é reutilizada na Sicredi.
+O comando testa o callback público antes de consultar o cadastro e escrever. **Se a chave Pix já estiver apontada para outro projeto, não sobrescreve o webhook.** Nesse caso, mantenha o receptor central existente encaminhando notificações por TXID ou use o polling já incluído aqui. O worker consulta automaticamente as cobranças conhecidas mesmo sem webhook. A assinatura/segredo de webhook do Asaas não é reutilizada na Sicredi.
 
 A notificação tem limite de tamanho/lote e segredo no caminho. Ela somente acorda cobranças conhecidas. Valor, nome e status recebidos no webhook não creditam saldo, não emitem ingresso e não consomem estoque. A API consulta o banco autenticada antes de qualquer lançamento.
 
@@ -73,7 +111,7 @@ A notificação tem limite de tamanho/lote e segredo no caminho. Ela somente aco
 2. O worker consulta o mesmo TXID e só cria uma COB quando não existe e a criação não está ambígua. A cobrança usa `PUT /cob/{txid}`, valor decimal com duas casas e `modalidadeAlteracao=0`.
 3. A imagem QR é gerada localmente pelo app a partir de `pixCopiaECola` bancário. Criar cobrança não confirma pagamento. Se a consulta omitir o copia e cola já recebido na criação, o conteúdo bancário anterior é preservado até o fechamento/expiração.
 4. Para confirmar, a API confere status `CONCLUIDA`, TXID, chave recebedora, valor exato e um recebimento. Consulta também `GET /pix/{e2eid}` e confere novamente TXID, E2E, valor e horário válido.
-5. A transação Serializable emite o ingresso ou confirma o pedido/baixa estoque, registra financeiro/auditoria e associa um E2E único. Repetição, polling e webhook não duplicam pagamento ou estoque.
+5. Uma transação emite o ingresso, confirma o pedido e dá baixa no estoque ou ativa a associação. Ela registra a auditoria e associa um E2E único. Repetição, polling e webhook não duplicam pagamento ou estoque.
 
 Timeout/500 não criam novo TXID. A referência continua em conciliação. Falhas definitivas de autenticação/rejeição permitem retomar com o mesmo TXID após corrigir o acesso. Leituras divergentes ou regressão de pagamento não liberam ingresso. Processos possuem lease, token de posse e gravações condicionais; um worker substituído não pode concluir o lançamento.
 
@@ -91,7 +129,7 @@ Repasse semanal e saques existentes permanecem manuais, com registro/comprovante
 
 O painel identifica o provedor dos registros históricos e opera novos pagamentos somente pela Sicredi. Os pagamentos anteriores ficam para consulta, sem ações remotas. Uma cobrança existente não é renomeada para o novo provedor. Reservas com cobrança de outro provedor/ambiente precisam ser conciliadas originalmente antes de uma nova emissão; a interface não exibe QR pagável de provedor inativo. A opção de ativar Asaas foi retirada. Seus serviços, controller e comando de cadastro de webhook não fazem parte da operação atual. Registros anteriores permanecem somente para consulta.
 
-Esta troca do gateway atende ao **checkout existente de `Ticket` e da loja**. Não transforma automaticamente o checkout anterior em `PedidoIngressoV1`/`IngressoV1`. A emissão administrativa V1 permanece separada, conforme [documentação da portaria V1](ingresso-v1.md). Nenhum ingresso antigo foi convertido ou reativado.
+A integração atende ao **checkout existente de `Ticket`, da loja e da associação**. Não transforma automaticamente o checkout anterior em `PedidoIngressoV1`/`IngressoV1`. A emissão administrativa V1 permanece separada, conforme [documentação da portaria V1](ingresso-v1.md). Nenhum ingresso antigo foi convertido ou reativado.
 
 ## Estrutura
 
