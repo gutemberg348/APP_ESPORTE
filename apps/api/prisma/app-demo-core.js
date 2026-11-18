@@ -11,7 +11,7 @@ export function demoMatches(now = new Date()) {
     return { slug: `app-teste-jogo-${index + 1}`, homeTeam: 'Esporte', awayTeam: `Adversário teste ${index + 1}`, startsAt,
       stadium: 'José Cavalcanti · TESTE', competition: 'TESTE — sem evento real', isHome: true, published: true,
       salesEnabled: true, salesOpenAt: now, salesCloseAt: new Date(startsAt.getTime() - 3600000),
-      sectors: { create: [{ name: 'Arquibancada · TESTE', priceCents: 100, capacity: 100 }, { name: 'Cadeiras · TESTE', priceCents: 200, capacity: 30 }] } };
+      sectors: { create: [{ name: 'Arquibancada · TESTE', priceCents: 10, capacity: 100 }, { name: 'Cadeiras · TESTE', priceCents: 200, capacity: 30 }] } };
   });
 }
 

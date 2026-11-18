@@ -10,7 +10,7 @@ export async function seedDemoV1(tx, { tenantSlug, schedule }) {
   if (!tenant.active) throw new Error('O clube está inativo. Ative-o no admin antes de publicar os exemplos.');
   const stadiumId = fixtureId(tenant.id, 'stadium'), salesId = fixtureId(tenant.id, 'sales');
   const specs = [
-    { key: 'arquibancada', nome: '[TESTE APP] Arquibancada', numerado: false, capacidade: 100, preco: 100 },
+    { key: 'arquibancada', nome: '[TESTE APP] Arquibancada', numerado: false, capacidade: 100, preco: 10 },
     { key: 'cadeiras', nome: '[TESTE APP] Cadeiras numeradas', numerado: true, capacidade: 20, preco: 200 },
   ];
   let templatesCreated = 0, stadiumsCreated = 0, salesTemplatesCreated = 0, matchesCreated = 0;

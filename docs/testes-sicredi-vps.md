@@ -174,3 +174,23 @@ Os testes unitários comuns usam mocks e não chamam sua conta. O runner não im
 Depois de validar, habilite `PAYMENT_MODE=sicredi` quando quiser ativar o gateway nas vendas e aplique as variáveis ao servidor. Para validar a emissão, reserve pelo app e pague **a cobrança daquela reserva**: o checkout mantém as próprias transações, reservas e conciliação. A COB `TST` deste runner fica separada e não será vinculada a ingresso/pedido existente.
 
 O teste de webhook aqui é só leitura do cadastro. HTTPS/mTLS de entrada e registro de webhook seguem [Pix Sicredi](sicredi-pix.md); o comando existente preserva um cadastro pertencente a outro projeto.
+## Venda de ingresso com Pix do clube
+
+Após atualizar o código na VPS, execute `sudo docker compose up -d --build api`. A API aplica a migration de preços ao iniciar. Nos jogos **Adversário teste**, selecione **Arquibancada · TESTE** no app ou **[TESTE APP] Arquibancada → Inteira TESTE** na bilheteria. Confira o total de **R$ 0,10** para uma unidade antes de pagar. O preço vale para novas reservas. Um jogo real ou um preço personalizado pelo clube permanece com o valor cadastrado. Em produção o dinheiro é movimentado de verdade.
+
+Para verificar o cadastro do callback, execute `sudo docker compose exec -T api node scripts/sicredi-tests.mjs diagnostico`. Se estiver ausente, o comando de registro é `sudo docker compose exec -T api node scripts/sicredi-pix.mjs webhook`. Para comprovar a entrega dessa venda, pague o Pix, guarde o **protocolo do pagamento** (ID da cobrança na API) e confira o ingresso emitido. O worker também confirma pagamentos por consulta periódica. Para distinguir a notificação recebida, abra o PostgreSQL da VPS:
+
+```bash
+sudo docker compose exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+```
+
+```sql
+\prompt 'Protocolo do pagamento: ' protocolo
+SELECT i.state, i."amountCents", i."pixEndToEndId" IS NOT NULL AS recebimento_confirmado,
+       EXISTS (SELECT 1 FROM "GatewayWebhook" w WHERE w.provider = i.provider
+               AND w.environment = i.environment AND w."paymentId" = i."providerReference"
+               AND w.event = 'PIX_RECEIVED') AS webhook_recebido
+FROM "GatewayIntent" i WHERE i.id = :'protocolo'::uuid AND i.provider = 'sicredi';
+```
+
+O resultado esperado após a conciliação é `RECEIVED`, 10 centavos e os dois indicadores verdadeiros. Se apenas o recebimento estiver confirmado, confira o cadastro e a entrega do callback antes de concluir o teste de webhook.

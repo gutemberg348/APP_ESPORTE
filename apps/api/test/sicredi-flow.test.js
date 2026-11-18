@@ -222,10 +222,10 @@ test('Sicredi durable Pix saga with isolated PostgreSQL, refunds and legacy isol
     const sector = await db.setorEstadioIngressoV1.create({ data: { estadioId: stadium.id, nome: 'Geral', capacidadeFisica: 10 } });
     const game = await db.partidaIngressoV1.create({ data: { estadioId: stadium.id, timeMandante: 'E', timeVisitante: 'V', dataPartida: new Date(Date.now() + 86400000), status: 'PUBLICADA', vendasAtivas: true } });
     const allocation = await db.alocacaoSetorPartidaIngressoV1.create({ data: { partidaId: game.id, setorId: sector.id, capacidadeLiberada: 10 } });
-    const lot = await db.loteIngressoPartidaV1.create({ data: { alocacaoId: allocation.id, nome: 'Inteira', tipoCategoria: 'INTEIRA', precoCentavos: 1250, quantidadeMaxima: 10 } });
+    const lot = await db.loteIngressoPartidaV1.create({ data: { alocacaoId: allocation.id, nome: 'Inteira', tipoCategoria: 'INTEIRA', precoCentavos: 10, quantidadeMaxima: 10 } });
     const seller = await db.user.create({ data: { name: 'Balcão', email: 'counter@local.test', passwordHash: 'test', role: 'TICKET_SELLER' } });
     const counter = createTicketCounter(db, env.TENANT_SLUG, settings);
-    const input = { key: randomUUID(), lotId: lot.id, cpf: '12345678909', unitCents: 1250, quantity: 2, method: 'PIX' };
+    const input = { key: randomUUID(), lotId: lot.id, cpf: '12345678909', unitCents: 10, quantity: 1, method: 'PIX' };
     const order = await counter.sale(seller.id, input);
     assert.equal((await counter.terminalQueue(seller.id, true)).some(row => row.id === order.id), true);
     assert.equal((await counter.terminalQueue(seller.id)).some(row => row.id === order.id), false);
@@ -238,6 +238,8 @@ test('Sicredi durable Pix saga with isolated PostgreSQL, refunds and legacy isol
     assert.equal((await counter.pix(seller.id, input.key)).pixPayload, '000201TEST_ONLY');
     const received = await pay(intent);
     await store.webhook(settings.SICREDI_PIX_WEBHOOK_TOKEN, { pix: [received] });
+    assert.equal(received.valor, '0.10');
+    assert.equal(await db.gatewayWebhook.count({ where: { provider: 'sicredi', paymentId: received.txid, event: 'PIX_RECEIVED' } }), 1);
     assert.equal((await counter.receipt(seller.id, input.key)).statusPagamento, 'PENDENTE');
     await store.process(intent.id); await store.process(intent.id);
     let issued = await counter.receipt(seller.id, input.key);

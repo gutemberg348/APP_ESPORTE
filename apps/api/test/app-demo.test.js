@@ -40,6 +40,21 @@ test('app demo is atomic, repeatable, audited and preserves admin edits, stock a
   const v1 = await db.partidaIngressoV1.findFirst({ include: { alocacoesSetor: { include: { lotes: true } } } });
   assert.equal(v1.status, 'PUBLICADA'); assert.equal(v1.vendasAtivas, true); assert.equal(v1.alocacoesSetor.length, 2);
   assert.ok(v1.alocacoesSetor.every(row => row.lotes.length === 2 && row.lotes.reduce((sum,lote) => sum + lote.quantidadeMaxima,0) === row.capacidadeLiberada));
+  const stand = { name: 'Arquibancada · TESTE', match: { slug: { startsWith: 'app-teste-jogo-' } } };
+  const demoLot = { alocacao: { setor: { nome: '[TESTE APP] Arquibancada' } } };
+  assert.equal(await db.sector.count({ where: { ...stand, priceCents: 10 } }), 6);
+  assert.equal(await db.loteIngressoPartidaV1.count({ where: { ...demoLot, tipoCategoria: 'INTEIRA', precoCentavos: 10 } }), 6);
+  await db.sector.updateMany({ where: stand, data: { priceCents: 100 } });
+  await db.sector.updateMany({ where: { ...stand, match: { slug: 'app-teste-jogo-1' } }, data: { priceCents: 1234 } });
+  for (const [tipoCategoria, precoCentavos] of [['INTEIRA',100],['MEIA',50]]) {
+    await db.loteIngressoPartidaV1.updateMany({ where: { ...demoLot, tipoCategoria }, data: { precoCentavos } });
+  }
+  await pg.exec(await readFile(new URL('20261118200000_demo_pix_ticket_price/migration.sql', migrations), 'utf8'));
+  assert.equal(await db.sector.count({ where: { ...stand, priceCents: 10 } }), 5);
+  assert.equal(await db.sector.count({ where: { ...stand, priceCents: 1234 } }), 1);
+  for (const [tipoCategoria, precoCentavos] of [['INTEIRA',10],['MEIA',5]]) {
+    assert.equal(await db.loteIngressoPartidaV1.count({ where: { ...demoLot, tipoCategoria, precoCentavos } }), 6);
+  }
   const catalog = await createShopStore(db, { settings: {} }).products({ limit: 24, offset: 0 }, false);
   assert.equal(catalog.items.length, 5); assert.ok(catalog.items.every(row => row.images.length && row.variants.some(size => size.available > 0)));
   const stadium = await db.estadioIngressoV1.findFirst();
