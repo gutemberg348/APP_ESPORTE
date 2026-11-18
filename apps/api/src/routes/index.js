@@ -140,6 +140,7 @@ export const routes = [
   { method: 'POST', path: '/v1/payments/pix', handler: pixController.cashPix, private: true },
   { method: 'GET', path: '/v1/payments/intent', handler: pixController.intent, private: true },
   { method: 'GET', path: '/v1/admin/payments', handler: pixController.list, private: true, admin: true },
+  { method: 'POST', path: '/v1/admin/payments/test-webhook', handler: pixController.simulate, private: true, admin: true },
   { method: 'POST', path: '/v1/admin/payments/reconcile', handler: pixController.retry, private: true, admin: true },
   { method: 'POST', path: '/v1/admin/payments/refund', handler: pixController.refund, private: true, admin: true },
   { method: 'POST', path: '/v1/tickets/quote', handler: clubController.quoteTicket, private: true, ticketLimit: 'quote' },

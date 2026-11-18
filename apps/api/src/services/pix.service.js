@@ -2,10 +2,13 @@ import { db } from '../config/database.js';
 import { env } from '../config/env.js';
 import { createSicrediClient } from '../payments/sicredi/client.js';
 import { createSicrediStore } from '../models/sicredi.store.js';
+import { testPixWebhook } from './pix-webhook-test.js';
 import { publicIntent, ticketGeneration } from '../payments/pix-contract.js';
 import { AppError } from '../lib/errors.js';
 
-export const sicrediStore = createSicrediStore(db, { settings: env, api: createSicrediClient(env) });
+const bank = createSicrediClient(env);
+export const sicrediStore = createSicrediStore(db, { settings: env, api: bank });
+export const simulatePixApproval = id => testPixWebhook(db, env, id, { readRegistration: bank.webhook });
 export const currentPixStore = sicrediStore;
 export function createPixQueries(client, settings = env) {
   const render = (row) => {

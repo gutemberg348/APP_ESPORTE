@@ -1,3 +1,4 @@
+import { simulateApproval } from './helpers/pix-approval.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
@@ -62,6 +63,14 @@ test('Sicredi durable Pix saga with isolated PostgreSQL, refunds and legacy isol
   });
   await t.test('webhook is only a wakeup, repeated and forged values cannot issue tickets, E2E reconciliation settles once', async () => {
     const { user, ticket, intent } = await purchase(); await store.process(intent.id);
+    const snapshot = await db.gatewayIntent.findUniqueOrThrow({ where: { id: intent.id } });
+    const simulate = () => simulateApproval(db, settings, intent.id, () => instant, store);
+    assert.deepEqual(await simulate(), { publicCallback: 'ok', registration: 'matched', simulatedState: 'RECEIVED', orderChanged: false });
+    await simulate();
+    assert.deepEqual(await db.gatewayIntent.findUniqueOrThrow({ where: { id: intent.id } }), snapshot);
+    assert.equal((await db.ticket.findUniqueOrThrow({ where: { id: ticket.id } })).status, 'PENDING');
+    assert.equal(await db.ticketFinancial.count({ where: { payment: { ticketId: ticket.id } } }), 0);
+    assert.equal(await db.gatewayWebhook.count({ where: { paymentId: snapshot.providerReference } }), 0);
     const received = await pay(intent);
     const body = { pix: [
       { endToEndId: `E${'b'.repeat(31)}`, valor: '0.01' },
@@ -74,6 +83,7 @@ test('Sicredi durable Pix saga with isolated PostgreSQL, refunds and legacy isol
     assert.equal(await db.ticketPayment.count({ where: { ticketId: ticket.id } }), 0);
     await Promise.all([store.process(intent.id), store.process(intent.id)]);
     const paid = await db.ticket.findUnique({ where: { id: ticket.id }, include: { payment: true, user: true } });
+    await assert.rejects(simulate(), { code: 'PIX_TEST_UNAVAILABLE' });
     assert.equal(paid.status, 'ISSUED'); assert.equal(paid.payment.method, 'SICREDI'); assert.equal(paid.payment.amountCents, 5000); assertTicketPaid(paid);
     assert.equal((await store.ownIntent(user.id, intent.id)).state, 'RECEIVED');
     const financial = await db.ticketFinancial.findUnique({ where: { paymentId: paid.payment.id } });
@@ -162,7 +172,11 @@ test('Sicredi durable Pix saga with isolated PostgreSQL, refunds and legacy isol
     const product = await db.product.create({ data: { name: 'Camisa de teste', active: true, priceCents: 5000, variants: { create: { sku: 'SICREDI-SHOP-TEST', stock: 3 } } }, include: { variants: true } });
     const variant = product.variants[0];
     const order = await db.shopOrder.create({ data: { userId: user.id, requestKey: randomUUID(), requestHash: 'a'.repeat(64), recipient: user.name, phone: '83999999999', address: { pickupAddress: 'Loja' }, deliveryMethod: 'PICKUP', shippingName: 'Retirada', shippingService: 'PICKUP', shippingDays: 0, subtotalCents: 5000, shippingCents: 0, totalCents: 5000, expiresAt: new Date(instant.getTime() + 900000), items: { create: { variantId: variant.id, productName: product.name, variantLabel: variant.label, sku: variant.sku, quantity: 1, unitPriceCents: 5000, costCents: 1000 } } } });
-    const intent = await store.shopPix(user.id, order.id); await store.process(intent.id); await pay(intent); await store.process(intent.id); await store.process(intent.id);
+    const intent = await store.shopPix(user.id, order.id); await store.process(intent.id);
+    assert.equal((await simulateApproval(db, settings, intent.id, () => instant, store)).simulatedState, 'RECEIVED');
+    assert.equal((await db.productVariant.findUniqueOrThrow({ where: { id: variant.id } })).stock, 3);
+    assert.equal(await db.shopPayment.count({ where: { orderId: order.id } }), 0);
+    await pay(intent); await store.process(intent.id); await store.process(intent.id);
     const paid = await db.shopOrder.findUnique({ where: { id: order.id }, include: { payment: true } });
     assert.equal(paid.status, 'PAID'); assert.equal(paid.payment.method, 'SICREDI'); assert.equal((await db.productVariant.findUnique({ where: { id: variant.id } })).stock, 2);
     await store.requestRefund(admin.id, intent.id, 'Devolução de teste da loja'); await store.process(intent.id); await store.process(intent.id);

@@ -10,6 +10,7 @@ export const pixApi = {
   createShop: (token: string, orderId: string) => request<PixIntent>('/shop/pix', { token, method: 'POST', body: { orderId } }),
   intent: (token: string, id: string) => request<PixIntent>(`/payments/intent?id=${encodeURIComponent(id)}`, { token }),
   adminList: (token: string, offset = 0) => request<AdminPixIntent[]>(`/admin/payments?limit=25&offset=${offset}`, { token }),
+  testWebhook: (token: string, id: string) => request<{ publicCallback: 'ok'; registration: 'missing' | 'different' | 'matched' | 'unknown'; simulatedState: 'RECEIVED'; orderChanged: false }>('/admin/payments/test-webhook', { token, method: 'POST', body: { id }, timeoutMs: 90000 }),
   reconcile: (token: string, id: string) => request('/admin/payments/reconcile', { token, method: 'POST', body: { id } }),
   refund: (token: string, id: string, reason: string) => request('/admin/payments/refund', { token, method: 'POST', body: { id, reason } }),
 };

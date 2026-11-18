@@ -16,7 +16,7 @@ const receiptRef = (intent) => `SICREDI:${intent.providerReference}`;
 const owner = (userId) => ({ OR: [{ ticket: { userId } }, { shopOrder: { userId } }, { membershipOrder: { userId } }] });
 const opaque = (prefix) => `${prefix}${randomUUID().replace(/-/g, '')}`;
 const isPixPayload = (value) => typeof value === 'string' && value.length <= 4096 && value.startsWith('000201');
-export function createSicrediStore(db, { settings, api, now = () => new Date() }) {
+export function createSicrediStore(db, { settings, api, now = () => new Date(), transaction = work => serializable(db, work) }) {
   const environment = settings.SICREDI_PIX_ENV;
   const scope = { provider: 'sicredi', environment };
   const active = () => { if (settings.PAYMENT_MODE !== 'sicredi') throw fault('SICREDI_DISABLED', 'O Pix Sicredi não está habilitado.', 503); };
@@ -30,7 +30,7 @@ export function createSicrediStore(db, { settings, api, now = () => new Date() }
   }
   async function createIntent(userId, id, shop = false) {
     active();
-    return serializable(db, async (tx) => {
+    return transaction(async (tx) => {
       const item = shop ? await tx.shopOrder.findFirst({ where: { id, userId }, include: { payment: true } }) : await tx.ticket.findFirst({ where: { id, userId }, include: { payment: true } });
       if (!item || item.deletedAt) throw fault('PAYMENT_NOT_FOUND', 'Pedido não encontrado.', 404);
       const amountCents = shop ? item.totalCents : item.priceCents;
@@ -77,7 +77,7 @@ export function createSicrediStore(db, { settings, api, now = () => new Date() }
     return { total, pending: refunds.some((row) => row.status === 'EM_PROCESSAMENTO') };
   }
   async function apply(id, token, remote) {
-    return serializable(db, async (tx) => {
+    return transaction(async (tx) => {
       const intent = await tx.gatewayIntent.findUnique({ where: { id } }); fence(intent, token);
       const { charge, received } = remote, refunds = refunded(received, intent);
       // A paid observation cannot regress because of a stale provider response.
@@ -160,7 +160,7 @@ export function createSicrediStore(db, { settings, api, now = () => new Date() }
     async adminList({ limit, offset }) { return (await db.gatewayIntent.findMany({ where: scope, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: limit, skip: offset })).map((row) => ({ ...publicIntent(row, now()), providerReference: row.providerReference, pixEndToEndId: row.pixEndToEndId, attempts: row.attempts, updatedAt: row.updatedAt })); },
     async retry(id) { active(); await db.gatewayIntent.updateMany({ where: { id, ...scope }, data: { nextAttemptAt: now(), wakeVersion: { increment: 1 } } }); return { queued: true }; },
     async requestRefund(actorId, id, reason) {
-      active(); return serializable(db, async (tx) => {
+      active(); return transaction(async (tx) => {
         const intent = await tx.gatewayIntent.findFirst({ where: { id, ...scope } });
         if (!intent || !intent.pixEndToEndId || intent.refundedCents >= intent.amountCents) throw fault('SICREDI_REFUND_UNAVAILABLE', 'Não há recebimento confirmado disponível para devolução.');
         await tx.gatewayIntent.update({ where: { id }, data: { refundRequestedAt: intent.refundRequestedAt || now(), state: 'REFUNDING', pixPayload: null, wakeVersion: { increment: 1 }, nextAttemptAt: now() } });
@@ -186,7 +186,7 @@ export function createSicrediStore(db, { settings, api, now = () => new Date() }
       }
       if (!events.size) return { received: true };
 
-      await serializable(db, async (tx) => {
+      await transaction(async (tx) => {
         const references = [...new Set(events.values())];
         const known = await tx.gatewayIntent.findMany({ where: { ...scope, providerReference: { in: references } }, select: { providerReference: true } });
         if (!known.length) return;

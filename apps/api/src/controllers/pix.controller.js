@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { currentPixStore, sicrediStore, pixQueries, pixStoreForIntent } from '../services/pix.service.js';
+import { currentPixStore, sicrediStore, pixQueries, pixStoreForIntent, simulatePixApproval } from '../services/pix.service.js';
 import { paginationSchema } from '../validators/index.js';
 const id = z.object({ id: z.uuid() }).strict();
 const ticket = z.object({ ticketId: z.uuid() }).strict();
@@ -15,6 +15,7 @@ export const pixController = {
   cashPix: async ({ user, body }) => ({ data: await currentPixStore.cashPix(user.id, z.object({ chargeId: z.uuid() }).strict().parse(body).chargeId) }),
   intent: async ({ user, url }) => ({ data: await pixQueries.ownIntent(user.id, id.parse(query(url)).id) }),
   list: async ({ url }) => ({ data: await pixQueries.adminList(paginationSchema.parse(query(url))) }),
+  simulate: async ({ body }) => ({ data: await simulatePixApproval(id.parse(body).id) }),
   retry: async ({ body }) => { const value = id.parse(body).id; return { data: await (await pixStoreForIntent(value)).retry(value) }; },
   refund: async ({ user, body }) => { const value = id.extend({ reason: z.string().trim().min(5).max(500) }).strict().parse(body); return { data: await (await pixStoreForIntent(value.id)).requestRefund(user.id, value.id, value.reason) }; },
   sicrediWebhook: async ({ req, body }) => ({ data: await sicrediStore.webhook(req.params.webhookToken, body) }),

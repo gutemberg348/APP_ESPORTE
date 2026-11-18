@@ -1,22 +1,31 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AppState, View } from 'react-native';
+import { ActivityIndicator, AppState, View } from 'react-native';
+import { Timer, ChevronDown, ChevronUp } from 'lucide-react-native';
 import QRCode from 'react-native-qrcode-svg';
 import * as Clipboard from 'expo-clipboard';
 import type { PixIntent, BillingProfile } from '@nacional/shared/types';
 import { Text, TextInput } from './Typography';
-import { Button, Panel } from './ui';
+import { Button, Panel, TextAction } from './ui';
 import { useSession } from '../providers/SessionProvider';
 import { useTheme } from '../theme/ThemeProvider';
 import { pixApi } from '../services/pix';
 import { messageOf, money } from '../utils/format';
 import { useServerClock } from '../hooks/useServerClock';
 export const pixStates: Record<PixIntent['state'], string> = { QUEUED: 'Preparando seu Pix…', CREATING: 'Gerando cobrança…', PENDING: 'Aguardando pagamento', PROCESSING: 'Pagamento em análise pelo provedor', RECEIVED: 'Pagamento confirmado', REFUNDING: 'Estorno solicitado · aguardando confirmação', REFUNDED: 'Pagamento estornado', CANCELED: 'Cobrança cancelada', REVIEW: 'Pagamento em conciliação', PARTIAL_REFUND: 'Pagamento parcialmente estornado' };
-export function PixCheckout({ ticketId, chargeId, shopOrderId, membershipOrderId, initialIntentId, onChanged }: { ticketId?: string; chargeId?: string; shopOrderId?: string; membershipOrderId?: string; initialIntentId?: string | null; onChanged: () => Promise<unknown> }) {
+export function PixCheckout({ ticketId, chargeId, shopOrderId, membershipOrderId, initialIntentId, reservation, onChanged }: { ticketId?: string; chargeId?: string; shopOrderId?: string; membershipOrderId?: string; initialIntentId?: string | null; reservation?: { expiresAt: string | null; serverTime?: string; instructions: string }; onChanged: () => Promise<unknown> }) {
   const { token, demoMode } = useSession(), { colors } = useTheme();
   const [profile, setProfile] = useState<BillingProfile | null>(null), [intent, setIntent] = useState<PixIntent | null>(null), [document, setDocument] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [copied, setCopied] = useState(false);
   const current = useRef(0), lock = useRef(false), lastState = useRef(''), callback = useRef(onChanged);
-  const { now } = useServerClock(intent?.serverTime);
-  const pixPayload = intent?.pixPayload && Date.parse(intent.expiresAt) > now ? intent.pixPayload : null;
+  const [details, setDetails] = useState(false);
+  const [qrWidth, setQrWidth] = useState(0);
+  const { now } = useServerClock(intent?.serverTime || reservation?.serverTime);
+  const deadlines = [intent?.expiresAt, reservation?.expiresAt].map(value => Date.parse(value || '')).filter(Number.isFinite);
+  const remaining = deadlines.length ? Math.max(0, Math.ceil((Math.min(...deadlines) - now) / 1000)) : null;
+  const expired = remaining === 0;
+  const waiting = !intent || ['QUEUED', 'CREATING', 'PENDING'].includes(intent.state);
+  const pixPayload = intent?.state === 'PENDING' && remaining !== null && !expired ? intent.pixPayload : null;
+  const manual = demoMode || profile?.enabled === false;
+  useEffect(() => { setCopied(false); }, [pixPayload]);
   callback.current = onChanged;
   function accept(value: PixIntent | null) {
     setIntent(value);
@@ -73,26 +82,49 @@ export function PixCheckout({ ticketId, chargeId, shopOrderId, membershipOrderId
     } catch (err) { if (version === current.current) setError(messageOf(err)); }
     finally { lock.current = false; setBusy(false); }
   }
-  if (demoMode || profile?.enabled === false) return null;
-  return <Panel style={{ gap: 14, borderColor: colors.primary, borderRadius: 16 }}>
-    <Text heading style={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>Pagamento Pix</Text>
-    {intent?.failureCode === 'PAYMENT_PROVIDER_NOT_ACTIVE' && <Text style={{ color: colors.danger }}>Este pagamento pertence ao provedor anterior. Fale com o atendimento antes de pagar.</Text>}
-    {profile?.environment === 'sandbox' && <Text style={{ color: colors.gold, fontSize: 12 }}>Ambiente de testes · Pix sandbox sem dinheiro real.</Text>}
-    {!intent && !membershipOrderId && <>
-      {!profile?.configured && <><Text style={{ color: colors.muted, fontSize: 13 }}>Informe o CPF ou CNPJ do pagador para gerar a cobrança.</Text><TextInput accessibilityLabel="CPF ou CNPJ do pagador" value={document} onChangeText={setDocument} keyboardType="number-pad" autoComplete="off" maxLength={25} placeholder="CPF ou CNPJ" placeholderTextColor={colors.muted} style={{ minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, color: colors.text }} /></>}
-      {profile?.documentLast4 && <Text style={{ color: colors.muted, fontSize: 12 }}>Documento cadastrado · final {profile.documentLast4}</Text>}
-      <Button label="Gerar Pix para pagar" loading={busy} disabled={!profile || (!profile.configured && !document.trim())} onPress={() => void generate()} />
+  if (manual && !reservation) return null;
+  const clockColor = remaining !== null && remaining <= 60 ? colors.danger : colors.gold;
+  const qrSize = Math.min(196, Math.floor(qrWidth) - 32);
+  return <Panel style={{ gap: 10, padding: 14, borderRadius: 16, backgroundColor: colors.soft }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'space-between', gap: 8 }}>
+      <Text heading style={{ color: colors.text, fontSize: 17, fontWeight: '800' }}>{manual ? 'Pagamento da reserva' : 'Pagamento Pix'}</Text>
+      {intent && !reservation && <Text heading style={{ color: colors.text, fontWeight: '800', fontSize: 20, lineHeight: 28 }}>{money(intent.amountCents)}</Text>}
+    </View>
+    {waiting && remaining !== null && <View accessible accessibilityLabel={expired ? 'Prazo encerrado' : `Tempo para pagar, ${Math.floor(remaining / 60)} minutos e ${remaining % 60} segundos`}
+      style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, borderRadius: 12, backgroundColor: colors.surface, paddingHorizontal: 12, paddingVertical: 8 }}>
+      <Timer size={19} color={clockColor} />
+      <Text style={{ color: colors.muted, fontSize: 13, flexGrow: 1 }}>{expired ? 'Prazo encerrado' : 'Tempo para pagar'}</Text>
+      <Text heading style={{ color: clockColor, fontWeight: '800', fontSize: 25, lineHeight: 34, fontVariant: ['tabular-nums'] }}>
+        {String(Math.floor(remaining / 60)).padStart(2, '0')}:{String(remaining % 60).padStart(2, '0')}
+      </Text>
+    </View>}
+    {manual ? <Text style={{ color: colors.muted, fontSize: 14 }}>{reservation?.instructions || 'Consulte o clube com o número do pedido.'}</Text> : <>
+      {profile?.environment === 'sandbox' && <Text style={{ color: colors.gold, fontSize: 12 }}>Ambiente de testes · sem dinheiro real</Text>}
+      {!profile && !intent && !error && <ActivityIndicator accessibilityLabel="Carregando pagamento" color={colors.primary} />}
+      {profile && !intent && !membershipOrderId && !expired && <>
+        {!profile.configured && <TextInput accessibilityLabel="CPF ou CNPJ do pagador" value={document} onChangeText={setDocument} keyboardType="number-pad" autoComplete="off" maxLength={25} placeholder="CPF ou CNPJ do pagador" placeholderTextColor={colors.muted} style={{ minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, color: colors.text }} />}
+        {profile.documentLast4 && <Text style={{ color: colors.muted, fontSize: 12 }}>Documento final {profile.documentLast4}</Text>}
+        <Button label="Gerar Pix" loading={busy} disabled={!profile.configured && !document.trim()} onPress={() => void generate()} />
+      </>}
+      {intent && <>
+        {(!pixPayload && !(expired && intent.state === 'PENDING')) && <Text accessibilityLiveRegion="polite" style={{ color: colors.text, fontWeight: '700' }}>{pixStates[intent.state]}</Text>}
+        {pixPayload && <>
+          <View onLayout={event => setQrWidth(event.nativeEvent.layout.width)} style={{ alignItems: 'center' }}>
+            {qrSize > 0 && <View accessible accessibilityLabel="QR Code para pagar com Pix" style={{ padding: 16, backgroundColor: '#fff', borderRadius: 12 }}>
+              <QRCode value={pixPayload} size={qrSize} color="#111111" backgroundColor="#ffffff" />
+            </View>}
+          </View>
+          <Button label={copied ? 'Código Pix copiado ✓' : 'Copiar código Pix'} onPress={() => void Clipboard.setStringAsync(pixPayload).then(() => setCopied(true)).catch(() => setError('Não foi possível copiar o Pix. Tente novamente.'))} />
+          <Text style={{ color: colors.muted, fontSize: 12, textAlign: 'center' }}>Confirmação automática após o pagamento.</Text>
+        </>}
+        {intent.failureCode === 'PAYMENT_PROVIDER_NOT_ACTIVE' && <Text style={{ color: colors.danger }}>Cobrança de outro provedor. Consulte o clube antes de pagar.</Text>}
+        {(intent.state === 'REVIEW' || (intent.failureCode?.startsWith('SICREDI_') && waiting)) && <Text style={{ color: colors.gold, fontSize: 13 }}>Aguarde a conferência do banco antes de pagar novamente.</Text>}
+        {intent.state === 'RECEIVED' && <Text style={{ color: colors.muted, fontSize: 13 }}>{membershipOrderId ? 'Carteirinha disponível na aba Carteira.' : ticketId ? 'Ingresso disponível em Meus ingressos.' : shopOrderId ? 'Acompanhe a entrega em Meus pedidos.' : 'Consulte o cashback no extrato.'}</Text>}
+        {intent.refundedCents > 0 && <Text style={{ color: colors.muted, fontSize: 13 }}>Valor estornado · {money(intent.refundedCents)}</Text>}
+        <TextAction icon={details ? ChevronUp : ChevronDown} label={details ? 'Ocultar protocolo' : 'Ver protocolo'} onPress={() => setDetails(!details)} />
+        {details && <Text selectable style={{ color: colors.muted, fontSize: 13 }}>{intent.id}</Text>}
+      </>}
+      {!!error && <><Text accessibilityRole="alert" style={{ color: colors.danger, fontSize: 13 }}>{error}</Text><Button secondary label="Consultar novamente" onPress={() => { if (token) void load(token, current.current); }} /></>}
     </>}
-    {intent && <>
-      <Text accessibilityRole="alert" style={{ color: intent.state === 'RECEIVED' ? colors.primary : colors.gold, fontWeight: '700' }}>{pixStates[intent.state]}</Text>
-      <Text style={{ color: colors.text }}>{money(intent.amountCents)}</Text>
-      {pixPayload && <><View style={{ alignSelf: 'center', padding: 16, backgroundColor: '#fff', borderRadius: 12 }}><QRCode value={pixPayload} size={190} color="#111111" backgroundColor="#ffffff" /></View><Text style={{ color: colors.muted, fontSize: 13 }}>Leia com o app do seu banco ou use Pix Copia e Cola.</Text><Button label={copied ? 'Pix copiado' : 'Copiar Pix'} onPress={() => void Clipboard.setStringAsync(pixPayload).then(() => setCopied(true)).catch(() => setError('Não foi possível copiar o Pix.'))} /><Text selectable numberOfLines={3} style={{ color: colors.muted, fontSize: 10 }}>{pixPayload}</Text></>}
-      {intent.failureCode?.startsWith('SICREDI_') && ['QUEUED', 'CREATING', 'PENDING', 'REVIEW'].includes(intent.state) && <Text style={{ color: colors.gold, fontSize: 13 }}>Estamos conferindo esta cobrança com o Sicredi. Aguarde a próxima atualização antes de pagar.</Text>}
-      {intent.state === 'RECEIVED' ? <Text style={{ color: colors.primary, fontSize: 13 }}>{membershipOrderId ? 'Associação ativada. Sua carteirinha está na aba Carteira.' : ticketId ? 'Seu ingresso foi emitido automaticamente. Ele está em Meus ingressos.' : shopOrderId ? 'Pagamento confirmado. Acompanhe a preparação e entrega em Meus pedidos.' : 'Recebimento e divisão confirmados. Confira o cashback no extrato.'}</Text> : <Text style={{ color: colors.muted, fontSize: 12 }}>A tela consulta a confirmação automaticamente. Prazo da reserva: {new Date(intent.expiresAt).toLocaleString('pt-BR', { timeZone: 'America/Fortaleza' })} (Patos). Não pague após esse horário.</Text>}
-      {intent.refundedCents > 0 && <Text style={{ color: colors.muted, fontSize: 13 }}>Estorno confirmado: {money(intent.refundedCents)}</Text>}
-      {intent.state === 'REVIEW' && <Text style={{ color: colors.muted, fontSize: 12 }}>Estamos conferindo a cobrança no provedor. Não gere outro pagamento. Se persistir, informe o protocolo ao atendimento.</Text>}
-      <Text selectable style={{ color: colors.muted, fontSize: 10 }}>Protocolo do pagamento: {intent.id}</Text>
-    </>}
-    {!!error && <><Text accessibilityRole="alert" style={{ color: colors.danger, fontSize: 13 }}>{error}</Text><Button secondary label="Consultar novamente" onPress={() => { if (token) void load(token, current.current); }} /></>}
   </Panel>;
 }

@@ -14,6 +14,18 @@ export function Button({ label, onPress, loading, gold = false, disabled = false
     <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.button, secondary && { borderWidth: 1, borderColor: colors.border }]}>{loading ? <ActivityIndicator color={ink} /> : <Text style={{ color: ink, fontWeight: '700', textAlign: 'center' }}>{label}</Text>}</LinearGradient>
   </Pressable>;
 }
+export function TextAction({ icon: Icon, label, accessibilityLabel, onPress, danger, disabled }: {
+  icon: LucideIcon; label: string; accessibilityLabel?: string; onPress: () => void; danger?: boolean; disabled?: boolean;
+}) {
+  const { colors } = useTheme();
+  const color = danger ? colors.danger : colors.muted;
+  return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel || label} disabled={disabled}
+    accessibilityState={{ disabled: !!disabled }} onPress={onPress}
+    style={({ pressed }) => ({ alignSelf: 'flex-start', minHeight: 44, maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 7, opacity: disabled || pressed ? 0.5 : 1 })}>
+    <Icon size={16} color={color} /><Text style={{ color, fontSize: 13, flexShrink: 1, fontWeight: '600' }}>{label}</Text>
+  </Pressable>;
+}
+
 export function Panel({ children, style }: React.PropsWithChildren<{ style?: StyleProp<ViewStyle> }>) {
   const { colors, variant } = useTheme();
   return <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }, variant === 'admin' && { borderRadius: 10, padding: 20 }, style]}>{children}</View>;

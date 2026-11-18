@@ -1,4 +1,5 @@
 import { AppError } from '../src/lib/errors.js';
+import { simulateApproval } from './helpers/pix-approval.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -74,6 +75,9 @@ test('membership Pix activates only confirmed payments, preserves snapshots and 
   await assert.rejects(createPixQueries(db,settings).ownIntent(admin.id,order.intentId), { code: 'PAYMENT_NOT_FOUND' });
   await bank.process(order.intentId);
   assert.equal((await bank.ownIntent(user.id,order.intentId)).state,'PENDING');
+  assert.equal((await simulateApproval(db, settings, order.intentId, () => instant, bank)).simulatedState, 'RECEIVED');
+  assert.equal(await db.membership.count({ where: { userId: user.id } }), 0);
+  assert.equal((await db.membershipOrder.findUniqueOrThrow({ where: { id: order.id } })).status, 'PENDING');
   await db.plan.update({ where: { id: plan.id }, data: { priceCents: 5990, durationDays: 365 } });
   await paid(order, { horario: new Date(Math.floor(instant.getTime()/1000)*1000).toISOString() }); await bank.process(order.intentId);
   const membership = await db.membership.findUnique({ where: { userId: user.id } });
