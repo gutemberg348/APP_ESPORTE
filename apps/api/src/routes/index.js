@@ -23,6 +23,8 @@ export const routes = [
   { method: 'GET', path: '/v1/membership/orders', handler: membershipController.orders, private: true },
   { method: 'POST', path: '/v1/membership/checkout', handler: membershipController.checkout, private: true, membershipLimit: 'checkout' },
   { method: 'POST', path: '/v1/membership/verify', handler: membershipController.verify, private: true, membershipCard: true, membershipLimit: 'verify' },
+  { method: 'GET', path: '/v1/stadium/clock', handler: () => ({ data: { epochMs: Date.now() } }) },
+  { method: 'POST', path: '/v1/invitations/business', handler: invitationController.submitBusiness, authLimit: true },
   { method: 'GET', path: '/v1/me/invitation', handler: invitationController.link, private: true },
   { method: 'GET', path: '/v1/auth/social/providers', handler: socialAuthController.providers },
   { method: 'POST', path: '/v1/auth/social/start', handler: socialAuthController.start, authLimit: true },

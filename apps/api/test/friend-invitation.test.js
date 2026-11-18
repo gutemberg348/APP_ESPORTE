@@ -6,6 +6,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/client/index.js';
+import { submitBusinessInvitation } from '../src/models/friend-invitation.js';
 import { createAuthModel } from '../src/models/auth.model.js';
 import { createSocialAuthModel } from '../src/models/social-auth.model.js';
 import { registerSchema } from '../src/validators/index.js';
@@ -23,6 +24,13 @@ test('invitation attribution is transactional, new-account only, supporter only 
   const owner = await db.user.create({ data: user('owner@test.local') });
   const other = await db.user.create({ data: user('other@test.local') });
   const staff = await db.user.create({ data: { ...user('staff@test.local'), role: 'GATE' } });
+  const business = { code: owner.referralCode, name: 'Loja do Estádio', contact: 'loja@example.test' };
+  await submitBusinessInvitation(db, business);
+  await submitBusinessInvitation(db, business);
+  assert.equal(await db.referral.count({ where: { userId: owner.id, kind: 'BUSINESS' } }), 1);
+  for (const code of [randomUUID(), staff.referralCode]) {
+    await assert.rejects(submitBusinessInvitation(db, { ...business, code }), { code: 'INVALID_BUSINESS_INVITATION' });
+  }
   const model = createAuthModel(db);
   const first = await model.register(user('invited@test.local'), session(), owner.referralCode);
   assert.equal(first.user.referredById, owner.id);

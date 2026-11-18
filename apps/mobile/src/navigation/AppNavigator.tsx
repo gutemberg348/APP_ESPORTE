@@ -31,7 +31,7 @@ import { SecurityScreen } from '../screens/SecurityScreen';
 import { ShopScreen } from '../screens/ShopScreen';
 import { Crest } from '../components/Crest';
 import { Text } from '../components/Typography';
-import { ReferralSheet } from '../components/ReferralSheet';
+import { BusinessInvitationPage, ReferralSheet } from '../components/ReferralSheet';
 import { FeatureSheet } from '../components/FeatureSheet';
 import { PartnerSheet } from '../components/PartnerSheet';
 import { StadiumModal } from '../components/StadiumModal';
@@ -45,6 +45,12 @@ export function AppNavigator() {
   const { portal, navigate } = useWebPortal();
   const recovery = usePasswordRecoveryLink();
   if (recovery.link) return <PasswordResetScreen {...recovery.link} onDone={() => { const destination = recovery.link!.portal; void clearSession().then(() => { recovery.clear(); navigate(destination === 'ADMIN' ? 'admin' : 'app'); }); }} />;
+  if (Platform.OS === 'web' && portal === 'business') {
+    const refs = new URL(window.location.href).searchParams.getAll('ref');
+    return <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <BusinessInvitationPage key={refs.join(',')} code={refs.length === 1 ? refs[0]! : null} onDone={() => navigate('app')} />
+    </SafeAreaView>;
+  }
   if (member?.role === 'CASHIER') return <PaymentsProvider><CashierScreen /></PaymentsProvider>;
   if (Platform.OS === 'web' && portal === 'admin' && !member && !demoMode) return <AdminLoginScreen loading={loading} bootError={bootError} onRetry={() => void retry()} onOpenApp={() => navigate('app')} />;
   if (Platform.OS === 'web' && portal === 'gate' && member && !['GATE', 'ADMIN'].includes(member.role)) return <View style={[layout.center, { gap: 16, padding: 24 }]}><Text>Esta área exige uma conta de portaria ou administrador.</Text><Button label="Voltar ao aplicativo" onPress={() => navigate('app')} /><Button secondary label="Trocar conta" onPress={() => void clearSession()} /></View>;

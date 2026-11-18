@@ -6,6 +6,8 @@ import { AppError } from '../../lib/errors.js';
 
 export function createAccessMiddleware(authenticate) {
   const limit = createRateLimiter();
+  // Hundreds of phones on stadium Wi-Fi can share one public IP. The clock never queries the DB.
+  const clockLimit = createRateLimiter({ max: 12000 });
   const authLimit = createRateLimiter({ max: 10, windowMs: 15 * 60000 });
   const refreshLimit = createRateLimiter({ max: 60, windowMs: 15 * 60000 });
   const gateLimit = createRateLimiter({ max: 90, windowMs: 60000 });
@@ -23,7 +25,8 @@ export function createAccessMiddleware(authenticate) {
   }
   return {
     general(req, res, next) {
-      enforce(res, limit(req.ip || req.socket.remoteAddress || 'unknown'), 60, 'RATE_LIMIT', 'Muitas requisições. Aguarde um minuto.');
+      const budget = req.method === 'GET' && req.path === '/v1/stadium/clock' ? clockLimit : limit;
+      enforce(res, budget(req.ip || req.socket.remoteAddress || 'unknown'), 60, 'RATE_LIMIT', 'Muitas requisições. Aguarde um minuto.');
       next();
     },
     route: (route) => async (req, res, next) => {

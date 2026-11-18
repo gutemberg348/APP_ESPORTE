@@ -17,7 +17,7 @@ Somente cadastro novo recebe referredById. Login normal ou social existente nao 
 Nao concede pontos, cashback, dinheiro ou associacao automaticamente.
 
 O app guarda o primeiro convite valido por ate 30 dias no dispositivo/navegador. Limpa depois de login/cadastro bem-sucedido. Link abre a versao web /app. Tambem reconhece nacional://invite?ref=UUID quando recebido pelo app instalado; nao implementa atribuicao apos instalar pela loja nem Android App Links/iOS Universal Links.
-BUSINESS e PARTNER continuam no formulario de indicacao comercial. Registros FRIEND antigos em Referral sao preservados.
+O convite de comercio usa GET /v1/me/invitation?kind=business. O lojista abre /app/parceiro?ref=UUID e envia nome e contato pelo POST /v1/invitations/business. Referral registra kind BUSINESS com userId do indicador. Envios identicos pelo mesmo convite contam uma vez. A solicitacao direta de parceria continua com kind PARTNER.
 
 DEPLOY (apos subir estas alteracoes e dar git pull na pasta deste projeto):
 sudo docker compose up -d --build api web
