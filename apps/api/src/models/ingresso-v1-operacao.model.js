@@ -1,3 +1,5 @@
+import { releaseExpiredCounterOrders } from './counter-reservation.js';
+import { serializable } from '../lib/business-rules.js';
 import { signTicketV1Token } from '../lib/ingresso-v1-token.js';
 import { gateV1Service } from '../services/gate-v1.service.js';
 import { db } from '../config/database.js';
@@ -221,11 +223,189 @@ const ingressoInclude = {
     select: {
       id: true,
       valorTotalCentavos: true,
+      metodoBalcao: true,
+      _count: { select: { ingressos: true } },
+      usuario: { select: { name: true } },
       statusPagamento: true,
       criadoEm: true,
     },
   },
 };
+
+export async function issueTicketInTransaction(tx, actorId, input, order) {
+  const { partidaId, alocacaoId, loteId, nomeTitular, cpfTitular = null, blocoEscolhido = null, fileiraEscolhida = null, assentoEscolhido = null } = input;
+  const tenantId = await getTenantId(tx);
+  const alocacao = await tx.alocacaoSetorPartidaIngressoV1.findFirst({
+    where: {
+      id: alocacaoId,
+      partidaId,
+      partida: { estadio: { tenantId } },
+    },
+    include: {
+      partida: true,
+      setor: {
+        include: {
+          template: {
+            include: {
+              nivelRegras: { include: { excecoes: true } },
+            },
+          },
+        },
+      },
+      lotes: true,
+    },
+  });
+  if (!alocacao) {
+    throw new AppError(404, 'ALOCACAO_NAO_ENCONTRADA', 'Setor da partida não encontrado.');
+  }
+
+  const saldoSetor =
+    alocacao.capacidadeLiberada - alocacao.quantidadeVendida - alocacao.quantidadeReservada;
+  if (saldoSetor < 1) {
+    throw new AppError(409, 'SETOR_ESGOTADO', 'A capacidade liberada deste setor está esgotada.');
+  }
+
+  const lote = alocacao.lotes.find((l) => l.id === loteId) || (!loteId && alocacao.lotes[0]);
+  if (!lote) {
+    throw new AppError(404, 'LOTE_NAO_ENCONTRADO', 'Lote de ingresso não encontrado para este setor.');
+  }
+  if (lote.quantidadeVendida + lote.quantidadeReservada >= lote.quantidadeMaxima) {
+    throw new AppError(409, 'LOTE_ESGOTADO', 'A cota deste lote está esgotada.');
+  }
+
+  let numBloco = blocoEscolhido !== null && blocoEscolhido !== undefined ? Number(blocoEscolhido) : null;
+  let fileiraStr = fileiraEscolhida ? String(fileiraEscolhida).trim().toUpperCase() : null;
+  let numAssento =
+    assentoEscolhido !== null && assentoEscolhido !== undefined ? Number(assentoEscolhido) : null;
+
+  if (alocacao.setor.numerado) {
+    if (!numBloco || !fileiraStr || !numAssento) {
+      throw new AppError(
+        422,
+        'ASSENTO_OBRIGATORIO',
+        'Este setor possui assento marcado. Escolha o Bloco, a Fileira e o Número do assento.'
+      );
+    }
+
+    const regras = extrairRegrasNivelDoSetor(alocacao.setor);
+    let blocoValido = null;
+    for (const r of regras) {
+      const ini = Math.min(r.blocoInicio, r.blocoFim);
+      const fim = Math.max(r.blocoInicio, r.blocoFim);
+      if (numBloco >= ini && numBloco <= fim) {
+        const ex = (r.excecoes || []).find((e) => Number(e.numeroBloco) === numBloco);
+        const maxCadeiras = ex ? ex.cadeirasPorFileira : r.cadeirasPorFileira;
+        const fileirasValidas = listarFileiras(r.fileiraInicio, r.fileiraFim);
+        blocoValido = { maxCadeiras, fileirasValidas };
+        break;
+      }
+    }
+
+    if (!blocoValido) {
+      throw new AppError(422, 'BLOCO_INVALIDO', `O Bloco ${numBloco} não pertence às regras deste setor.`);
+    }
+    if (!blocoValido.fileirasValidas.includes(fileiraStr)) {
+      throw new AppError(
+        422,
+        'FILEIRA_INVALIDA',
+        `A fileira ${fileiraStr} não existe no Bloco ${numBloco}.`
+      );
+    }
+    if (numAssento < 1 || numAssento > blocoValido.maxCadeiras) {
+      throw new AppError(
+        422,
+        'ASSENTO_INVALIDO',
+        `O assento ${numAssento} excede o limite de ${blocoValido.maxCadeiras} cadeiras da fileira ${fileiraStr} no Bloco ${numBloco}.`
+      );
+    }
+
+    const ocupado = await tx.ingressoV1.findFirst({
+      where: {
+        alocacaoId,
+        blocoEscolhido: numBloco,
+        fileiraEscolhida: fileiraStr,
+        assentoEscolhido: numAssento,
+        status: { in: ['RESERVADO', 'VENDIDO', 'UTILIZADO'] },
+      },
+    });
+    if (ocupado) {
+      throw new AppError(
+        409,
+        'ASSENTO_JA_OCUPADO',
+        `O assento Bloco ${numBloco} · Fileira ${fileiraStr} · Cadeiras ${numAssento} já está ocupado.`
+      );
+    }
+  } else {
+    numBloco = null;
+    fileiraStr = null;
+    numAssento = null;
+  }
+
+  const chaveQr = signTicketV1Token({
+    partidaId,
+    alocacaoId,
+    blocoEscolhido: numBloco,
+    fileiraEscolhida: fileiraStr,
+    assentoEscolhido: numAssento,
+    tipoValidacao: alocacao.setor.tipoValidacao || 'QR_CODE_ESTATICO',
+  }, env.TICKET_QR_SECRET);
+
+  const reserved = order?.statusPagamento === 'PENDENTE';
+  const counter = reserved ? 'quantidadeReservada' : 'quantidadeVendida';
+  const pedido = order || await tx.pedidoIngressoV1.create({
+    data: {
+      usuarioId: actorId,
+      partidaId,
+      valorTotalCentavos: lote.precoCentavos,
+      statusPagamento: 'PAGO',
+    },
+  });
+
+  await tx.alocacaoSetorPartidaIngressoV1.update({
+    where: { id: alocacaoId },
+    data: {
+      [counter]: { increment: 1 },
+      versao: { increment: 1 },
+    },
+  });
+
+  await tx.loteIngressoPartidaV1.update({
+    where: { id: lote.id },
+    data: { [counter]: { increment: 1 } },
+  });
+
+  const createdTicket = await tx.ingressoV1.create({
+    data: {
+      partidaId,
+      alocacaoId,
+      loteId: lote.id,
+      pedidoId: pedido.id,
+      blocoEscolhido: numBloco,
+      fileiraEscolhida: fileiraStr,
+      assentoEscolhido: numAssento,
+      nomeTitular: nomeTitular.trim(),
+      cpfTitular: cpfTitular?.trim() || null,
+      status: reserved ? 'RESERVADO' : 'VENDIDO',
+      chaveQr,
+    },
+    include: ingressoInclude,
+  });
+
+  await audit(
+    actorId,
+    reserved ? 'INGRESSO_V1_RESERVADO' : 'INGRESSO_V1_EMITIDO',
+    createdTicket.id,
+    {
+      setor: createdTicket.alocacao.setor.nome,
+      bloco_escolhido: numBloco,
+      fileira_escolhida: fileiraStr,
+      assento_escolhido: numAssento,
+    },
+    tx
+  );
+
+  return createdTicket;
+}
 
 export const ingressoV1OperacaoModel = {
   // =========================================================================
@@ -740,193 +920,9 @@ export const ingressoV1OperacaoModel = {
     });
   },
 
-  async issueTicket(
-    actorId,
-    {
-      partidaId,
-      alocacaoId,
-      loteId,
-      nomeTitular,
-      cpfTitular = null,
-      blocoEscolhido = null,
-      fileiraEscolhida = null,
-      assentoEscolhido = null,
-    }
-  ) {
-    const tenantId = await getTenantId();
-    const alocacao = await db.alocacaoSetorPartidaIngressoV1.findFirst({
-      where: {
-        id: alocacaoId,
-        partidaId,
-        partida: { estadio: { tenantId } },
-      },
-      include: {
-        partida: true,
-        setor: {
-          include: {
-            template: {
-              include: {
-                nivelRegras: { include: { excecoes: true } },
-              },
-            },
-          },
-        },
-        lotes: true,
-      },
-    });
-    if (!alocacao) {
-      throw new AppError(404, 'ALOCACAO_NAO_ENCONTRADA', 'Setor da partida não encontrado.');
-    }
-
-    const saldoSetor =
-      alocacao.capacidadeLiberada - alocacao.quantidadeVendida - alocacao.quantidadeReservada;
-    if (saldoSetor < 1) {
-      throw new AppError(409, 'SETOR_ESGOTADO', 'A capacidade liberada deste setor está esgotada.');
-    }
-
-    const lote = alocacao.lotes.find((l) => l.id === loteId) || alocacao.lotes[0];
-    if (!lote) {
-      throw new AppError(404, 'LOTE_NAO_ENCONTRADO', 'Lote de ingresso não encontrado para este setor.');
-    }
-    if (lote.quantidadeVendida >= lote.quantidadeMaxima) {
-      throw new AppError(409, 'LOTE_ESGOTADO', 'A cota deste lote está esgotada.');
-    }
-
-    let numBloco = blocoEscolhido !== null && blocoEscolhido !== undefined ? Number(blocoEscolhido) : null;
-    let fileiraStr = fileiraEscolhida ? String(fileiraEscolhida).trim().toUpperCase() : null;
-    let numAssento =
-      assentoEscolhido !== null && assentoEscolhido !== undefined ? Number(assentoEscolhido) : null;
-
-    if (alocacao.setor.numerado) {
-      if (!numBloco || !fileiraStr || !numAssento) {
-        throw new AppError(
-          422,
-          'ASSENTO_OBRIGATORIO',
-          'Este setor possui assento marcado. Escolha o Bloco, a Fileira e o Número do assento.'
-        );
-      }
-
-      const regras = extrairRegrasNivelDoSetor(alocacao.setor);
-      let blocoValido = null;
-      for (const r of regras) {
-        const ini = Math.min(r.blocoInicio, r.blocoFim);
-        const fim = Math.max(r.blocoInicio, r.blocoFim);
-        if (numBloco >= ini && numBloco <= fim) {
-          const ex = (r.excecoes || []).find((e) => Number(e.numeroBloco) === numBloco);
-          const maxCadeiras = ex ? ex.cadeirasPorFileira : r.cadeirasPorFileira;
-          const fileirasValidas = listarFileiras(r.fileiraInicio, r.fileiraFim);
-          blocoValido = { maxCadeiras, fileirasValidas };
-          break;
-        }
-      }
-
-      if (!blocoValido) {
-        throw new AppError(422, 'BLOCO_INVALIDO', `O Bloco ${numBloco} não pertence às regras deste setor.`);
-      }
-      if (!blocoValido.fileirasValidas.includes(fileiraStr)) {
-        throw new AppError(
-          422,
-          'FILEIRA_INVALIDA',
-          `A fileira ${fileiraStr} não existe no Bloco ${numBloco}.`
-        );
-      }
-      if (numAssento < 1 || numAssento > blocoValido.maxCadeiras) {
-        throw new AppError(
-          422,
-          'ASSENTO_INVALIDO',
-          `O assento ${numAssento} excede o limite de ${blocoValido.maxCadeiras} cadeiras da fileira ${fileiraStr} no Bloco ${numBloco}.`
-        );
-      }
-
-      const ocupado = await db.ingressoV1.findFirst({
-        where: {
-          alocacaoId,
-          blocoEscolhido: numBloco,
-          fileiraEscolhida: fileiraStr,
-          assentoEscolhido: numAssento,
-          status: { in: ['RESERVADO', 'VENDIDO', 'UTILIZADO'] },
-        },
-      });
-      if (ocupado) {
-        throw new AppError(
-          409,
-          'ASSENTO_JA_OCUPADO',
-          `O assento Bloco ${numBloco} · Fileira ${fileiraStr} · Cadeiras ${numAssento} já está ocupado.`
-        );
-      }
-    } else {
-      numBloco = null;
-      fileiraStr = null;
-      numAssento = null;
-    }
-
-    const chaveQr = signTicketV1Token({
-      partidaId,
-      alocacaoId,
-      blocoEscolhido: numBloco,
-      fileiraEscolhida: fileiraStr,
-      assentoEscolhido: numAssento,
-      tipoValidacao: alocacao.setor.tipoValidacao || 'QR_CODE_ESTATICO',
-    }, env.TICKET_QR_SECRET);
-
-    const ingresso = await db.$transaction(async (tx) => {
-      const pedido = await tx.pedidoIngressoV1.create({
-        data: {
-          usuarioId: actorId,
-          partidaId,
-          valorTotalCentavos: lote.precoCentavos,
-          statusPagamento: 'PAGO',
-        },
-      });
-
-      await tx.alocacaoSetorPartidaIngressoV1.update({
-        where: { id: alocacaoId },
-        data: {
-          quantidadeVendida: { increment: 1 },
-          versao: { increment: 1 },
-        },
-      });
-
-      await tx.loteIngressoPartidaV1.update({
-        where: { id: lote.id },
-        data: { quantidadeVendida: { increment: 1 } },
-      });
-
-      const createdTicket = await tx.ingressoV1.create({
-        data: {
-          partidaId,
-          alocacaoId,
-          loteId: lote.id,
-          pedidoId: pedido.id,
-          blocoEscolhido: numBloco,
-          fileiraEscolhida: fileiraStr,
-          assentoEscolhido: numAssento,
-          nomeTitular: nomeTitular.trim(),
-          cpfTitular: cpfTitular?.trim() || null,
-          status: 'VENDIDO',
-          chaveQr,
-        },
-        include: ingressoInclude,
-      });
-
-      await audit(
-        actorId,
-        'INGRESSO_V1_EMITIDO',
-        createdTicket.id,
-        {
-          chaveQr,
-          setor: createdTicket.alocacao.setor.nome,
-          bloco_escolhido: numBloco,
-          fileira_escolhida: fileiraStr,
-          assento_escolhido: numAssento,
-        },
-        tx
-      );
-
-      return createdTicket;
-    });
-
-    return ingresso;
+  async issueTicket(actorId, input) {
+    await releaseExpiredCounterOrders(db, env.TENANT_SLUG, input.partidaId);
+    return serializable(db, tx => issueTicketInTransaction(tx, actorId, input));
   },
 
   async cancelTicket(actorId, id) {
@@ -940,6 +936,9 @@ export const ingressoV1OperacaoModel = {
     if (current.status === 'CANCELADO') {
       return db.ingressoV1.findUnique({ where: { id }, include: ingressoInclude });
     }
+    if (current.status === 'RESERVADO' && current.pedidoId && await db.pedidoIngressoV1.count({ where: { id: current.pedidoId, chaveBalcao: { not: null } } })) {
+      throw new AppError(409, 'COUNTER_PENDING', 'O vendedor pode cancelar esta reserva na bilheteria. Ela também vence automaticamente.');
+    }
     if (current.status === 'UTILIZADO') {
       throw new AppError(
         409,
@@ -949,6 +948,15 @@ export const ingressoV1OperacaoModel = {
     }
 
     return db.$transaction(async (tx) => {
+      const changed = await tx.ingressoV1.updateMany({
+        where: { id, status: current.status },
+        data: { status: 'CANCELADO', blocoEscolhido: null, fileiraEscolhida: null, assentoEscolhido: null },
+      });
+      if (!changed.count) {
+        const latest = await tx.ingressoV1.findUniqueOrThrow({ where: { id }, include: ingressoInclude });
+        if (latest.status === 'CANCELADO') return latest;
+        throw new AppError(409, 'INGRESSO_STATUS_ALTERADO', 'O ingresso mudou durante o cancelamento. Confira a entrada registrada.');
+      }
       await tx.alocacaoSetorPartidaIngressoV1.update({
         where: { id: current.alocacaoId },
         data: {
@@ -964,19 +972,8 @@ export const ingressoV1OperacaoModel = {
         });
       }
 
-      const updated = await tx.ingressoV1.update({
-        where: { id },
-        data: {
-          status: 'CANCELADO',
-          blocoEscolhido: null,
-          fileiraEscolhida: null,
-          assentoEscolhido: null,
-        },
-        include: ingressoInclude,
-      });
-
-      await audit(actorId, 'INGRESSO_V1_CANCELADO', id, { chaveQr: current.chaveQr }, tx);
-      return updated;
+      await audit(actorId, 'INGRESSO_V1_CANCELADO', id, { partidaId: current.partidaId }, tx);
+      return tx.ingressoV1.findUniqueOrThrow({ where: { id }, include: ingressoInclude });
     });
   },
 

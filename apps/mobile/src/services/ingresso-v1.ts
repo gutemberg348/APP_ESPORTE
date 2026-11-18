@@ -488,6 +488,9 @@ export interface IngressoEmitidoV1 {
   pedido?: {
     id: string;
     valorTotalCentavos: number;
+    metodoBalcao?: string | null;
+    _count?: { ingressos: number };
+    usuario?: { name: string };
     statusPagamento: string;
     criadoEm: string;
   } | null;

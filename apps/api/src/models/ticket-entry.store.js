@@ -46,7 +46,7 @@ export function createTicketEntryStore(client, { now = () => new Date(), authori
         // A database wait must not turn an expired token into an authorization.
         assertEntryContext(ticket, claims, input.matchId, now(), input.sectorId);
         const admission = await tx.ticketAdmission.create({ data: { ticketId: ticket.id, actorId, quantity: input.quantity, requestKey: input.requestKey, scanId: claims.scanId, qrVersion: claims.version } });
-        await tx.auditLog.create({ data: { actorId, action: 'TICKET_ADMISSION', entityId: ticket.id, details: { matchId: input.matchId, quantity: input.quantity, usedQuantity, admissionId: admission.id } } });
+        await tx.auditLog.create({ data: { actorId, action: 'TICKET_ADMISSION', entityId: ticket.id, details: { matchId: input.matchId, sectorId: input.sectorId, ...(input.gate && { gate: input.gate }), quantity: input.quantity, usedQuantity, admissionId: admission.id } } });
         return receipt(await tx.ticket.findUnique({ where: { id: ticket.id }, include }), admission, false);
       }); } catch (error) {
         if (error.code === 'P2002') {
@@ -65,6 +65,6 @@ export function createTicketEntryStore(client, { now = () => new Date(), authori
       if (!admission || admission.actorId !== actorId || admission.ticket.matchId !== matchId || admission.ticket.sectorId !== sectorId) throw new AppError(404, 'ADMISSION_NOT_FOUND', 'Não foi encontrada uma entrada confirmada para esta operação.');
       return receipt(admission.ticket, admission, true);
     },
-    deny: (actorId, matchId, reason, qrHash, sectorId, stage) => client.auditLog.create({ data: { actorId, action: 'TICKET_VALIDATION_DENIED', entityId: matchId, details: { reason, qrHash, ...(sectorId ? { sectorId } : {}), ...(stage ? { stage } : {}) } } }),
+    deny: (actorId, matchId, reason, qrHash, sectorId, stage, gate) => client.auditLog.create({ data: { actorId, action: 'TICKET_VALIDATION_DENIED', entityId: matchId, details: { reason, qrHash, ...(gate && { gate }), ...(sectorId ? { sectorId } : {}), ...(stage ? { stage } : {}) } } }),
   };
 }

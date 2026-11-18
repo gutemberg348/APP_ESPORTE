@@ -41,3 +41,12 @@ export function maskInput(value, kind) {
   if (kind === 'contact') return /[a-z@]/i.test(value) ? value : formatPhone(value);
   return value;
 }
+
+export function validTaxId(value) {
+  const digits = String(value).replace(/\D/g, '');
+  if (!/^(\d{11}|\d{14})$/.test(digits) || /^(\d)\1+$/.test(digits)) return false;
+  const check = (base, weights) => { const rest = [...base].reduce((sum, digit, index) => sum + Number(digit) * weights[index], 0) % 11; return rest < 2 ? '0' : String(11 - rest); };
+  const firstWeights = digits.length === 11 ? [10, 9, 8, 7, 6, 5, 4, 3, 2] : [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const base = digits.slice(0, -2), first = check(base, firstWeights), second = check(base + first, [digits.length === 11 ? 11 : 6, ...firstWeights]);
+  return digits === base + first + second;
+}

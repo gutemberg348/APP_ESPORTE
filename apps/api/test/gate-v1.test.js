@@ -6,14 +6,36 @@ import { PGlite } from '@electric-sql/pglite';
 import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/client/index.js';
+import { createAppGate } from '../src/services/app-gate.js';
+import { createTicketEntryService } from '../src/services/ticket-entry.service.js';
+import { createStaffModel } from '../src/models/staff.model.js';
+import { createAdminReportsStore } from '../src/models/admin-reports.store.js';
 import { createGateV1Store } from '../src/models/gate-v1.store.js';
 import { signTicketV1Token, verifyTicketV1TokenSignature } from '../src/lib/ingresso-v1-token.js';
 import { gateV1AdmitSchema, gateV1InspectSchema, gateV1HistorySchema } from '../src/validators/gate-v1.js';
 import { createApp } from '../src/http/app.js';
 import { routes } from '../src/routes/index.js';
 import { inject } from './helpers/inject.js';
+import { createTicketCounter } from '../src/services/ticket-counter.js';
+import { counterSaleSchema } from '../src/validators/ticket-counter.js';
+import { counterTicketPdf } from '../src/lib/counter-ticket-pdf.js';
+import { requireTerminalKey } from '../src/services/pagbank-counter.js';
+import { env } from '../src/config/env.js';
 
 const secret = 'test-gate-key-'.repeat(8);
+test('only the counter and admin can submit counter sales, sellers cannot admit or administer', async () => {
+  for (const role of ['USER','CASHIER','GATE','TICKET_SELLER','ADMIN']) {
+    const app = createApp({ routes, logger: { info() {}, error() {} }, authenticate: async () => ({ user: { id: randomUUID(), role, active: true } }) });
+    const post = { method: 'POST', headers: { Authorization: 'Bearer test.header.signature', 'Content-Type': 'application/json' }, body: '{}' };
+    assert.equal((await inject(app, '/v1/bilheteria/vendas', post)).status, ['ADMIN','TICKET_SELLER'].includes(role) ? 422 : 403);
+    if (role === 'TICKET_SELLER') {
+      const smart = { key: randomUUID(), lotId: randomUUID(), quantity: 1, unitCents: 2000, cpf: '12345678909', method: 'PAGBANK' };
+      const denied = await inject(app, '/v1/bilheteria/vendas', { ...post, body: JSON.stringify(smart) });
+      assert.equal(denied.status, 403);
+      for (const path of ['/v1/gate/v1/admit', '/v1/admin/employees']) assert.equal((await inject(app, path, post)).status, 403);
+    }
+  }
+});
 test('gate endpoints restrict staff roles before parsing and all admission aliases use V1', async () => {
   const paths = ['/v1/gate/v1/inspect', '/v1/gate/inspect', '/v1/ingresso-v1/portaria/inspecionar'];
   for (const role of ['USER', 'CASHIER', 'GATE', 'ADMIN']) {
@@ -76,6 +98,39 @@ test('V1 gate migration, authorization, payment, single use and receipt recovery
     const order = await db.pedidoIngressoV1.create({ data: { usuarioId: admin.id, partidaId: current.partidaId, valorTotalCentavos: 3000, statusPagamento: 'PAGO' } });
     return db.ingressoV1.create({ data: { partidaId: current.partidaId, alocacaoId: current.alocacaoId, pedidoId: order.id, nomeTitular: 'Torcedor', cpfTitular: '12345678909', status: 'VENDIDO', chaveQr: signTicketV1Token(current, secret), ...extra } });
   }
+  await t.test('app and V1 scopes stay independent; a group QR, manual code and recovery refer to the same admission', async () => {
+    const entry = createTicketEntryService(db, { secret, issuer: 'test', now: () => instant });
+    const gate = createAppGate({ staff: createStaffModel(db), reports: createAdminReportsStore(db), entry });
+    const match = await db.match.create({ data: { slug: randomUUID(), homeTeam: 'Esporte', awayTeam: 'Visitante',
+      startsAt: instant, stadium: 'Teste', competition: 'Teste', published: true, entryEnabled: true,
+      sectors: { create: { name: 'Geral', priceCents: 3000 } } }, include: { sectors: true } });
+    const sector = match.sectors[0];
+    const fan = await db.user.create({ data: { name: 'Torcedor', email: 'group@gate.test', passwordHash: 'test' } });
+    const ticket = await db.ticket.create({ data: { userId: fan.id, matchId: match.id, sectorId: sector.id,
+      priceCents: 6000, quantity: 2, status: 'ISSUED', payment: { create: { method: 'SICREDI', amountCents: 6000, reference: 'SICREDI:' + 'A'.repeat(32) } } } });
+    const issued = await entry.qr(fan, ticket.id);
+    const input = { partidaId: match.id, alocacaoId: sector.id, ticketId: ticket.id, chaveQr: issued.qr, catracaId: 'P1', requestKey: randomUUID() };
+    assert.deepEqual(await gate.matches(employee), []);
+    await assert.rejects(gate.inspect(employee, input), { code: 'GATE_SCOPE_DENIED' });
+    await store.assignments(admin.id, { userId: employee.id, allocationIds: [], appSectorIds: [sector.id] });
+    assert.equal((await gate.matches(employee))[0].source, 'app');
+    assert.equal((await gate.inspect(employee, input)).remainingQuantity, 2);
+    const admitted = await gate.admit(employee, { ...input, chaveQr: issued.code });
+    assert.equal(admitted.ticket.remainingQuantity, 1);
+    assert.equal((await gate.admit(employee, input)).duplicate, true);
+    assert.equal((await gate.receipt(employee, input)).admission.id, admitted.admission.id);
+    await assert.rejects(gate.inspect(employee, input), { code: 'TICKET_QR_USED' });
+    const next = await entry.qr(fan, ticket.id);
+    await gate.inspect(employee, { ...input, chaveQr: next.code });
+    const history = { kind: 'ALLOW', limit: 20, offset: 0, actorId: employee.id };
+    const [historyRow] = (await gate.history(employee, history)).items;
+    assert.equal(historyRow.id, admitted.admission.id);
+    assert.equal(historyRow.gate, 'P1');
+    assert.equal((await gate.history(other, history)).total, 0);
+    await store.assignments(admin.id, { userId: employee.id, allocationIds: [], appSectorIds: [] });
+    await assert.rejects(gate.admit(employee, { ...input, chaveQr: next.code, requestKey: randomUUID() }), { code: 'GATE_SCOPE_DENIED' });
+    assert.equal((await db.ticket.findUniqueOrThrow({ where: { id: ticket.id } })).usedQuantity, 1);
+  });
   const a = await issue();
   const input = (ticket = a, extra = {}) => ({ partidaId: ctx.partidaId, alocacaoId: ctx.alocacaoId, chaveQr: ticket.chaveQr, ...extra });
   const operation = (ticket = a, extra = {}) => input(ticket, { catracaId: 'P1', requestKey: randomUUID(), ...extra });
@@ -98,7 +153,7 @@ test('V1 gate migration, authorization, payment, single use and receipt recovery
   await t.test('QR, manual and scanner codes identify one ticket without exposing CPF or QR', async () => {
     assert.match(a.codigoPortaria, /^[A-F0-9]{4}(-[A-F0-9]{4}){3}$/);
     const manual = await store.inspect(employee.id, input(a, { chaveQr: a.codigoPortaria.toLowerCase().replace(/-/g, '') }));
-    assert.equal(manual.id, a.id); assert.equal(manual.cpfTitular, undefined); assert.equal(manual.chaveQr, undefined);
+    assert.equal(manual.id, a.id); assert.equal(manual.cpfTitular, undefined); assert.equal(manual.codigoPortaria, undefined); assert.equal(manual.chaveQr, undefined);
     for (const raw of [a.id, '1234', a.chaveQr.slice(0, -1) + (a.chaveQr.endsWith('A') ? 'B' : 'A')]) await assert.rejects(store.inspect(employee.id, input(a, { chaveQr: raw })));
     assert.equal(verifyTicketV1TokenSignature(a.chaveQr, secret).claims.mid, ctx.partidaId);
     await assert.rejects(store.inspect(admin.id, input(a, another)), { code: 'WRONG_MATCH' });
@@ -161,5 +216,88 @@ test('V1 gate migration, authorization, payment, single use and receipt recovery
     } })), options) };
     await assert.rejects(createGateV1Store(racing, { tenantSlug: 'gate-test', secret, now: () => instant }).admit(employee.id, operation(ticket)), { code: 'INGRESSO_JA_UTILIZADO' });
     assert.ok(intercepted); assert.equal(await db.admissionV1.count({ where: { ingressoId: ticket.id } }), 0);
+  });
+  await t.test('counter sale, stock rollback, private reprint and one admission across printed codes', async () => {
+    const club = await db.tenant.upsert({ where: { slug: env.TENANT_SLUG }, create: { slug: env.TENANT_SLUG, name: 'Bilheteria' }, update: {} });
+    const game = await context(club.id);
+    const date = new Date(Date.now() + 3600000);
+    await db.partidaIngressoV1.update({ where: { id: game.partidaId }, data: { dataPartida: date, vendasAtivas: true } });
+    const seller = await db.user.create({ data: { name: 'Vendedor', email: 'seller@gate.test', passwordHash: 'test', role: 'TICKET_SELLER' } });
+    const lot = await db.loteIngressoPartidaV1.create({ data: { alocacaoId: game.alocacaoId, tipoCategoria: 'INTEIRA', nome: 'Inteira', precoCentavos: 2000, quantidadeMaxima: 2 } });
+    const counter = createTicketCounter(db, env.TENANT_SLUG);
+    assert.ok((await counter.catalog()).some(l => l.id === lot.id));
+    const sale = counterSaleSchema.parse({ key: randomUUID(), lotId: lot.id, quantity: 2, unitCents: 2000, cpf: '123.456.789-09', method: 'CARD' });
+    assert.equal(counterSaleSchema.safeParse({ ...sale, cpf: '11111111111' }).success, false);
+    await assert.rejects(counter.sale(employee.id, sale), { code: 'TICKET_SELLER_REQUIRED' });
+    await assert.rejects(counter.sale(seller.id, { ...sale, quantity: 3 }), { code: 'LOTE_ESGOTADO' });
+    assert.equal(await db.pedidoIngressoV1.count({ where: { chaveBalcao: sale.key } }), 0);
+    const temporary = await counter.sale(seller.id, { ...sale, key: randomUUID() });
+    await assert.rejects(counter.settle(admin.id, temporary.chaveBalcao, true), { code: 'COUNTER_NOT_FOUND' });
+    await db.pedidoIngressoV1.update({ where: { id: temporary.id }, data: { expiraEm: new Date(0) } });
+    assert.ok((await counter.catalog()).some(l => l.id === lot.id && l.available === 2));
+    assert.equal((await counter.settle(seller.id, temporary.chaveBalcao, true)).statusPagamento, 'EXPIRADO');
+    const abandoned = await counter.sale(seller.id, { ...sale, key: randomUUID() });
+    assert.equal((await counter.settle(seller.id, abandoned.chaveBalcao, false)).statusPagamento, 'CANCELADO');
+    assert.ok((await counter.catalog()).some(l => l.id === lot.id && l.available === 2));
+    const smart = createTicketCounter(db, env.TENANT_SLUG, { PAGBANK_TERMINAL_TOKEN: 'test' });
+    assert.throws(() => requireTerminalKey('', ''), { code: 'TERMINAL_KEY_REQUIRED' });
+    assert.throws(() => requireTerminalKey('device', 'other'), { code: 'TERMINAL_KEY_REQUIRED' });
+    const integrated = { ...sale, method: 'PAGBANK', key: randomUUID() };
+    await assert.rejects(counter.sale(seller.id, integrated), { code: 'TERMINAL_UNAVAILABLE' });
+    await smart.sale(seller.id, integrated);
+    const begin = { key: integrated.key, attempt: randomUUID(), action: 'begin' };
+    await assert.rejects(smart.terminal(other.id, begin), { code: 'COUNTER_NOT_FOUND' });
+    const claim = await smart.terminal(seller.id, begin);
+    assert.deepEqual(await smart.terminal(seller.id, begin), claim);
+    assert.match(claim.reference, /^[0-9A-F]{10}$/);
+    await assert.rejects(smart.terminal(seller.id, { ...begin, attempt: randomUUID() }), { code: 'TERMINAL_BUSY' });
+    for (const pay of [false, true]) await assert.rejects(smart.settle(seller.id, integrated.key, pay), { code: 'COUNTER_TERMINAL_ONLY' });
+    const approved = { ...begin, action: 'approved', ...claim, transaction: 'SDK-TEST-001' };
+    await assert.rejects(smart.terminal(seller.id, { ...approved, amountCents: 1 }), { code: 'TERMINAL_MISMATCH' });
+    const decline = { ...begin, action: 'declined', reason: 'A004' };
+    assert.equal((await smart.terminal(seller.id, decline)).status, 'CANCELADO');
+    assert.equal((await smart.terminal(seller.id, decline)).status, 'CANCELADO');
+    assert.deepEqual(await smart.terminalQueue(seller.id), []);
+    const held = await counter.sale(seller.id, sale);
+    assert.equal(held.statusPagamento, 'PENDENTE');
+    assert.equal(held.ingressos[0].status, 'RESERVADO');
+    assert.equal((await counter.catalog()).some(l => l.id === lot.id), false);
+    const order = await counter.settle(seller.id, sale.key, true);
+    assert.equal(order.statusPagamento, 'PAGO');
+    assert.equal((await counter.settle(seller.id, sale.key, true)).id, order.id);
+    assert.equal(order.ingressos.length, 2); assert.equal(order.valorTotalCentavos, 4000);
+    assert.equal((await counter.sale(seller.id, sale)).id, order.id);
+    await assert.rejects(counter.sale(seller.id, { ...sale, method: 'CASH' }), { code: 'COUNTER_KEY_CONFLICT' });
+    assert.equal((await counter.recent(seller.id)).length, 4);
+    await assert.rejects(counter.receipt(other.id, sale.key), { code: 'COUNTER_NOT_FOUND' });
+    const secondCopy = await counter.receipt(seller.id, sale.key);
+    assert.deepEqual(secondCopy.ingressos, order.ingressos);
+    const pdf = await counterTicketPdf(secondCopy);
+    assert.ok(pdf.subarray(0, 5).equals(Buffer.from('%PDF-')));
+    assert.equal((pdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length, 2);
+    const reader = createGateV1Store(db, { tenantSlug: env.TENANT_SLUG, secret: env.TICKET_QR_SECRET });
+    const input = { partidaId: game.partidaId, alocacaoId: game.alocacaoId, chaveQr: order.ingressos[0].chaveQr };
+    assert.equal((await reader.inspect(admin.id, input)).decision, 'REVIEW');
+    const barcode = order.ingressos[0].codigoPortaria.replaceAll('-', '');
+    assert.equal((await reader.admit(admin.id, { ...input, chaveQr: barcode, requestKey: randomUUID(), catracaId: '1' })).decision, 'ALLOW');
+    await assert.rejects(reader.inspect(admin.id, input), { code: 'INGRESSO_JA_UTILIZADO' });
+    await db.setorEstadioIngressoV1.update({ where: { id: game.sector.id }, data: { numerado: true } });
+    await db.loteIngressoPartidaV1.update({ where: { id: lot.id }, data: { quantidadeMaxima: 8 } });
+    const numbered = { ...sale, key: randomUUID(), seat: { block: 101, row: 'A', first: 5 } };
+    const seats = await counter.sale(seller.id, numbered);
+    assert.deepEqual(seats.ingressos.map(i => i.assentoEscolhido).sort(), [5, 6]);
+    await assert.rejects(counter.sale(seller.id, { ...numbered, key: randomUUID() }), { code: 'ASSENTO_JA_OCUPADO' });
+    await counter.settle(seller.id, numbered.key, false);
+    const moderninha = { ...numbered, method: 'PAGBANK', key: randomUUID() };
+    assert.equal((await smart.sale(seller.id, moderninha)).ingressos.length, 2);
+    const charge = { ...begin, key: moderninha.key };
+    const proof = { ...approved, ...await smart.terminal(seller.id, charge), key: charge.key };
+    assert.equal((await smart.terminal(seller.id, proof)).status, 'PAGO');
+    assert.equal((await smart.terminal(seller.id, proof)).status, 'PAGO');
+    assert.ok((await smart.receipt(seller.id, charge.key)).ingressos.every(t => t.status === 'VENDIDO'));
+    const another = { ...moderninha, key: randomUUID(), seat: { ...numbered.seat, first: 9 } };
+    await smart.sale(seller.id, another);
+    const otherClaim = await smart.terminal(seller.id, { ...begin, key: another.key });
+    await assert.rejects(smart.terminal(seller.id, { ...proof, key: another.key, ...otherClaim }), { code: 'TERMINAL_REFERENCE_CONFLICT' });
   });
 });

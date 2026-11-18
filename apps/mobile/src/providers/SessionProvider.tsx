@@ -10,7 +10,7 @@ import { socialLogin } from '../services/social-login';
 import type { SocialProvider } from '../services/social-login-core';
 interface Session {
   member: Member | null; token: string | null; loading: boolean; bootError: string | null; demoMode: boolean;
-  signIn: (email: string, password: string, name?: string, portal?: 'APP' | 'ADMIN' | 'GATE') => Promise<void>;
+  signIn: (email: string, password: string, name?: string, portal?: 'APP' | 'ADMIN' | 'GATE' | 'SELLER') => Promise<void>;
   signInSocial: (provider: SocialProvider) => Promise<void>;
   signOut: () => Promise<void>; logoutAll: () => Promise<void>; clearSession: () => Promise<void>;
   retry: () => Promise<void>; updateMember: (member: Member) => void; resumeDemo: () => void;
@@ -46,7 +46,7 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
     const links = Linking.addEventListener('url', ({ url }) => { if (!authClient.current()) void captureInvitation(url); });
     return () => { unsubscribe(); links.remove(); };
   }, []);
-  async function signIn(email: string, password: string, name?: string, portal: 'APP' | 'ADMIN' | 'GATE' = 'APP') {
+  async function signIn(email: string, password: string, name?: string, portal: 'APP' | 'ADMIN' | 'GATE' | 'SELLER' = 'APP') {
     await captureInitialInvitation();
     const referralCode = name ? await readInvitation() : undefined;
     const result = await request<AuthResponse>(name ? '/auth/register' : '/auth/login', { method: 'POST', body: { email, password, ...(name ? { name, ...(referralCode ? { referralCode } : {}) } : portal !== 'APP' ? { portal } : {}) } });

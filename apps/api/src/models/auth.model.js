@@ -13,10 +13,10 @@ export function createAuthModel(client = db) {
         return { user, session: stored };
       });
     },
-    async start(userId, expectedPasswordHash, session) {
+    async start(userId, expectedPasswordHash, session, expectedRole) {
       return serializable(client, async (tx) => {
         const user = await tx.user.findUnique({ where: { id: userId }, include: authUserInclude });
-        if (!user?.active || user.passwordHash !== expectedPasswordHash) return null;
+        if (!user?.active || user.passwordHash !== expectedPasswordHash || (expectedRole && user.role !== expectedRole)) return null;
         const stored = await tx.session.create({ data: { ...session, userId, refreshTokens: { create: { tokenHash: session.tokenHash, expiresAt: session.expiresAt } } } });
         return { user, session: stored };
       });

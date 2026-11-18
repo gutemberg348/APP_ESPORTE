@@ -7,3 +7,4 @@ export function formatMoneyInput(value: string): string;
 export function centsInput(value: number): string;
 export function moneyToCents(value: string, max?: number): number;
 export function maskInput(value: string, kind?: InputMask): string;
+export function validTaxId(value: string): boolean;

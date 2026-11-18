@@ -11,20 +11,20 @@ import { Text } from './Typography';
 import { AdminButton, AdminNotice, AdminFilterPanel } from './admin/AdminControls';
 import { PeriodFilters, ReportInput, ReportSelect, appliedFilters, type Filters } from './admin/AdminReportControls';
 const reasons: Record<string, string> = { GATE_CLOSED: 'Portaria fechada ou fora do horário', TICKET_NOT_PAID: 'Pagamento não confirmado ou estornado', INGRESSO_JA_UTILIZADO: 'Ingresso já utilizado', WRONG_MATCH: 'Ingresso de outra partida', WRONG_SECTOR: 'Ingresso de outro setor', GATE_SCOPE_DENIED: 'Funcionário sem escala', INVALID_TICKET_QR: 'QR inválido', INVALID_GATE_CODE: 'Código inválido', TICKET_NOT_FOUND: 'Ingresso não encontrado', TICKET_NOT_VALID: 'Ingresso cancelado ou não emitido' };
-export function GateV1History({ refreshKey = 0, partidaId, alocacaoId }: { refreshKey?: number; partidaId?: string; alocacaoId?: string }) {
+export function GateV1History({ refreshKey = 0, partidaId, alocacaoId, source }: { refreshKey?: number; partidaId?: string; alocacaoId?: string; source?: 'app' }) {
   const { token, member } = useSession(), { colors } = useTheme();
   const [data, setData] = useState<History | null>(null), [offset, setOffset] = useState(0), [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const [matches, setMatches] = useState<GateV1Match[]>([]), [operators, setOperators] = useState<GateOperator[]>([]);
   const [draft, setDraft] = useState<Filters>({}), [filters, setFilters] = useState<Filters>({}), [kind, setKind] = useState('ALLOW'), [reload, setReload] = useState(0);
   useEffect(() => { let active = true; if (!token) return;
-    void Promise.all([gateV1Api.matches(token), member?.role === 'ADMIN' ? adminApi.gateOperators(token) : Promise.resolve([])]).then(([m, o]) => { if (active) { setMatches(m); setOperators(o); } }).catch((err) => { if (active) setError(messageOf(err)); });
+    void Promise.all([gateV1Api.matches(token, source === 'app'), member?.role === 'ADMIN' ? adminApi.gateOperators(token) : Promise.resolve([])]).then(([m, o]) => { if (active) { setMatches(m); setOperators(o); } }).catch((err) => { if (active) setError(messageOf(err)); });
     return () => { active = false; };
-  }, [token, member?.role, refreshKey]);
-  useEffect(() => { setOffset(0); }, [partidaId, alocacaoId, kind, filters]);
+  }, [token, member?.role, refreshKey, source]);
+  useEffect(() => { setOffset(0); }, [partidaId, alocacaoId, source, kind, filters]);
   useEffect(() => { let current = true; if (!token) return; setBusy(true); setError(''); setData(null);
-    void gateV1Api.history(token, { ...filters, kind, limit: '20', offset: String(offset), ...(partidaId ? { partidaId } : {}), ...(alocacaoId ? { alocacaoId } : {}) }).then((value) => { if (current) setData(value); }).catch((err) => { if (current) setError(messageOf(err)); }).finally(() => { if (current) setBusy(false); });
+    void gateV1Api.history(token, { ...filters, ...(source && { source }), kind, limit: '20', offset: String(offset), ...(partidaId ? { partidaId } : {}), ...(alocacaoId ? { alocacaoId } : {}) }).then((value) => { if (current) setData(value); }).catch((err) => { if (current) setError(messageOf(err)); }).finally(() => { if (current) setBusy(false); });
     return () => { current = false; };
-  }, [token, refreshKey, reload, kind, filters, offset, partidaId, alocacaoId]);
+  }, [token, refreshKey, reload, kind, filters, offset, partidaId, alocacaoId, source]);
   const match = matches.find((row) => row.id === (partidaId || draft.partidaId));
   function apply() { try { const next = Object.fromEntries(Object.entries(appliedFilters(draft)).filter(([, value]) => value !== '')); delete next.limit; delete next.offset; if (kind === 'DENIED') delete next.search; setFilters(next); setOffset(0); setError(''); } catch (err) { setError(messageOf(err)); } }
   return <View style={{ gap: 16 }}>

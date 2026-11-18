@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AppState, View } from 'react-native';
+import { TicketBarcode } from './TicketBarcode';
 import QRCode from 'react-native-qrcode-svg';
 import type { TicketQr } from '@nacional/shared/types';
 import { useSession } from '../providers/SessionProvider';
@@ -55,7 +56,7 @@ export function LiveTicketQr({ ticketId, onUsed }: { ticketId: string; onUsed: (
     return () => { alive = false; clearInterval(interval); subscription.remove(); retry.current = () => {}; };
   }, [ticketId, token, demoMode]);
   return <View style={{ gap: 12 }}>
-    {qr && remaining > 0 ? <><View style={{ alignSelf: 'center', padding: 16, borderRadius: 18, backgroundColor: '#fff' }}><QRCode value={qr.qr} size={210} color={tone('#08150f')} /></View><Text style={{ color: colors.muted, textAlign: 'center', fontSize: 12 }}>CÓDIGO PARA DIGITAR NA PORTARIA</Text><Text selectable heading style={{ color: colors.text, textAlign: 'center', fontSize: 25, lineHeight: 34, fontWeight: '800', letterSpacing: 2 }}>{qr.code}</Text><Text style={{ color: colors.primary, textAlign: 'center', fontSize: 14 }}>QR e código válidos por {remaining}s · {qr.remainingQuantity} entrada(s) restantes</Text><Text style={{ color: colors.muted, textAlign: 'center', fontSize: 12 }}>Apresente o app aberto na portaria. Após uma entrada, aguarde o próximo QR ou código.</Text></> : <Text style={{ color: colors.muted, textAlign: 'center', fontSize: 14 }}>{error || 'Solicitando QR atualizado…'}</Text>}
+    {qr && remaining > 0 ? <><View style={{ alignSelf: 'center', padding: 16, borderRadius: 18, backgroundColor: '#fff' }}><QRCode value={qr.qr} size={210} color={tone('#08150f')} /></View><TicketBarcode code={qr.code} /><Text style={{ color: colors.primary, textAlign: 'center', fontSize: 14 }}>QR e código válidos por {remaining}s · {qr.remainingQuantity} entrada(s) restantes</Text><Text style={{ color: colors.muted, textAlign: 'center', fontSize: 12 }}>Apresente o app aberto na portaria. Após uma entrada, aguarde o próximo QR ou código.</Text></> : <Text style={{ color: colors.muted, textAlign: 'center', fontSize: 14 }}>{error || 'Solicitando QR atualizado…'}</Text>}
     <Button secondary label={busy ? 'Atualizando QR…' : 'Atualizar QR de entrada'} loading={busy} onPress={() => retry.current()} />
   </View>;
 }

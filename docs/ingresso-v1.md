@@ -1,6 +1,6 @@
 # Gestão de ingressos e portaria V1
 
-A gestão V1 usa estádios, setores, templates, partidas, alocações, lotes, pedidos e ingressos próprios (`ingresso_v1_*`). A portaria visível no admin e no acesso do funcionário agora é única e usa esse modelo.
+A gestão V1 usa estádios, setores, templates, partidas, alocações, lotes, pedidos e ingressos próprios (`ingresso_v1_*`). A portaria visível no admin e no acesso do funcionário agora atende esse modelo e os ingressos comprados no app.
 
 ## Preparação depois do pull
 
@@ -40,7 +40,7 @@ Se a resposta for interrompida, o dispositivo guarda apenas identificadores da o
 
 Os ingressos V1 anteriores recebem códigos aleatórios pela migration, preservando QR e status. Um V1 que já estava `UTILIZADO` permanece bloqueado, sem inventar uma admissão histórica sem responsável. Novas confirmações aparecem em `AdmissionV1`.
 
-Os ingressos do fluxo anterior (`Ticket`, `Match`, `Sector`) permanecem preservados. O botão **Consultar histórico anterior ao V1** mantém a consulta desses registros. O leitor antigo foi retirado; os antigos caminhos HTTP de leitura apontam para o motor V1 e exigem o novo contrato. **Não houve conversão automática dos ingressos antigos ou do checkout do torcedor para V1.** Antes de usar em um evento com ingressos emitidos no fluxo anterior, essa migração precisa ser planejada. O checkout/pagamento anterior continua separado; este trabalho não altera a integração do gateway.
+O mesmo leitor também atende o checkout do torcedor (`Ticket`, `Match`, `Sector`). O painel identifica as partidas e escalas por origem. O botão **Ingressos do app · histórico** abre o relatório dessas entradas. Consulte o [guia dos funcionários](gate-staff.md) para o fluxo de grupo, QR temporário e escalas.
 
 ## API e arquivos
 
@@ -55,7 +55,7 @@ Todas as rotas abaixo exigem Bearer JWT e limitam leituras por funcionário:
 | GET | `/v1/gate/v1/history` | Histórico `kind=ALLOW` ou `DENIED` |
 | PUT | `/v1/admin/employees/assignments-v1` | Escala V1, somente ADMIN |
 
-Consulta: `{ partidaId, alocacaoId, chaveQr }`. `chaveQr` aceita o token assinado ou o código manual. Confirmação acrescenta `catracaId` e `requestKey` (16–80 caracteres). Recibo usa os mesmos IDs e a mesma chave. Escala: `{ userId, allocationIds: [] }`. Histórico: `partidaId`, `alocacaoId`, `actorId`, `from`, `to` ISO UTC, `protocol`, `search`, `kind`, `limit` (até 100), `offset`.
+Consulta: `{ partidaId, alocacaoId, chaveQr }`. `chaveQr` aceita o token assinado ou o código manual. Confirmação acrescenta `catracaId` e `requestKey` (16–80 caracteres). Recibo usa os mesmos IDs e a mesma chave. O leitor pede `?catalog=all` para receber os dois catálogos e envia `source: "app"` nas operações desse catálogo. A confirmação e o recibo do app usam também `ticketId`. Escala: `{ userId, allocationIds: [], appSectorIds: [] }`; clientes V1 que omitem `appSectorIds` alteram somente as alocações V1. Histórico: `partidaId`, `alocacaoId`, `actorId`, `from`, `to` ISO UTC, `protocol`, `search`, `kind`, `limit` (até 100), `offset`.
 
 - API: controller/validator/service `gate-v1`, store `src/models/gate-v1.store.js` e assinatura `src/lib/ingresso-v1-token.js`.
 - App e admin: `GateV1Panel`, `GateV1History`, `TicketBarcode`, `gate-image.ts`, `gate-v1.ts`. Uma única tela de validação é reutilizada nos dois acessos.

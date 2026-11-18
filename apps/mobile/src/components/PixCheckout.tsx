@@ -8,11 +8,12 @@ import { Text, TextInput } from './Typography';
 import { Button, Panel, TextAction } from './ui';
 import { useSession } from '../providers/SessionProvider';
 import { useTheme } from '../theme/ThemeProvider';
+import { counterApi } from '../services/ticket-counter';
 import { pixApi } from '../services/pix';
 import { messageOf, money } from '../utils/format';
 import { useServerClock } from '../hooks/useServerClock';
 export const pixStates: Record<PixIntent['state'], string> = { QUEUED: 'Preparando seu Pix…', CREATING: 'Gerando cobrança…', PENDING: 'Aguardando pagamento', PROCESSING: 'Pagamento em análise pelo provedor', RECEIVED: 'Pagamento confirmado', REFUNDING: 'Estorno solicitado · aguardando confirmação', REFUNDED: 'Pagamento estornado', CANCELED: 'Cobrança cancelada', REVIEW: 'Pagamento em conciliação', PARTIAL_REFUND: 'Pagamento parcialmente estornado' };
-export function PixCheckout({ ticketId, chargeId, shopOrderId, membershipOrderId, initialIntentId, reservation, onChanged }: { ticketId?: string; chargeId?: string; shopOrderId?: string; membershipOrderId?: string; initialIntentId?: string | null; reservation?: { expiresAt: string | null; serverTime?: string; instructions: string }; onChanged: () => Promise<unknown> }) {
+export function PixCheckout({ ticketId, chargeId, shopOrderId, membershipOrderId, counterKey, initialIntentId, reservation, onChanged }: { ticketId?: string; chargeId?: string; shopOrderId?: string; membershipOrderId?: string; counterKey?: string; initialIntentId?: string | null; reservation?: { expiresAt: string | null; serverTime?: string; instructions: string }; onChanged: () => Promise<unknown> }) {
   const { token, demoMode } = useSession(), { colors } = useTheme();
   const [profile, setProfile] = useState<BillingProfile | null>(null), [intent, setIntent] = useState<PixIntent | null>(null), [document, setDocument] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [copied, setCopied] = useState(false);
   const current = useRef(0), lock = useRef(false), lastState = useRef(''), callback = useRef(onChanged);
@@ -29,10 +30,13 @@ export function PixCheckout({ ticketId, chargeId, shopOrderId, membershipOrderId
   callback.current = onChanged;
   function accept(value: PixIntent | null) {
     setIntent(value);
-    if (value && lastState.current !== value.state && ['RECEIVED', 'REFUNDED', 'PARTIAL_REFUND', 'CANCELED'].includes(value.state)) void callback.current().catch(() => {});
+    if (value && lastState.current !== value.state && ['RECEIVED', 'REFUNDED', 'PARTIAL_REFUND', 'CANCELED'].includes(value.state)) {
+      void callback.current().catch(err => { lastState.current = ''; setError(messageOf(err)); });
+    }
     lastState.current = value?.state || '';
   }
   async function readIntent(access: string) {
+    if (counterKey) return counterApi.pix(access, counterKey);
     if (ticketId) return pixApi.ticket(access, ticketId);
     if (shopOrderId) return pixApi.shop(access, shopOrderId);
     if (initialIntentId) return pixApi.intent(access, initialIntentId);
@@ -40,7 +44,7 @@ export function PixCheckout({ ticketId, chargeId, shopOrderId, membershipOrderId
   }
   async function load(access: string, version: number) {
     try {
-      const [fresh, payment] = await Promise.all([pixApi.profile(access), readIntent(access)]);
+      const [fresh, payment] = await Promise.all([counterKey ? Promise.resolve(null) : pixApi.profile(access), readIntent(access)]);
       if (current.current !== version) return;
       setProfile(fresh);
       accept(payment);
@@ -55,22 +59,22 @@ export function PixCheckout({ ticketId, chargeId, shopOrderId, membershipOrderId
     setError('');
     void load(token, version);
     return () => { current.current++; };
-  }, [token, demoMode, ticketId, shopOrderId, initialIntentId]);
+  }, [token, demoMode, ticketId, shopOrderId, counterKey, initialIntentId]);
   useEffect(() => {
     if (!token || !intent || ['REFUNDED', 'CANCELED'].includes(intent.state)) return;
     let alive = true, polling = false;
     const version = current.current, id = intent.id;
     const poll = async () => {
-      if (polling || AppState.currentState !== 'active') return;
+      if (polling || (AppState.currentState && AppState.currentState !== 'active')) return;
       polling = true;
-      try { const fresh = await pixApi.intent(token, id); if (alive && version === current.current) { accept(fresh); setError(''); } }
+      try { const fresh = await (counterKey ? counterApi.pix(token, counterKey) : pixApi.intent(token, id)); if (alive && version === current.current) { accept(fresh); setError(''); } }
       catch (err) { if (alive) setError(messageOf(err)); }
       finally { polling = false; }
     };
     const timer = setInterval(() => void poll(), intent.state === 'RECEIVED' ? 15000 : 4000);
     const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') void poll(); });
     return () => { alive = false; clearInterval(timer); subscription.remove(); };
-  }, [token, demoMode, ticketId, shopOrderId, initialIntentId, intent?.id, intent?.state]);
+  }, [token, demoMode, ticketId, shopOrderId, counterKey, initialIntentId, intent?.id, intent?.state]);
   async function generate() {
     if (!token || lock.current) return;
     lock.current = true; setBusy(true); setError('');
@@ -99,7 +103,7 @@ export function PixCheckout({ ticketId, chargeId, shopOrderId, membershipOrderId
       </Text>
     </View>}
     {manual ? <Text style={{ color: colors.muted, fontSize: 14 }}>{reservation?.instructions || 'Consulte o clube com o número do pedido.'}</Text> : <>
-      {profile?.environment === 'sandbox' && <Text style={{ color: colors.gold, fontSize: 12 }}>Ambiente de testes · sem dinheiro real</Text>}
+      {(profile?.environment || intent?.environment) === 'sandbox' && <Text style={{ color: colors.gold, fontSize: 12 }}>Ambiente de testes · sem dinheiro real</Text>}
       {!profile && !intent && !error && <ActivityIndicator accessibilityLabel="Carregando pagamento" color={colors.primary} />}
       {profile && !intent && !membershipOrderId && !expired && <>
         {!profile.configured && <TextInput accessibilityLabel="CPF ou CNPJ do pagador" value={document} onChangeText={setDocument} keyboardType="number-pad" autoComplete="off" maxLength={25} placeholder="CPF ou CNPJ do pagador" placeholderTextColor={colors.muted} style={{ minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, color: colors.text }} />}
@@ -119,7 +123,7 @@ export function PixCheckout({ ticketId, chargeId, shopOrderId, membershipOrderId
         </>}
         {intent.failureCode === 'PAYMENT_PROVIDER_NOT_ACTIVE' && <Text style={{ color: colors.danger }}>Cobrança de outro provedor. Consulte o clube antes de pagar.</Text>}
         {(intent.state === 'REVIEW' || (intent.failureCode?.startsWith('SICREDI_') && waiting)) && <Text style={{ color: colors.gold, fontSize: 13 }}>Aguarde a conferência do banco antes de pagar novamente.</Text>}
-        {intent.state === 'RECEIVED' && <Text style={{ color: colors.muted, fontSize: 13 }}>{membershipOrderId ? 'Carteirinha disponível na aba Carteira.' : ticketId ? 'Ingresso disponível em Meus ingressos.' : shopOrderId ? 'Acompanhe a entrega em Meus pedidos.' : 'Consulte o cashback no extrato.'}</Text>}
+        {intent.state === 'RECEIVED' && <Text style={{ color: colors.muted, fontSize: 13 }}>{counterKey ? 'Bilhetes disponíveis na bilheteria.' : membershipOrderId ? 'Carteirinha disponível na aba Carteira.' : ticketId ? 'Ingresso disponível em Meus ingressos.' : shopOrderId ? 'Acompanhe a entrega em Meus pedidos.' : 'Consulte o cashback no extrato.'}</Text>}
         {intent.refundedCents > 0 && <Text style={{ color: colors.muted, fontSize: 13 }}>Valor estornado · {money(intent.refundedCents)}</Text>}
         <TextAction icon={details ? ChevronUp : ChevronDown} label={details ? 'Ocultar protocolo' : 'Ver protocolo'} onPress={() => setDetails(!details)} />
         {details && <Text selectable style={{ color: colors.muted, fontSize: 13 }}>{intent.id}</Text>}

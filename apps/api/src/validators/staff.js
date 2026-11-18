@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { accountFields } from "./accounts.js";
-const role = z.enum(["ADMIN", "GATE", "CASHIER"]);
+const role = z.enum(["ADMIN", "GATE", "CASHIER", "TICKET_SELLER"]);
 const email = z.string().trim().toLowerCase().email().max(254);
 const contact = z.string().regex(/^(?:\d{10,13})?$/);
 export const employeeCreateSchema = z

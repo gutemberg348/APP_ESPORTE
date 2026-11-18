@@ -18,7 +18,17 @@ import { financeController } from '../controllers/finance.controller.js';
 import { passwordRecoveryController } from '../controllers/password-recovery.controller.js';
 import { partnerController } from '../controllers/partner.controller.js';
 import { ingressoV1Controller } from '../controllers/ingresso-v1.controller.js';
+import { ticketCounterController as counter } from '../controllers/ticket-counter.controller.js';
 export const routes = [
+  { method: 'GET', path: '/v1/bilheteria/moderninha', handler: counter.terminalQueue, private: true, ticketSeller: true },
+  { method: 'POST', path: '/v1/bilheteria/moderninha', handler: counter.terminal, private: true, ticketSeller: true },
+  { method: 'GET', path: '/v1/bilheteria/lotes', handler: counter.catalog, private: true, ticketSeller: true },
+  { method: 'POST', path: '/v1/bilheteria/vendas', handler: counter.sell, private: true, ticketSeller: true },
+  { method: 'GET', path: '/v1/bilheteria/vendas', handler: counter.recent, private: true, ticketSeller: true },
+  { method: 'POST', path: '/v1/bilheteria/recebimento', handler: counter.settle, private: true, ticketSeller: true },
+  { method: 'GET', path: '/v1/bilheteria/bilhete', handler: counter.receipt, private: true, ticketSeller: true },
+  { method: 'GET', path: '/v1/bilheteria/pix', handler: counter.pix, private: true, ticketSeller: true },
+  { method: 'GET', path: '/v1/bilheteria/pdf', handler: counter.pdf, private: true, ticketSeller: true },
   { method: 'GET', path: '/v1/membership/plans', handler: membershipController.plans, private: true },
   { method: 'GET', path: '/v1/membership/orders', handler: membershipController.orders, private: true },
   { method: 'POST', path: '/v1/membership/checkout', handler: membershipController.checkout, private: true, membershipLimit: 'checkout' },
@@ -156,7 +166,7 @@ export const routes = [
   { method: 'POST', path: '/v1/gate/admit', handler: gateV1Controller.admit, private: true, gate: true },
   { method: 'GET', path: '/v1/gate/admission-receipt', handler: gateV1Controller.receipt, private: true, gate: true },
   { method: 'GET', path: '/v1/tickets/entry-qr', handler: adminController.qr, private: true, ticketLimit: 'qr' },
-  { method: 'GET', path: '/v1/admin/tickets/admission-receipt', handler: gateV1Controller.receipt, private: true, admin: true },
+  { method: 'GET', path: '/v1/admin/tickets/admission-receipt', handler: gateV1Controller.receipt, private: true, admin: true, gate: true },
   { method: 'GET', path: '/v1/tickets/payment-instructions', handler: adminController.instructions, private: true },
   { method: 'POST', path: '/v1/tickets/cancel', handler: adminController.customerCancel, private: true, ticketLimit: 'checkout' },
   { method: 'GET', path: '/v1/admin/overview', handler: adminController.overview, private: true, admin: true },
@@ -176,8 +186,8 @@ export const routes = [
   { method: 'DELETE', path: '/v1/admin/tickets', handler: adminController.deleteSale, private: true, admin: true },
   { method: 'POST', path: '/v1/admin/tickets/confirm-payment', handler: adminController.confirm, private: true, admin: true },
   { method: 'POST', path: '/v1/admin/tickets/cancel', handler: adminController.cancel, private: true, admin: true },
-  { method: 'POST', path: '/v1/admin/tickets/inspect', handler: gateV1Controller.inspect, private: true, admin: true },
-  { method: 'POST', path: '/v1/admin/tickets/admit', handler: gateV1Controller.admit, private: true, admin: true },
+  { method: 'POST', path: '/v1/admin/tickets/inspect', handler: gateV1Controller.inspect, private: true, admin: true, gate: true },
+  { method: 'POST', path: '/v1/admin/tickets/admit', handler: gateV1Controller.admit, private: true, admin: true, gate: true },
   { method: 'GET', path: '/v1/admin/users', handler: adminController.users, private: true, admin: true },
   { method: 'GET', path: '/v1/admin/users/detail', handler: adminController.userDetail, private: true, admin: true },
   { method: 'PATCH', path: '/v1/admin/users', handler: adminController.updateUser, private: true, admin: true },

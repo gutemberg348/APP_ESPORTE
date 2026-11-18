@@ -370,7 +370,7 @@ export function IngressosEmitidosV1Panel({
                 disabled={busy || !partidaSelecionada}
                 options={(partidaSelecionada?.alocacoesSetor || []).map((a) => ({
                   value: a.id,
-                  label: `${a.setor.nome} (${a.capacidadeLiberada - a.quantidadeVendida} livres)`,
+                  label: `${a.setor.nome} (${Math.max(0, a.capacidadeLiberada - a.quantidadeVendida - a.quantidadeReservada)} livres)`,
                 }))}
                 onChange={handleSelectAlocacao}
               />
@@ -611,7 +611,9 @@ export function IngressosEmitidosV1Panel({
                   <Text style={{ color: colors.text, fontSize: 13, fontWeight: '700' }}>
                     {bilheteVisivel.lote?.nome || 'Ingresso'} ·{' '}
                     {money(
-                      bilheteVisivel.lote?.precoCentavos ??
+                      bilheteVisivel.pedido?.metodoBalcao && bilheteVisivel.pedido._count?.ingressos
+                        ? bilheteVisivel.pedido.valorTotalCentavos / bilheteVisivel.pedido._count.ingressos
+                        : bilheteVisivel.lote?.precoCentavos ??
                         bilheteVisivel.pedido?.valorTotalCentavos ??
                         0
                     )}
@@ -619,6 +621,9 @@ export function IngressosEmitidosV1Panel({
                 </View>
               </View>
 
+              {!!bilheteVisivel.pedido?.metodoBalcao && <Text style={{ color: colors.muted, fontSize: 12 }}>
+                Bilheteria · {bilheteVisivel.pedido.usuario?.name} · {bilheteVisivel.pedido.metodoBalcao === 'PIX' ? 'Pix Sicredi' : bilheteVisivel.pedido.metodoBalcao === 'PAGBANK' ? 'Moderninha Smart' : bilheteVisivel.pedido.metodoBalcao === 'CARD' ? 'Cartão físico' : 'Dinheiro'} · Total do pedido {money(bilheteVisivel.pedido.valorTotalCentavos)}
+              </Text>}
               {bilheteVisivel.blocoEscolhido ? (
                 <View
                   style={{

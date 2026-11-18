@@ -1,0 +1,36 @@
+plugins { id 'com.android.application' version '9.2.1' }
+
+android {
+    namespace 'br.com.esporte.bilheteria.smart'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'br.com.esporte.bilheteria.smart'
+        minSdk 25
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+        buildConfigField 'String', 'API_URL', groovy.json.JsonOutput.toJson(providers.gradleProperty('terminalApiUrl').getOrElse('https://api-esporte.testes-techcode.shop/v1'))
+    }
+    buildFeatures { buildConfig true }
+    signingConfigs {
+        if (System.getenv('TERMINAL_STORE_FILE')) {
+            terminal {
+                storeFile file(System.getenv('TERMINAL_STORE_FILE'))
+                storePassword System.getenv('TERMINAL_STORE_PASSWORD')
+                keyAlias System.getenv('TERMINAL_KEY_ALIAS')
+                keyPassword System.getenv('TERMINAL_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release { if (signingConfigs.findByName('terminal')) signingConfig signingConfigs.terminal }
+    }
+}
+dependencies {
+    implementation 'com.google.zxing:core:3.5.3'
+    implementation 'br.com.uol.pagseguro.plugpagservice.wrapper:wrapper:1.35.0'
+    implementation 'androidx.core:core:1.13.1'
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.25'
+    implementation 'io.reactivex.rxjava2:rxandroid:2.1.1'
+    implementation 'io.reactivex.rxjava2:rxjava:2.2.21'
+}

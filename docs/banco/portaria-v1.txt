@@ -52,9 +52,8 @@ INGRESSO_V1_VALIDACAO_RECUSADA: partidaId em entityId; details contém code, sta
 GATE_V1_ASSIGNMENTS_CHANGED: userId em entityId; details contém allocationIds.
 Histórico de recusa é filtrado pelas partidas do clube e pelo ator, quando GATE.
 
-6. LEGADO
-GateAssignment e TicketAdmission permanecem para preservar dados e relatórios antigos.
-Não há conversão automática de GateAssignment para GateAssignmentV1.
-Não há conversão automática de Ticket/Pedido legado para IngressoV1/PedidoIngressoV1.
-A interface de leitura antiga foi removida e os caminhos antigos de admissão usam o motor V1.
-Relatórios antigos continuam consultáveis no histórico anterior ao V1.
+6. INGRESSOS COMPRADOS NO APP
+GateAssignment autoriza o funcionário em um setor de Match. GateAssignmentV1 autoriza uma alocação de PartidaIngressoV1.
+O painel salva as duas escalas na mesma transação. O leitor identifica a origem pela partida escolhida.
+TicketAdmission registra entradas do app, inclusive consumo parcial de grupos. AdmissionV1 registra a entrada individual do V1.
+As confirmações usam o ingresso original. A tela de histórico permite consultar as duas origens.

@@ -21,7 +21,7 @@ export async function updateAdminAccount(
   const old = await tx.user.findUnique({ where: { id: userId } });
   if (
     !old ||
-    (employeeOnly && !["ADMIN", "GATE", "CASHIER"].includes(old.role))
+    (employeeOnly && !["ADMIN", "GATE", "CASHIER", "TICKET_SELLER"].includes(old.role))
   )
     throw new AppError(404, "ACCOUNT_NOT_FOUND", "Conta não encontrada.");
   if (updatedAt && old.updatedAt.toISOString() !== updatedAt)

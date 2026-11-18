@@ -81,7 +81,13 @@ export function createAdminReportsStore(client, { now = () => new Date() } = {})
           () => tx.ticketAdmission.count({ where }), () => tx.ticketAdmission.aggregate({ where, _sum: { quantity: true } }),
           () => tx.ticketAdmission.findMany({ where, select: admissionSelect, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: query.limit, skip: query.offset }),
         ]);
-        return { items: items.map(toAdmission), pagination: page(total, query), summary: { operations: total, admittedQuantity: sum(totals, 'quantity') } };
+        const events = items.length ? await tx.auditLog.findMany({
+          where: { action: 'TICKET_ADMISSION', entityId: { in: items.map(row => row.ticket.id) },
+            OR: items.map(row => ({ details: { path: ['admissionId'], equals: row.id } })) },
+          select: { details: true },
+        }) : [];
+        const gates = new Map(events.map(({ details }) => [details.admissionId, details.gate]));
+        return { items: items.map(row => ({ ...toAdmission(row), gate: gates.get(row.id) || null })), pagination: page(total, query), summary: { operations: total, admittedQuantity: sum(totals, 'quantity') } };
       });
     },
     async admission(protocol) {
@@ -101,7 +107,7 @@ export function createAdminReportsStore(client, { now = () => new Date() } = {})
           () => tx.match.findMany({ where: { id: { in: matchIds } }, select: { id: true, homeTeam: true, awayTeam: true, startsAt: true } }),
           () => tx.sector.findMany({ where: { id: { in: sectorIds } }, select: { id: true, name: true } }),
         ]);
-        return { items: rows.map((row) => ({ protocol: row.id, createdAt: row.createdAt, actor: row.actor, reason: row.details.reason, stage: row.details.stage || null, match: matches.find((match) => match.id === row.entityId) || null, sector: sectors.find((sector) => sector.id === row.details.sectorId) || null })), pagination: page(total, query) };
+        return { items: rows.map((row) => ({ protocol: row.id, createdAt: row.createdAt, actor: row.actor, gate: row.details.gate || null, reason: row.details.reason, stage: row.details.stage || null, match: matches.find((match) => match.id === row.entityId) || null, sector: sectors.find((sector) => sector.id === row.details.sectorId) || null })), pagination: page(total, query) };
       });
     },
     // Includes inactive staff and admins who actually operated the gate, preserving history.

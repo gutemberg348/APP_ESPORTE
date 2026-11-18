@@ -17,6 +17,7 @@ import { useSession } from "../../providers/SessionProvider";
 import { messageOf } from "../../utils/format";
 const roles = [
   { value: "ADMIN", label: "Administrador" },
+  { value: "TICKET_SELLER", label: "Bilheteria" },
   { value: "GATE", label: "Portaria" },
   { value: "CASHIER", label: "Caixa de parceiro" },
 ];

@@ -23,6 +23,7 @@ const schema = z.object({
   APPLE_SERVICE_ID: z.string().default(''),
   APPLE_CLIENT_SECRET: z.string().default(''),
   PAYMENT_MODE: z.enum(['disabled', 'demo', 'sicredi']).default('disabled'),
+  PAGBANK_TERMINAL_TOKEN: z.union([z.literal(''), z.string().regex(/^[A-Za-z0-9_-]{32,128}$/)]).default(''),
   SICREDI_PIX_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
   SICREDI_PIX_API_URL: z.string().default(''),
   SICREDI_PIX_AUTH_URL: z.string().default(''),

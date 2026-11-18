@@ -36,6 +36,11 @@ const roles = [
     description: "Entrada somente nos setores autorizados",
   },
   {
+    value: "TICKET_SELLER",
+    label: "Bilheteria",
+    description: "Venda presencial e impressão de ingressos",
+  },
+  {
     value: "CASHIER",
     label: "Caixa de parceiro",
     description: "Vendas somente nos parceiros autorizados",
@@ -68,6 +73,7 @@ export function EmployeePanel({
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Employee["role"]>("GATE"),
     [contact, setContact] = useState("");
+  const [appSectors, setAppSectors] = useState<string[]>([]);
   const [sectors, setSectors] = useState<string[]>([]);
   const lock = useRef(false),
     revision = useRef(0);
@@ -76,7 +82,7 @@ export function EmployeePanel({
     const current = ++revision.current;
     setLoading(true);
     try {
-      const [value, matchesV1] = await Promise.all([employeeApi.list(token, query, offset), gateV1Api.matches(token)]);
+      const [value, matchesV1] = await Promise.all([employeeApi.list(token, query, offset), gateV1Api.matches(token, true)]);
       if (current === revision.current) { setEmployees(value); setGateMatches(matchesV1); }
     } catch (err) {
       if (current === revision.current) setError(messageOf(err));
@@ -106,6 +112,7 @@ export function EmployeePanel({
     setPassword("");
     setName("");
     setEmail("");
+    setAppSectors(employee?.assignments.filter(item => item.active).map(item => item.sectorId) || []);
     setSectors(
       employee?.assignmentsV1
         ?.filter((item) => item.active)
@@ -157,7 +164,7 @@ export function EmployeePanel({
             })
           : employeeApi.password(token!, selected!.id, password),
       create
-        ? "Funcionário cadastrado. Configure a escala da portaria ou os parceiros autorizados para o caixa."
+        ? (role === "TICKET_SELLER" ? "Vendedor cadastrado. Use o login no app ou em /bilheteria." : "Funcionário cadastrado. Configure a escala da portaria ou os parceiros autorizados para o caixa.")
         : "Senha redefinida e sessões anteriores revogadas.",
     );
   }
@@ -295,7 +302,7 @@ export function EmployeePanel({
               <Text
                 style={{ color: colors.muted, fontSize: 12, lineHeight: 21 }}
               >
-                {(employee.assignmentsV1 || [])
+                {[...employee.assignmentsV1, ...employee.assignments]
                   .filter((item) => item.active)
                   .map((item) => item.matchLabel + " · " + item.sectorName)
                   .join("\n") || "Sem setores liberados"}
@@ -335,7 +342,7 @@ export function EmployeePanel({
                 {employee.email}
               </Text>
               <Text style={{ color: colors.subtle, fontSize: 12 }}>
-                {(employee.assignmentsV1 || []).filter((item) => item.active).length}{" "}
+                {[...employee.assignmentsV1, ...employee.assignments].filter((item) => item.active).length}{" "}
                 setor(es) na escala
               </Text>
               {actions(employee)}
@@ -459,7 +466,7 @@ export function EmployeePanel({
                 <AdminSection
                   key={match.id}
                   title={match.timeMandante + " × " + match.timeVisitante}
-                  description={matchDate(match.dataPartida)}
+                  description={`${match.source ? 'App' : 'V1'} · ${matchDate(match.dataPartida)}`}
                 >
                   {match.alocacoesSetor.map((sector) => (
                     <AdminToggle
@@ -467,9 +474,9 @@ export function EmployeePanel({
                       checkbox
                       disabled={busy}
                       label={sector.setor.nome}
-                      value={sectors.includes(sector.id)}
+                      value={(match.source ? appSectors : sectors).includes(sector.id)}
                       onChange={(checked) =>
-                        setSectors((previous) =>
+                        (match.source ? setAppSectors : setSectors)((previous) =>
                           checked
                             ? [...previous, sector.id]
                             : previous.filter((id) => id !== sector.id),
@@ -481,12 +488,12 @@ export function EmployeePanel({
               ))}
               <AdminButton
                 primary
-                label={"Salvar escala · " + sectors.length + " setor(es)"}
+                label={"Salvar escala · " + (sectors.length + appSectors.length) + " setor(es)"}
                 loading={busy}
                 onPress={() =>
                   void perform(
                     () =>
-                      gateV1Api.assignments(token!, selected!.id, sectors),
+                      gateV1Api.assignments(token!, selected!.id, sectors, appSectors),
                     "Escala atualizada.",
                   )
                 }

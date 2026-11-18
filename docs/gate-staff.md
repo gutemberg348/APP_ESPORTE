@@ -1,59 +1,45 @@
-> Este documento descreve o fluxo anterior. A operação de leitura foi substituída pela [portaria unificada V1](ingresso-v1.md) em 11/11/2026; consulte seu contrato e os limites de migração antes de operar. Dados e relatórios anteriores permanecem preservados.
+# Portaria do Sócio Esporte
 
-# Funcionários e app de portaria
+## Preparar o jogo
 
-## Operação
+1. Em **Funcionários**, o administrador cadastra uma conta individual com perfil **Portaria**. O cadastro público cria torcedores.
+2. Em **Definir escala**, marca o setor da partida em que a pessoa vai trabalhar. **App** identifica partidas vendidas pelo checkout do torcedor e **V1** identifica partidas de **Gestão de ingressos V1**. Mesmo quando os nomes coincidem, cada setor tem o seu próprio identificador. A escala salva os dois conjuntos juntos.
+3. Habilita a portaria na partida e confere o horário. Na ausência de horários específicos, a janela vai de duas horas antes até quatro horas depois do início. A API usa o relógio do servidor.
+4. Entrega a cada funcionário as próprias credenciais. O navegador tem acesso dedicado em `/portaria`. No Android e no iOS a pessoa usa o login comum do app e é direcionada pelo perfil da conta.
 
-1. O ADMIN entra no app ou no mesmo painel pelo navegador, abre **Funcionários** e cadastra nome, e-mail e senha de pelo menos 12 caracteres. A conta criada tem papel `GATE`; não existe cadastro público de funcionários nem promoção de uma conta existente pelo e-mail.
-2. Em **Definir escala de jogos e setores**, marca os setores que o funcionário pode operar. Sem escala, a conta pode entrar, mas não validar ingressos. A partida também precisa estar com portaria habilitada e dentro da janela de entrada.
-3. O funcionário abre o app e usa o mesmo formulário de e-mail e senha dos torcedores, com as credenciais entregues pelo clube. O perfil GATE retornado pela API direciona automaticamente para a tela exclusiva de portaria; não há seletor de tipo de conta no login. O cadastro público continua criando somente torcedores.
-4. Seleciona o jogo e o setor físico da portaria. Pode **ler o QR pela câmera** ou **digitar o código de 10 caracteres** mostrado junto ao QR no app do titular. Letras minúsculas, espaços e o hífen são normalizados.
-5. A consulta mostra titular, setor, acessos restantes e validade. Ainda não libera entrada. Depois da conferência presencial, informa quantas pessoas estão entrando e confirma no servidor.
-6. Somente uma resposta de nova entrada confirmada permite liberar as pessoas indicadas. Resposta perdida exige consultar a operação pendente. Sem internet, não há liberação offline.
+## O que cada conta pode fazer
 
-ADMIN mantém acesso à portaria pelo painel, sem precisar de escala individual. GATE não acessa rotas administrativas, compras, cashback ou recursos privados do torcedor; tem somente portaria e segurança da própria conta. O administrador pode desativar a conta ou redefinir a senha: ambas as ações revogam as sessões anteriores. Alterações de escala são consultadas na API e novamente dentro da transação de entrada; não dependem de atualizar o app do funcionário.
+| Perfil | Acesso |
+| --- | --- |
+| Portaria | Selecionar partidas e setores da escala, conferir o ingresso, confirmar uma entrada e consultar suas próprias operações. A verificação de carteirinha é uma ação distinta. |
+| Administrador | Gerenciar funcionários, escalas e portarias, operar os setores disponíveis e consultar o histórico dos operadores. |
+| Torcedor ou caixa | As rotas de consulta e admissão de ingressos exigem outro perfil. |
 
-## Código digitável e QR
+O servidor verifica o JWT, a sessão e a conta ativa em cada pedido autenticado. O token de renovação é rotacionado e o banco guarda seu hash. O app nativo usa SecureStore, e o navegador guarda a sessão na aba. Desativar uma conta, redefinir sua senha ou trocar seu perfil revoga as sessões. Alterar a escala passa a valer na próxima autorização. A API confere novamente a escala dentro da transação que registra a passagem.
 
-O código tem dez caracteres aleatórios, em dois grupos de cinco, sem `0`, `1`, `I` ou `O`. São 50 bits de aleatoriedade. Não é o UUID do ingresso, uma senha fixa ou um código de pagamento. Cada emissão cria um par QR/código com a **mesma leitura (`scanId`), versão e expiração de até 45 segundos**, limitada ao fechamento da portaria.
+## Na catraca
 
-O app renova o par aproximadamente a cada 15 segundos. Pares anteriores continuam sujeitos ao seu vencimento original; depois de qualquer entrada, todos os pares da versão anterior deixam de funcionar, inclusive quando o pedido ainda tem lugares restantes. Ler pela câmera e depois digitar o código não fornece dois acessos. Repetir a mesma operação retorna um comprovante anterior, sem novo consumo.
+A **Bilheteria** vende os ingressos presenciais das partidas V1. O operador da catraca usa a mesma partida e o mesmo setor para ler o QR ou o Code 128 da via impressa ou digital. O ingresso temporário apresentado no app do torcedor também exibe Code 128. Veja o [fluxo de venda e impressão](bilheteria.md).
 
-`TicketAccessCode` guarda somente hash SHA-256 do código, vínculo com ingresso/leitura/versão e vencimento. O texto do código e o JWT não entram em auditorias nem na pendência local. `npm run auth:cleanup --workspace @nacional/api` remove registros vencidos. O limite da API inclui autenticação, limite geral por IP e 90 ações de portaria por minuto por conta; os contadores atuais ficam em memória.
+1. Selecionar partida, setor físico e informar o portão. Ler o QR com a câmera ou com um arquivo de imagem. Também é possível digitar o código ou usar um leitor USB em modo teclado, com o campo focado e Enter. A câmera depende de permissão e, no navegador, de HTTPS ou localhost.
+2. Conferir o titular e o setor na prévia. Para o V1, o bilhete também pode trazer acomodação e código de barras Code 128. Para um pedido de grupo do app, a prévia mostra o saldo disponível.
+3. Tocar em **Confirmar e registrar uma entrada**. Liberar uma pessoa ao receber **Entrada confirmada**. Um grupo do app apresenta um novo QR ou código para cada pessoa seguinte.
+4. Se a rede cair depois do envio, manter a passagem bloqueada e usar **Consultar confirmação no servidor**. O dispositivo guarda identificadores da operação para recuperar o protocolo. **Entrada já registrada** exige conferir quem já passou. Uma confirmação repetida não autoriza uma pessoa adicional.
+5. Consultar o **Histórico de entradas** no leitor. O administrador também tem **Histórico de portaria**, incluindo o relatório dos ingressos do app. A auditoria permite localizar entradas por protocolo e identificar o responsável, horário e setor. Os novos registros incluem o portão informado pelo operador.
 
-A confirmação mantém todas as regras existentes: ingresso emitido, pagamento compatível, titular ativo, partida/setor corretos, portaria aberta, quantidade disponível, atualização condicional da versão, transação Serializable e auditoria atômica. Um QR ou código ainda válido pode ser encaminhado ao vivo; a conferência presencial do titular continua necessária.
+## Credenciais e bloqueios
 
-## Endpoints
-
-| Método | Rota | Permissão |
+| | Comprado no app | Emitido na gestão V1 |
 | --- | --- | --- |
-| POST | `/v1/auth/login` com e-mail e senha | Login único; perfil retornado define a área e as permissões |
-| GET / POST / PATCH | `/v1/admin/employees` | ADMIN: listar, criar ou atualizar funcionário |
-| PUT | `/v1/admin/employees/password` | ADMIN: `{ userId, password }`, redefine senha e revoga sessões |
-| PUT | `/v1/admin/employees/assignments` | ADMIN: `{ userId, sectorIds }`, substitui escala; `[]` remove todas |
-| GET | `/v1/gate/matches` | GATE: somente jogos e setores da escala; ADMIN: todos |
-| POST | `/v1/gate/inspect` | GATE escalado ou ADMIN; consulta sem consumir |
-| POST | `/v1/gate/admit` | GATE escalado ou ADMIN; confirma entrada |
-| GET | `/v1/gate/admission-receipt` | Somente comprovante de operação do próprio operador |
+| Apresentação | QR assinado temporário ou código aleatório de 10 caracteres. O app solicita renovação aproximadamente a cada 15 segundos. | QR assinado do bilhete, Code 128 ou código de 16 caracteres hexadecimais. |
+| Validade | Até 45 segundos, limitada ao fechamento da portaria. QR e código correspondem à mesma versão. Uma passagem invalida a versão anterior. | Enquanto o ingresso estiver vendido, o pedido pago e a portaria aberta. A primeira confirmação muda o ingresso para utilizado. |
+| Verificações | Ingresso emitido, conta do titular ativa, pagamento registrado compatível com o valor, ausência de estorno, setor, partida e saldo. | Clube, estádio e setor ativos, partida publicada ou esgotada, pedido pago, ingresso vendido, setor e, no QR assinado, acomodação compatível. |
+| Persistência | `TicketAdmission` registra a entrada. `TicketAccessCode` guarda o hash do código temporário e seu vencimento. | `AdmissionV1` registra uma única admissão por ingresso. O bilhete imprimível tem credencial persistente. |
 
-Consulta digitada:
+As duas modalidades fazem a baixa com transação e atualização condicional. O recibo identifica a operação. Cada consulta de recuperação exige o mesmo operador e contexto autorizado. Na recusa de uma credencial processada pelo validador, a auditoria registra o motivo e um hash. A emissão V1 atual omite a chave do QR na auditoria e o painel filtra esse campo de registros anteriores.
 
-```json
-{ "code": "ABCDE-FGHJK", "matchId": "<UUID>", "sectorId": "<UUID>" }
-```
+O controle protege o saldo e a repetição de entrada. Quem tiver uma cópia de um bilhete V1 ainda disponível pode apresentá-la primeiro. Um QR do app também pode ser encaminhado enquanto estiver válido. A conferência presencial do titular continua importante. O leitor verifica o pagamento registrado no sistema. No V1, o estado pago também pode decorrer de uma operação administrativa. A leitura na catraca não realiza consulta bancária.
 
-Confirmação digitada:
+## Verificação
 
-```json
-{ "code": "ABCDE-FGHJK", "matchId": "<UUID>", "sectorId": "<UUID>", "quantity": 1, "requestKey": "unique_gate_operation_001" }
-```
-
-Para leitura pela câmera, enviar `token` com o JWT extraído de `nacional://ticket/<JWT>`, em vez de `code`. Enviar ambos ou nenhum é inválido. A consulta de comprovante usa `ticketId`, `matchId`, `sectorId` e `requestKey` na query; permanece disponível ao próprio operador ativo mesmo se sua escala mudar, para esclarecer uma resposta perdida sem outra entrada.
-
-## Banco e verificação
-
-A migration `20261030030000_gate_staff_codes` acrescenta GATE, `GateAssignment` e `TicketAccessCode`, com chaves estrangeiras e índices únicos. O PostgreSQL em `localhost:55432` recusou conexão em 30/10/2026; a migration **não foi aplicada** e nenhum funcionário foi criado nesta máquina. Quando o responsável iniciar o banco, executar `npm run db:prepare`.
-
-Passaram 51 testes isolados da API e 6 do mobile, além de TypeScript, sintaxe e validação do schema Prisma. Os testes exercitam código normalizado, hash, expiração, câmera/código compartilhando o mesmo consumo, impedimento de cadastro público GATE, login de portaria e escala revogada antes da confirmação. A persistência dos testes isolados é em memória e não comprova concorrência no PostgreSQL.
-
-`gate-staff-integration.test.js` está preparado para verificar cadastro/escala, permissões HTTP, os dois caminhos de entrada, redefinição de senha e suspensão com PostgreSQL. Não foi executado. Depois de preparar um banco de desenvolvimento, `npm run test:integration` executa também esse teste, que abre um servidor temporário durante sua execução. A câmera e o fluxo visual ainda precisam ser conferidos no aparelho; no navegador, a câmera exige HTTPS ou localhost. Nenhum app, API, container ou prévia foi iniciado pelo agente.
+Os testes de portaria cobrem as duas credenciais, os perfis, a escala revogada entre consulta e confirmação, pagamento estornado, uso repetido, grupo, protocolo e histórico. A integração HTTP cobre cadastro do funcionário, login, troca de senha e suspensão. A homologação de câmera, leitor USB e rede deve ser feita nos aparelhos que serão usados no evento. Para os endpoints e a configuração da gestão V1, consulte [Gestão de ingressos e portaria](ingresso-v1.md).

@@ -1,3 +1,4 @@
+import { closeCounterReservation, reverseCounterOrder } from './counter-reservation.js';
 import { settleMembership, reverseMembership } from './membership.store.js';
 import { randomUUID, createHash, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
@@ -120,6 +121,25 @@ export function createSicrediStore(db, { settings, api, now = () => new Date(), 
           }
         }
       }
+      if (intent.counterOrderId) {
+        const order = await tx.pedidoIngressoV1.findUniqueOrThrow({ where: { id: intent.counterOrderId }, include: { partida: { select: { status: true } } } });
+        if (blocked) {
+          await reverseCounterOrder(tx, order, refunds.total === intent.amountCents ? 'ESTORNADO' : refunds.total ? 'ESTORNADO_PARCIALMENTE' : 'CANCELADO');
+        } else if (state === 'RECEIVED' && !(order.statusPagamento === 'PAGO' && order.transacaoGatewayId === intent.providerReference)) {
+          const payable = order.metodoBalcao === 'PIX' && order.statusPagamento === 'PENDENTE' && order.valorTotalCentavos === intent.amountCents &&
+            !intent.cancelRequestedAt && new Date(received.horario) <= order.expiraEm && !['CANCELADA','ENCERRADA'].includes(order.partida.status);
+          if (payable) {
+            await closeCounterReservation(tx, order, 'PAGO', null);
+            await tx.pedidoIngressoV1.update({ where: { id: order.id }, data: { transacaoGatewayId: intent.providerReference } });
+          } else {
+            state = 'REFUNDING';
+            await reverseCounterOrder(tx, order, 'CANCELADO');
+            await tx.gatewayIntent.update({ where: { id }, data: { refundRequestedAt: now(), failureCode: 'COUNTER_NO_LONGER_PAYABLE' } });
+          }
+        } else if (state === 'CANCELED' && order.statusPagamento === 'PENDENTE') {
+          await closeCounterReservation(tx, order, 'EXPIRADO', null);
+        }
+      }
       if (intent.membershipOrderId) {
         if (blocked) {
           await reverseMembership(tx, intent);
@@ -168,6 +188,10 @@ export function createSicrediStore(db, { settings, api, now = () => new Date(), 
           const ticket = await tx.ticket.findUnique({ where: { id: intent.ticketId }, include: { payment: true } });
           if (ticket?.payment?.reference === receiptRef(intent)) { await tx.ticket.update({ where: { id: ticket.id }, data: { status: 'CANCELED', voidedQuantity: ticket.quantity - ticket.usedQuantity, entryVersion: { increment: 1 }, entryToken: null } }); await tx.ticketAccessCode.deleteMany({ where: { ticketId: ticket.id } }); await recordTicketFinancial(tx, ticket, { blocked: true, reason: 'Devolução Sicredi solicitada' }); }
         } else if (intent.shopOrderId) await reverseShopOrder(tx, intent, intent.refundedCents, now);
+        if (intent.counterOrderId) {
+          const order = await tx.pedidoIngressoV1.findUniqueOrThrow({ where: { id: intent.counterOrderId } });
+          await reverseCounterOrder(tx, order, 'CANCELADO');
+        }
         if (intent.membershipOrderId) await reverseMembership(tx, intent);
         await audit(tx, actorId, 'SICREDI_REFUND_REQUESTED', id, { reason }); return { requested: true };
       });
@@ -220,13 +244,20 @@ export function createSicrediStore(db, { settings, api, now = () => new Date(), 
         const ticket = intent.ticketId ? await db.ticket.findUnique({ where: { id: intent.ticketId }, include: { payment: true } }) : null;
         const order = intent.shopOrderId ? await db.shopOrder.findUnique({ where: { id: intent.shopOrderId }, include: { payment: true } }) : null;
         const membershipOrder = intent.membershipOrderId ? await db.membershipOrder.findUnique({ where: { id: intent.membershipOrderId } }) : null;
-        const settled = Boolean(membershipOrder?.appliedAt) || (ticket?.payment || order?.payment)?.reference === receiptRef(intent);
-        const cancel = intent.cancelRequestedAt || (!settled && (intent.expiresAt <= now() || (ticket && (ticket.deletedAt || ticket.status !== 'PENDING' || intent.snapshot.reservationGeneration !== ticketGeneration(ticket))) || (order && order.status !== 'PENDING')));
+        const counterOrder = intent.counterOrderId ? await db.pedidoIngressoV1.findUniqueOrThrow({ where: { id: intent.counterOrderId } }) : null;
+        const settled = Boolean(counterOrder?.transacaoGatewayId === intent.providerReference && counterOrder?.statusPagamento === 'PAGO') || Boolean(membershipOrder?.appliedAt) || (ticket?.payment || order?.payment)?.reference === receiptRef(intent);
+        const cancel = intent.cancelRequestedAt || (!settled && (intent.expiresAt <= now() || (ticket && (ticket.deletedAt || ticket.status !== 'PENDING' || intent.snapshot.reservationGeneration !== ticketGeneration(ticket))) || (order && order.status !== 'PENDING') || (counterOrder && counterOrder.statusPagamento !== 'PENDENTE')));
         if (!remote) {
           if (intent.pixEndToEndId || intent.creationStartedAt) throw fault('SICREDI_CREATION_UNCERTAIN', 'O banco ainda não confirmou esta referência. Nenhuma segunda cobrança será criada.');
-          if (cancel) { await write(id, token, { state: 'CANCELED', pixPayload: null }); delay = 86400000; return; }
+          if (cancel) {
+            if (counterOrder?.statusPagamento === 'PENDENTE') await transaction(async tx => {
+              fence(await tx.gatewayIntent.findUnique({ where: { id } }), token);
+              await closeCounterReservation(tx, counterOrder, 'EXPIRADO', null);
+            });
+            await write(id, token, { state: 'CANCELED', pixPayload: null }); delay = 86400000; return;
+          }
           intent = await write(id, token, { state: 'CREATING', creationStartedAt: now() });
-          const description = ticket ? `Ingresso ${ticket.id}` : membershipOrder ? `Associacao ${membershipOrder.id}` : `Pedido da loja ${order.number}`;
+          const description = counterOrder ? `Bilheteria ${counterOrder.id}` : ticket ? `Ingresso ${ticket.id}` : membershipOrder ? `Associacao ${membershipOrder.id}` : `Pedido da loja ${order.number}`;
           let created;
           try {
             created = await api.create(intent.providerReference, intent.amountCents, Math.ceil((intent.expiresAt - now()) / 1000), description);

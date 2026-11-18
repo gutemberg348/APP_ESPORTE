@@ -31,7 +31,7 @@ function safe(user) {
 }
 async function employee(tx, id) {
   const user = await tx.user.findFirst({
-    where: { id, role: { in: ["GATE", "ADMIN", "CASHIER"] } },
+    where: { id, role: { in: ["GATE", "ADMIN", "CASHIER", "TICKET_SELLER"] } },
   });
   if (!user)
     throw new AppError(
@@ -43,11 +43,33 @@ async function employee(tx, id) {
 }
 const audit = (tx, actorId, action, entityId, details) =>
   tx.auditLog.create({ data: { actorId, action, entityId, details } });
+export async function replaceAppGateAssignments(tx, userId, sectorIds) {
+  if (
+    (await tx.sector.count({ where: { id: { in: sectorIds } } })) !==
+    sectorIds.length
+  )
+    throw new AppError(
+      422,
+      "INVALID_ASSIGNMENT_SECTOR",
+      "Um dos setores informados não existe.",
+    );
+  await tx.gateAssignment.updateMany({
+    where: { userId },
+    data: { active: false },
+  });
+  for (const sectorId of sectorIds)
+    await tx.gateAssignment.upsert({
+      where: { userId_sectorId: { userId, sectorId } },
+      update: { active: true },
+      create: { userId, sectorId, active: true },
+    });
+}
+
 export function createStaffModel(db) {
   return {
     async list({ limit = 50, offset = 0, search } = {}) {
       const where = {
-        role: { in: ["GATE", "ADMIN", "CASHIER"] },
+        role: { in: ["GATE", "ADMIN", "CASHIER", "TICKET_SELLER"] },
         ...(search
           ? {
               OR: [
@@ -109,25 +131,7 @@ export function createStaffModel(db) {
             "GATE_ROLE_REQUIRED",
             "Escalas são atribuídas somente à portaria.",
           );
-        if (
-          (await tx.sector.count({ where: { id: { in: sectorIds } } })) !==
-          sectorIds.length
-        )
-          throw new AppError(
-            422,
-            "INVALID_ASSIGNMENT_SECTOR",
-            "Um dos setores informados não existe.",
-          );
-        await tx.gateAssignment.updateMany({
-          where: { userId },
-          data: { active: false },
-        });
-        for (const sectorId of sectorIds)
-          await tx.gateAssignment.upsert({
-            where: { userId_sectorId: { userId, sectorId } },
-            update: { active: true },
-            create: { userId, sectorId, active: true },
-          });
+        await replaceAppGateAssignments(tx, userId, sectorIds);
         await audit(tx, actorId, "EMPLOYEE_ASSIGNMENTS_CHANGED", userId, {
           sectorIds,
         });

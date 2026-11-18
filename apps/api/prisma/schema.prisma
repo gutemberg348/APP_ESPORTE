@@ -31,6 +31,7 @@ enum UserRole {
   ADMIN
   GATE
   CASHIER
+  TICKET_SELLER
 }
 
 enum TicketPaymentMethod {
@@ -702,6 +703,8 @@ model GatewayIntent {
   ticketId          String?           @db.Uuid
   chargeId          String?           @unique @db.Uuid
   shopOrderId       String?           @unique @db.Uuid
+  counterOrderId String? @unique @db.Uuid
+  counterOrder PedidoIngressoV1? @relation(fields: [counterOrderId], references: [id], onDelete: Restrict)
   membershipOrderId String? @unique @db.Uuid
   membershipOrder MembershipOrder? @relation(fields: [membershipOrderId], references: [id])
   customerId        String?           @db.Uuid
@@ -1337,6 +1340,7 @@ model LoteIngressoPartidaV1 {
   tipoCategoria     TipoCategoriaIngressoV1
   precoCentavos     Int
   quantidadeMaxima  Int
+  quantidadeReservada Int                   @default(0)
   quantidadeVendida Int                     @default(0)
   ativo             Boolean                 @default(true)
   criadoEm          DateTime                @default(now())
@@ -1354,6 +1358,12 @@ model PedidoIngressoV1 {
   partidaId          String                    @db.Uuid
   valorTotalCentavos Int
   statusPagamento    StatusPagamentoIngressoV1 @default(PENDENTE)
+  intent             GatewayIntent?
+  chaveBalcao        String?                   @db.VarChar(80)
+  metodoBalcao       String?                   @db.VarChar(12)
+  resumoBalcao       String?                   @db.Char(64)
+  pagbankTentativa    String?                   @db.Char(64)
+  pagbankReferencia   String?                   @unique @db.VarChar(10)
   transacaoGatewayId String?                   @db.VarChar(150)
   expiraEm           DateTime?
   criadoEm           DateTime                  @default(now())
@@ -1365,6 +1375,7 @@ model PedidoIngressoV1 {
 
   @@index([usuarioId, criadoEm])
   @@index([partidaId, statusPagamento])
+  @@unique([usuarioId, chaveBalcao])
   @@map("ingresso_v1_pedidos")
 }
 

@@ -1,3 +1,4 @@
+import { replaceAppGateAssignments } from './staff.model.js';
 import { createHash } from 'node:crypto';
 import { AppError } from '../lib/errors.js';
 import { assertGateUser } from '../lib/gate-rules.js';
@@ -6,7 +7,7 @@ import { verifyTicketV1TokenSignature } from '../lib/ingresso-v1-token.js';
 const error = (code, message, status = 409) => new AppError(status, code, message);
 const include = { partida: { include: { estadio: { select: { nome: true, nomePopular: true, ativo: true, tenantId: true } } } }, alocacao: { include: { setor: { select: { id: true, nome: true, ativo: true, portaoEntrada: true, localizacao: true, instrucaoAcomodacao: true } } } }, pedido: true, admission: true };
 function view(t) {
-  return { id: t.id, nomeTitular: t.nomeTitular, codigoPortaria: t.codigoPortaria, status: t.status, blocoEscolhido: t.blocoEscolhido, fileiraEscolhida: t.fileiraEscolhida, assentoEscolhido: t.assentoEscolhido, utilizadoEm: t.utilizadoEm, catracaId: t.catracaId,
+  return { id: t.id, nomeTitular: t.nomeTitular, status: t.status, blocoEscolhido: t.blocoEscolhido, fileiraEscolhida: t.fileiraEscolhida, assentoEscolhido: t.assentoEscolhido, utilizadoEm: t.utilizadoEm, catracaId: t.catracaId,
     partida: { id: t.partida.id, timeMandante: t.partida.timeMandante, timeVisitante: t.partida.timeVisitante, dataPartida: t.partida.dataPartida, estadio: { nome: t.partida.estadio.nome, nomePopular: t.partida.estadio.nomePopular } },
     alocacao: { id: t.alocacaoId, setor: t.alocacao.setor } };
 }
@@ -66,6 +67,7 @@ export function createGateV1Store(db, { tenantSlug, secret, now = () => new Date
       try { return await serializable(db, async (tx) => {
         const user = await actor(tx, actorId); await scope(tx, user, input);
         const t = await ticket(tx, input);
+        if (input.ticketId && input.ticketId !== t.id) throw error('TICKET_CHANGED', 'O ingresso mudou. Consulte novamente.');
         const previous = await tx.admissionV1.findUnique({ where: { actorId_requestKey: { actorId, requestKey: input.requestKey } } });
         if (previous) { if (previous.ingressoId !== t.id || previous.gate !== input.catracaId) throw error('ADMISSION_KEY_CONFLICT', 'Esta operação já foi usada para outra entrada.'); return receipt(t, previous, true); }
         assertOpen(t);
@@ -97,15 +99,16 @@ export function createGateV1Store(db, { tenantSlug, secret, now = () => new Date
       const [rows, total] = await db.$transaction([db.admissionV1.findMany({ where, include: { ingresso: { include }, actor: { select: { id: true, name: true } } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: limit, skip: offset }), db.admissionV1.count({ where })]);
       return { items: rows.map(({ ingresso, ...row }) => ({ ...row, ticket: view(ingresso) })), total, limit, offset };
     },
-    assignments(actorId, { userId, allocationIds }) {
+    assignments(actorId, { userId, allocationIds, appSectorIds }) {
       return serializable(db, async (tx) => {
         const admin = await actor(tx, actorId); if (admin.role !== 'ADMIN') throw error('ADMIN_REQUIRED', 'Acesso administrativo necessário.', 403);
         const user = await tx.user.findFirst({ where: { id: userId, role: 'GATE', active: true } });
         if (!user) throw error('GATE_ROLE_REQUIRED', 'Selecione um funcionário ativo de portaria.', 422);
         if (await tx.alocacaoSetorPartidaIngressoV1.count({ where: { id: { in: allocationIds }, partida: { estadio: { tenant: { slug: tenantSlug } } } } }) !== allocationIds.length) throw error('INVALID_ASSIGNMENT', 'Um dos setores não pertence a este clube.', 422);
-        await tx.gateAssignmentV1.updateMany({ where: { userId }, data: { active: false } });
+        if (appSectorIds) await replaceAppGateAssignments(tx, userId, appSectorIds);
+        await tx.gateAssignmentV1.updateMany({ where: { userId, alocacao: { partida: { estadio: { tenant: { slug: tenantSlug } } } } }, data: { active: false } });
         for (const alocacaoId of allocationIds) await tx.gateAssignmentV1.upsert({ where: { userId_alocacaoId: { userId, alocacaoId } }, update: { active: true }, create: { userId, alocacaoId } });
-        await tx.auditLog.create({ data: { actorId, action: 'GATE_V1_ASSIGNMENTS_CHANGED', entityId: userId, details: { allocationIds } } });
+        await tx.auditLog.create({ data: { actorId, action: 'GATE_V1_ASSIGNMENTS_CHANGED', entityId: userId, details: { allocationIds, ...(appSectorIds && { appSectorIds }) } } });
         return { updated: true };
       });
     },

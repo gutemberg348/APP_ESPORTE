@@ -29,3 +29,4 @@ naca-digital
 **/.env.*
 **/dist
 **/.expo
+apps/maquineta/

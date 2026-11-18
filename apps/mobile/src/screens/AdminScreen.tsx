@@ -124,7 +124,7 @@ function AdminWorkspace({ onBack }: { onBack: () => void }) {
     {tab === 'Planos' && <><AdminPlanGrid plans={plans} busy={busy} onEdit={setPlanEdit} /><MembershipCardCheck /></>}
     {tab === 'Funcionários' && <EmployeePanel matches={matches} desktop={desktop} />}
     {tab === 'Auditoria' && <AdminAuditPanel audit={audit} loading={loading} />}
-    {tab === 'Histórico de portaria' && <View style={{ gap: 18 }}><AdminButton label={legacyGateHistory ? 'Voltar ao histórico V1' : 'Consultar histórico anterior ao V1'} onPress={() => setLegacyGateHistory(!legacyGateHistory)} />{legacyGateHistory ? <AdminGateHistory matches={matches} refreshKey={reportRefresh} /> : <GateV1History refreshKey={reportRefresh} />}</View>}
+    {tab === 'Histórico de portaria' && <View style={{ gap: 18 }}><AdminButton label={legacyGateHistory ? 'Voltar ao histórico V1' : 'Ingressos do app · histórico'} onPress={() => setLegacyGateHistory(!legacyGateHistory)} />{legacyGateHistory ? <AdminGateHistory matches={matches} refreshKey={reportRefresh} /> : <GateV1History refreshKey={reportRefresh} />}</View>}
     {tab === 'Pagamentos' && <AdminPaymentsPanel refreshKey={reportRefresh} />}
     {tab === 'Loja' && <AdminShopPanel refreshKey={reportRefresh} onPayments={() => select('Pagamentos')} />}
     {tab === 'Financeiro' && <AdminFinancePanel refreshKey={reportRefresh} onOpenWithdrawals={() => select('Saques')} />}

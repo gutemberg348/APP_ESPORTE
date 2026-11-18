@@ -76,6 +76,18 @@ test('unknown user, incorrect password and deactivated account share the same lo
   [...people.values()][0].active = false;
   await assert.rejects(service.login(input), { code: 'INVALID_CREDENTIALS' });
 });
+test('ticket sellers can sign into the counter and the app, with a separate gate and admin login', async () => {
+  const { service, input, people } = await fixture();
+  await service.register(input);
+  const user = [...people.values()][0];
+  for (const role of ['USER', 'GATE', 'CASHIER']) {
+    user.role = role;
+    await assert.rejects(service.login({ ...input, portal: 'SELLER' }), { code: 'INVALID_CREDENTIALS' });
+  }
+  user.role = 'TICKET_SELLER';
+  for (const portal of ['SELLER', 'APP']) assert.equal((await service.login({ ...input, portal })).member.role, 'TICKET_SELLER');
+  for (const portal of ['GATE', 'ADMIN']) await assert.rejects(service.login({ ...input, portal }), { code: 'INVALID_CREDENTIALS' });
+});
 
 test('admin portal requires a live ADMIN and never starts sessions for fan or gate credentials', async () => {
   const { service, input, people, sessions } = await fixture();

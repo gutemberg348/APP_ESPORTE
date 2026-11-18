@@ -34,10 +34,11 @@ export async function createAuthService({ users, sessions, accessTokens, socialS
       const user = await users.byEmail(email);
       const valid = await verifyPassword(password, user?.passwordHash ?? dummyHash);
       if (!user || !valid || !user.active) throw invalidLogin();
+      if (portal === 'SELLER' && !['TICKET_SELLER', 'ADMIN'].includes(user.role)) throw invalidLogin();
       if (portal === 'GATE' && !['GATE', 'ADMIN'].includes(user.role)) throw invalidLogin();
       if (portal === 'ADMIN' && user.role !== 'ADMIN') throw invalidLogin();
       const fresh = newSession();
-      const result = await sessions.start(user.id, user.passwordHash, fresh.session);
+      const result = await sessions.start(user.id, user.passwordHash, fresh.session, user.role);
       if (!result) throw invalidLogin();
       return credentials(result.user, result.session, fresh.refreshToken);
     },

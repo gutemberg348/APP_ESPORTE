@@ -104,5 +104,12 @@ export const adminModel = {
       return { userId, active };
     });
   },
-  audit: ({ limit, offset }) => db.auditLog.findMany({ orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], include: { actor: { select: { name: true } } }, take: limit, skip: offset }),
+  async audit({ limit, offset }) {
+    const rows = await db.auditLog.findMany({ orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], include: { actor: { select: { name: true } } }, take: limit, skip: offset });
+    return rows.map(row => {
+      if (!row.details?.chaveQr) return row;
+      const { chaveQr, ...details } = row.details;
+      return { ...row, details };
+    });
+  },
 };
