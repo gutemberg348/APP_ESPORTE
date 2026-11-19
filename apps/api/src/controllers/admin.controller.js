@@ -6,6 +6,7 @@ import { paginationSchema } from '../validators/index.js';
 import { accountDetailSchema, accountUpdateSchema } from '../validators/accounts.js';
 const query = (url) => Object.fromEntries(url.searchParams);
 export const adminController = {
+  ticketDirectory: async ({ user, url }) => ({ data: await adminService.ticketDirectory(user, schemas.ticketDirectorySchema.parse(query(url))) }),
   overview: async ({ user }) => ({ data: await adminService.overview(user) }),
   salesReport: async ({ user, url }) => ({ data: await adminService.salesReport(user, schemas.salesReportSchema.parse(query(url))) }),
   admissionHistory: async ({ user, url }) => ({ data: await adminService.admissionHistory(user, schemas.admissionHistorySchema.parse(query(url))) }),

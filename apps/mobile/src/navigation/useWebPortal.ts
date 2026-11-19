@@ -1,25 +1,21 @@
 import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
+import { portalPaths, webPortal } from './web-portals';
 
-type Portal = 'app' | 'admin' | 'gate' | 'seller' | 'business';
-function currentPortal(): Portal {
-  if (Platform.OS !== 'web' || typeof window === 'undefined') return 'app';
-  if (window.location.pathname.replace(/\/$/, '') === '/app/parceiro') return 'business';
-  if (/^\/bilheteria(?:\/|$)/.test(window.location.pathname)) return 'seller';
-  if (/^\/portaria(?:\/|$)/.test(window.location.pathname)) return 'gate';
-  return /^\/app(?:\/|$)/.test(window.location.pathname) ? 'app' : 'admin';
-}
 export function useWebPortal() {
-  const [portal, setPortal] = useState<Portal>(currentPortal);
+  const [nativePortal, setNativePortal] = useState<'app' | 'seller'>('app');
+  const browser = Platform.OS === 'web' && typeof window !== 'undefined';
+  const portal = browser ? webPortal(window.location.pathname) : nativePortal;
   useEffect(() => {
-    if (Platform.OS !== 'web') return;
-    const update = () => setPortal(currentPortal());
-    window.addEventListener('popstate', update);
-    return () => window.removeEventListener('popstate', update);
-  }, []);
-  function navigate(next: Exclude<Portal, 'business'>) {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') window.history.pushState(null, '', next === 'admin' ? '/admin' : next === 'seller' ? '/bilheteria' : next === 'gate' ? '/portaria' : '/app');
-    setPortal(next);
+    if (!browser || (portal !== 'staff' && portal !== 'owner')) return;
+    const { pathname, search, hash } = window.location;
+    if (pathname !== portalPaths[portal]) window.history.replaceState(null, '', portalPaths[portal] + search + hash);
+  }, [browser, portal]);
+
+  function navigate(next: keyof typeof portalPaths | 'seller') {
+    // A fresh document restores only the session belonging to the destination portal.
+    if (browser) window.location.assign(portalPaths[next === 'seller' ? 'staff' : next]);
+    else setNativePortal(next === 'seller' ? 'seller' : 'app');
   }
   return { portal, navigate };
 }

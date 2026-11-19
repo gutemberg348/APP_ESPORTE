@@ -2,10 +2,10 @@
 
 ## Preparar
 
-A empresa entra em **Administração geral → Funcionários → Cadastrar acesso** e escolhe **Administrador do time**. Esse usuário entra em `/admin` para cadastrar os funcionários do clube. O clube pode atribuir **Bilheteria**, **Portaria** ou **Caixa de parceiro**. A empresa gerencia os acessos administrativos do time.
+A empresa entra em **Administração geral → Funcionários → Cadastrar acesso** e escolhe **Administrador do time**. Esse usuário entra em `/acesso/` para cadastrar os funcionários do clube. O clube pode atribuir **Bilheteria**, **Portaria** ou **Caixa de parceiro**. A empresa gerencia os acessos administrativos do time.
 
 1. No admin, publique a partida V1, abra as vendas e cadastre lotes ativos com preço e capacidade nos setores disponíveis. O balcão vende o estoque desses lotes.
-2. Em **Funcionários**, crie uma conta **Bilheteria** para cada vendedor. No app, o perfil abre a tela de vendas após o login. No navegador, a equipe acessa `/bilheteria`. O administrador também pode usar esse endereço.
+2. Em **Funcionários**, crie uma conta **Bilheteria** para cada vendedor. No app, o perfil abre a tela de vendas após o login. No navegador, o vendedor entra em `/acesso/` com as mesmas credenciais e segue direto para a bilheteria. O administrador do time pode selecionar **Abrir bilheteria** no painel.
 3. Em **Configurações**, o prazo de reserva de ingressos também vale para o balcão. O fim da venda pode encurtar esse prazo.
 
 ## Vender

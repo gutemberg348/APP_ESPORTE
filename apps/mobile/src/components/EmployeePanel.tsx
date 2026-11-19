@@ -146,9 +146,9 @@ export function EmployeePanel({
           : employeeApi.password(token!, selected!.id, password),
       create
         ? ({
-            ADMIN: "Administrador do time cadastrado. Entre em /admin para cadastrar a equipe.",
-            TICKET_SELLER: "Vendedor cadastrado. Use o login no app ou em /bilheteria.",
-            GATE: "Funcionário cadastrado. Defina os setores em Ações → Definir escala.",
+            ADMIN: "Administrador do time cadastrado. Entre em /acesso/ para cadastrar a equipe.",
+            TICKET_SELLER: "Vendedor cadastrado. Use o login no app ou em /acesso/.",
+            GATE: "Portaria cadastrada. O funcionário entra em /acesso/. Defina os setores em Ações → Definir escala.",
             CASHIER: "Caixa cadastrado. Autorize o acesso no cadastro do parceiro.",
           }[role])
         : "Senha redefinida e sessões anteriores revogadas.",
@@ -408,7 +408,7 @@ export function EmployeePanel({
                 editable={!busy}
               />
               <AdminNotice>
-                {role === "ADMIN" ? "Este acesso abre o painel do time em /admin e permite cadastrar a equipe do clube." : roles.find(item => item.value === role)?.description}
+                {role === "ADMIN" ? "Este acesso abre o painel do time em /acesso/ e permite cadastrar a equipe do clube." : roles.find(item => item.value === role)?.description}
               </AdminNotice>
             </>
           )}

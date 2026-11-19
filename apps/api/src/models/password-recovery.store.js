@@ -56,7 +56,7 @@ export function createPasswordRecoveryStore(
         const url = new URL(publicUrl);
         url.hash = new URLSearchParams({
           token,
-          portal: portal.toLowerCase(),
+          portal: user.role === "OWNER" ? "owner" : user.role === "USER" ? "app" : "admin",
         }).toString();
         await tx.passwordResetToken.create({
           data: {

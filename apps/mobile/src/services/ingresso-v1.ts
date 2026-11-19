@@ -688,9 +688,9 @@ export const ingressoV1Api = {
       { token }
     ),
 
-  ingressos: (token: string, partidaId?: string) =>
+  ingressos: (token: string, partidaId?: string, search = '') =>
     request<IngressoEmitidoV1[]>(
-      `/ingresso-v1/ingressos${partidaId ? `?partidaId=${encodeURIComponent(partidaId)}` : ''}`,
+      `/ingresso-v1/ingressos?${new URLSearchParams({ ...(partidaId && { partidaId }), ...(search && { search }) })}`,
       { token }
     ),
   emitirIngresso: (

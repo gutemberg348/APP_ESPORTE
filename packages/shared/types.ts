@@ -83,7 +83,7 @@ export interface Redemption { id: string; rewardId: string; cost: number; create
 export interface Engagement { checkInPoints: number; checkInEnabled: boolean; checkedIn: boolean; day: string; earnedPoints?: number; ledger: PointEntry[]; rewards: Reward[]; redemptions: Redemption[]; ranking: { name: string; points: number; you: boolean }[] }
 export interface Prediction { matchId: string; homeScore: number; awayScore: number }
 export interface Dashboard { member: Member; nextMatch: Match | null; matches: Match[]; partners: Partner[]; tickets: Ticket[]; engagement: Engagement; predictions: Prediction[] }
-export interface AdminOverview { users: number; matches: number; issuedTickets: number; pendingReservations: number }
+export interface AdminOverview { users: number; matches: number; issuedTickets: number; pendingReservations: number; upcomingCounterMatches?: { id: string; timeMandante: string; timeVisitante: string; dataPartida: string; status: string }[] }
 export interface AdminTicket extends Ticket { revision: string; user: { id: string; name: string; email: string } }
 export interface ReportPagination { total: number; limit: number; offset: number; hasMore: boolean }
 export interface SalesReport {

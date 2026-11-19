@@ -399,6 +399,7 @@ export const ingressosV1QuerySchema = z
   .object({
     partidaId: z.uuid().optional(),
     alocacaoId: z.uuid().optional(),
+    search: z.string().trim().max(100).optional(),
     status: z.enum(['DISPONIVEL', 'RESERVADO', 'VENDIDO', 'UTILIZADO', 'CANCELADO', 'INVALIDADO', 'all']).default('all'),
   })
   .strict();

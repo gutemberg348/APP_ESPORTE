@@ -11,7 +11,7 @@ export function PasswordRecoveryForm({
   onDone,
 }: {
   token?: string;
-  portal?: "APP" | "ADMIN";
+  portal?: "APP" | "ADMIN" | "OWNER";
   initialEmail?: string;
   onDone: () => void;
 }) {

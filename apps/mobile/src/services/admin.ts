@@ -1,3 +1,5 @@
+import type { IngressoEmitidoV1 } from './ingresso-v1';
+export type AdminTicketRow = { at: string } & ({ channel: 'app'; ticket: AdminTicket } | { channel: 'counter'; ticket: IngressoEmitidoV1 });
 import type { Match, Sector, Member, AdminOverview, AdminTicket, AdminSaleQuote, ClubPlan, AuditEvent, Ticket, TicketReview, AdmissionResult } from '@nacional/shared/types';
 import { request } from './api';
 import type { AdminAccount } from '@nacional/shared/types';
@@ -8,6 +10,7 @@ export interface MatchInput { homeTeam: string; awayTeam: string; startsAt: stri
 export interface SaleReviewInput { ticketId: string; revision: string; sectorId: string; quantity: number }
 export const adminApi = {
   overview: (token: string) => request<AdminOverview>('/admin/overview', { token }),
+  ticketDirectory: (token: string, filters: Record<string, string>) => request<{ items: AdminTicketRow[]; next: string | null }>(`/admin/ticket-directory?${encodedQuery(filters)}`, { token }),
   salesReport: (token: string, filters: Record<string, string>) => request<SalesReport>(`/admin/sales?${encodedQuery(filters)}`, { token }),
   admissionHistory: (token: string, filters: Record<string, string>) => request<AdmissionHistory>(`/admin/admissions?${encodedQuery(filters)}`, { token }),
   denialHistory: (token: string, filters: Record<string, string>) => request<DenialHistory>(`/admin/gate-denials?${encodedQuery(filters)}`, { token }),

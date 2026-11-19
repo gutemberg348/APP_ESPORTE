@@ -4,7 +4,7 @@ const token = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 const requestSchema = z
   .object({
   email: z.string().trim().toLowerCase().email().max(254),
-    portal: z.enum(["APP", "ADMIN"]).default("APP"),
+    portal: z.enum(["APP", "ADMIN", "OWNER"]).default("APP"),
   })
   .strict();
 const resetSchema = z

@@ -1,3 +1,4 @@
+import type { Match } from '@nacional/shared/types';
 import React, { useEffect, useState } from 'react';
 import { View, Pressable } from 'react-native';
 import { Pencil, Ticket, Trash2 } from 'lucide-react-native';
@@ -23,10 +24,13 @@ import {
   type StatusPartidaIngressoV1,
   type TemplateVendaIngressoV1,
 } from '../../../services/ingresso-v1';
-import { messageOf, money } from '../../../utils/format';
+import { matchDate, messageOf, money } from '../../../utils/format';
 import { formDate, parseClubDate } from '../../../utils/admin';
 
 type Props = {
+  appMatches: Match[];
+  onEditApp: (match: Match) => void;
+  refreshKey: number;
   token: string;
   busy: boolean;
   onBusy: (value: boolean) => void;
@@ -67,7 +71,7 @@ export function PartidasIngressoV1Panel({
   onError,
   createOpen = false,
   onConsumeCreate,
-  onOpenIngressos,
+  onOpenIngressos, appMatches, onEditApp, refreshKey,
 }: Props) {
   const { colors } = useTheme();
   const [rows, setRows] = useState<PartidaIngressoV1[]>([]);
@@ -108,7 +112,7 @@ export function PartidasIngressoV1Panel({
 
   useEffect(() => {
     void load();
-  }, [token]);
+  }, [token, refreshKey]);
 
   useEffect(() => {
     if (createOpen) {
@@ -331,24 +335,37 @@ export function PartidasIngressoV1Panel({
 
   const templatesDoEstadio = templatesVenda.filter((t) => t.estadioId === estadioId);
 
+  const appRows = appMatches.map(match => ({
+    id: match.id, startsAt: match.startsAt,
+    cells: [
+      <View style={{ gap: 3 }}>
+        <Text style={{ color: colors.text, fontWeight: '700' }}>{match.homeTeam} × {match.awayTeam}</Text>
+        <Text style={{ color: colors.muted, fontSize: 12 }}>{match.stadium} · {matchDate(match.startsAt)}</Text>
+        <AdminBadge label="App do torcedor" />
+      </View>,
+      <Text style={{ color: colors.text, fontSize: 12 }}>{match.sectors.map(sector => sector.name).join(', ') || 'Sem setores'}</Text>,
+      <AdminBadge label={match.published ? 'Publicado' : 'Rascunho'} />,
+      <AdminButton label="Editar" icon={Pencil} size="small" disabled={busy} onPress={() => onEditApp(match)} />,
+    ],
+  }));
   return (
     <View style={{ gap: 18 }}>
       <AdminTable
         loading={loading}
-        minWidth={0}
-        empty="Nenhuma partida V1 cadastrada."
+        minWidth={740}
+        empty="Nenhuma partida cadastrada."
         columns={[
           { label: 'Partida / Estádio', flex: 2 },
           { label: 'Setores e Lotes', flex: 1.8 },
-          { label: 'Vendidos / Cap.', width: 120 },
-          { label: 'Ações', width: 118 },
+          { label: 'Ocupação / situação', width: 120 },
+          { label: 'Ações', width: 210 },
         ]}
-        rows={rows.map((row) => {
+        rows={[...appRows, ...rows.map((row) => {
           const totalLiberada = row.alocacoesSetor.reduce((s, a) => s + a.capacidadeLiberada, 0);
           const totalVendida = row.alocacoesSetor.reduce((s, a) => s + a.quantidadeVendida, 0);
 
           return {
-            id: row.id,
+            id: row.id, startsAt: row.dataPartida,
             cells: [
               <Pressable
                 accessibilityRole="button"
@@ -369,6 +386,7 @@ export function PartidasIngressoV1Panel({
                     minute: '2-digit',
                   })}
                 </Text>
+                <AdminBadge label="Bilheteria" />
               </Pressable>,
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
                 {row.alocacoesSetor.map((a) => {
@@ -405,7 +423,6 @@ export function PartidasIngressoV1Panel({
                 <AdminButton
                   label="Editar"
                   icon={Pencil}
-                  iconOnly
                   size="small"
                   disabled={busy}
                   onPress={() => openEdit(row)}
@@ -422,13 +439,13 @@ export function PartidasIngressoV1Panel({
               </View>,
             ],
           };
-        })}
+        })].sort((a, b) => Date.parse(b.startsAt) - Date.parse(a.startsAt))}
       />
 
       {modalOpen && (
         <Sheet
           visible
-          title={editing ? 'Editar partida V1' : 'Cadastrar partida V1'}
+          title={editing ? 'Editar partida' : 'Cadastrar partida'}
           onClose={busy ? () => {} : () => setModalOpen(false)}
         >
           <AdminSection title="Dados do jogo e estádio">
@@ -606,7 +623,7 @@ export function PartidasIngressoV1Panel({
       {confirmDelete && (
         <Sheet
           visible
-          title="Excluir partida V1"
+          title="Excluir partida"
           onClose={busy ? () => {} : () => setConfirmDelete(null)}
         >
           <Text style={{ color: colors.text, fontSize: 13 }}>

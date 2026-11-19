@@ -35,6 +35,9 @@ export async function createAuthService({ users, sessions, accessTokens, socialS
       const user = await users.byEmail(email);
       const valid = await verifyPassword(password, user?.passwordHash ?? dummyHash);
       if (!user || !valid || !user.active) throw invalidLogin();
+      if (portal === 'FAN' && user.role !== 'USER') throw invalidLogin();
+      if (portal === 'OWNER' && user.role !== 'OWNER') throw invalidLogin();
+      if (portal === 'STAFF' && !['ADMIN', 'GATE', 'TICKET_SELLER', 'CASHIER'].includes(user.role)) throw invalidLogin();
       if (portal === 'SELLER' && !['TICKET_SELLER', 'ADMIN'].includes(user.role)) throw invalidLogin();
       if (portal === 'GATE' && !['GATE', 'ADMIN'].includes(user.role)) throw invalidLogin();
       if (portal === 'ADMIN' && !isAdminRole(user.role)) throw invalidLogin();

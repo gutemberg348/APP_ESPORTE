@@ -18,7 +18,7 @@ Depois reinicie os processos da API e do Expo que você mantém abertos. Esses c
 
 1. **Partidas V1 → Editar:** habilite a portaria e defina abertura/fechamento opcionais. A partida precisa estar `PUBLICADA` ou `ESGOTADA`; estádio e setor precisam estar ativos. Sem horários personalizados, a janela vai de duas horas antes até quatro horas depois do início do jogo. Horários do formulário são os de Patos (UTC−3).
 2. **Funcionários:** cadastre ou edite uma conta com perfil Portaria e use **Definir escala** para marcar as alocações de setor de cada partida V1. As escalas antigas não são convertidas por nome, para evitar autorizar o setor errado. Salvar sem marcações revoga todas as escalas V1 daquele funcionário.
-3. No navegador, **`/portaria`** abre um acesso da equipe sem cadastro público. No aplicativo, o mesmo login comum encaminha contas `GATE` diretamente à portaria. O administrador também pode operar a portaria.
+3. No navegador, a equipe entra em **`/acesso/`**. O perfil Portaria abre o leitor. No aplicativo, o mesmo login comum encaminha contas `GATE` diretamente à portaria. O administrador também pode operar a portaria.
 4. Selecione partida, setor físico e portão/catraca. Consulte o ingresso por câmera, arquivo de imagem do QR, leitor USB em modo teclado com Enter ou código digitado.
 5. Confira titular e acomodação. **Consultar não libera entrada.** Somente **Confirmar e registrar uma entrada** consome o ingresso. O resultado informa um protocolo, responsável e portão. Cada ingresso V1 autoriza uma pessoa uma única vez.
 

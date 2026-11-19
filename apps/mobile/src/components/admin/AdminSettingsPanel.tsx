@@ -37,7 +37,7 @@ export function AdminSettingsPanel({ refreshKey, onSelect }: { refreshKey: numbe
     <Panel><AdminSection title="Valores e percentuais" description="Cada valor é mantido no seu cadastro, sem repetir a configuração em outras telas.">
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{[
         ['Financeiro', 'Comissão, taxa estimada do gateway e repasse'], ['Loja', 'Produtos, estoque, frete e retirada'],
-        ['Jogos', 'Preços de ingressos e capacidade por setor'], ['Planos', 'Mensalidades e descontos'], ['Parceiros', 'Cashback, comissão e recebedores'],
+        ['Partidas', 'Preços de ingressos e capacidade por setor'], ['Planos', 'Mensalidades e descontos'], ['Parceiros', 'Cashback, comissão e recebedores'],
       ].map(([section, label]) => <AdminButton key={section} label={label!} onPress={() => onSelect(section!)} />)}</View>
       <Text style={{ color: colors.muted, fontSize: 12 }}>Em Financeiro → Configurações, a taxa estimada serve para previsão. Quando o gateway informa a tarifa efetiva, ela é usada na conciliação.</Text>
     </AdminSection></Panel>

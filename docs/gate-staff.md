@@ -5,7 +5,7 @@
 1. Em **Funcionários**, o administrador cadastra uma conta individual com perfil **Portaria**. O cadastro público cria torcedores.
 2. Em **Definir escala**, marca o setor da partida em que a pessoa vai trabalhar. **App** identifica partidas vendidas pelo checkout do torcedor e **V1** identifica partidas de **Gestão de ingressos V1**. Mesmo quando os nomes coincidem, cada setor tem o seu próprio identificador. A escala salva os dois conjuntos juntos.
 3. Para testar ingressos comprados pelo app antes do jogo, vá a **Jogos → Abrir portaria agora**. A API abre a entrada no horário atual do servidor e mantém o horário de fechamento. O torcedor já pode apresentar o QR em **Meus ingressos**. Ao terminar o teste, use **Fechar portaria**. Para agendar, edite os horários da partida. Na ausência de horários específicos, a janela vai de duas horas antes até quatro horas depois do início. Para ingressos presenciais, configure a janela em **Partidas V1**.
-4. Entrega a cada funcionário as próprias credenciais. O navegador tem acesso dedicado em `/portaria`. No Android e no iOS a pessoa usa o login comum do app e é direcionada pelo perfil da conta.
+4. Entrega a cada funcionário as próprias credenciais. No navegador, o funcionário entra em `/acesso/` com sua conta de portaria. No Android e no iOS a pessoa usa o login comum do app e é direcionada pelo perfil da conta.
 
 ## O que cada conta pode fazer
 

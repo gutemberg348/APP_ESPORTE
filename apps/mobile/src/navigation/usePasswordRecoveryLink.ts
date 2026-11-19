@@ -4,7 +4,7 @@ import { readPasswordRecoveryLink } from "../utils/password-recovery";
 export function usePasswordRecoveryLink() {
   const [link, setLink] = useState<{
     token: string;
-    portal: "APP" | "ADMIN";
+    portal: "APP" | "ADMIN" | "OWNER";
   } | null>(null);
   useEffect(() => {
     function handle(raw: string | null | undefined) {

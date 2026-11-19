@@ -1,3 +1,5 @@
+import { listAdminTickets } from '../models/admin-ticket-directory.js';
+import { env } from '../config/env.js';
 import { adminModel } from '../models/admin.model.js';
 import { ticketModel } from '../models/ticket.model.js';
 import { assertAdmin } from '../lib/ticket-rules.js';
@@ -12,6 +14,7 @@ const sales = createAdminTicketStore(db);
 const reports = createAdminReportsStore(db);
 const guard = (work) => (user, input) => { assertAdmin(user); return work(user.id, input, user.role); };
 export const adminService = {
+  ticketDirectory: guard((_, query) => listAdminTickets(db, env.TENANT_SLUG, query)),
   overview: guard(() => adminModel.overview()),
   salesReport: guard((_, query) => reports.sales(query)),
   admissionHistory: guard((_, query) => reports.admissions(query)),

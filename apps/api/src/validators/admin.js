@@ -36,6 +36,14 @@ export const ticketCodeSchema = z.object(entryFields).strict().refine(oneCredent
 export const admissionSchema = z.object({ ...entryFields, quantity: z.number().int().min(1).max(4), requestKey: z.string().regex(/^[A-Za-z0-9_-]{16,80}$/) }).strict().refine(oneCredential, 'Informe somente o QR ou o código digitável.');
 export const admissionReceiptSchema = z.object({ ticketId: z.uuid(), matchId: z.uuid(), sectorId: z.uuid(), requestKey: z.string().regex(/^[A-Za-z0-9_-]{16,80}$/) }).strict();
 export const adminQuerySchema = paginationSchema.extend({ search: z.string().trim().max(100).optional(), matchId: z.uuid().optional(), status: z.enum(['PENDING', 'ISSUED', 'USED', 'CANCELED', 'EXPIRED']).optional(), deleted: z.enum(['exclude', 'only', 'all']).default('exclude') }).strict();
+export const ticketDirectorySchema = z.object({
+  search: z.string().trim().max(100).optional(), matchId: z.uuid().optional(),
+  channel: z.enum(['app', 'counter']).optional(), limit: z.coerce.number().int().min(1).max(100).default(25),
+  cursor: z.string().max(100).refine(value => {
+    const parts = value.split('|');
+    return parts.length === 3 && z.iso.datetime().safeParse(parts[0]).success && z.uuid().safeParse(parts[1]).success && ['app', 'counter'].includes(parts[2]);
+  }).optional(),
+}).strict();
 const reportFields = {
   limit: z.coerce.number().int().min(1).max(100).default(25),
   offset: z.coerce.number().int().min(0).max(1000000000).default(0),

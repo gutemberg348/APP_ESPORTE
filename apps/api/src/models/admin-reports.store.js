@@ -22,7 +22,7 @@ export function salesWhere(query, now = new Date()) {
     ...period(query), ...ticketSearch(search),
     ...(matchId ? { matchId } : {}), ...(sectorId ? { sectorId } : {}),
     ...(deleted === 'all' ? {} : { deletedAt: deleted === 'only' ? { not: null } : null }),
-    ...(payment === 'UNPAID' ? { payment: { is: null } } : payment ? { payment: { is: { method: payment === 'FREE' ? 'FREE' : { in: ['MANUAL', 'ASAAS'] } } } } : {}),
+    ...(payment === 'UNPAID' ? { payment: { is: null } } : payment ? { payment: { is: { method: payment === 'FREE' ? 'FREE' : { in: ['MANUAL', 'ASAAS', 'SICREDI'] } } } } : {}),
     ...(status === 'EXPIRED' ? { status: 'PENDING', expiresAt: { lte: now } } : status === 'PENDING' ? { status, expiresAt: { gt: now } } : status ? { status } : {}),
   };
 }

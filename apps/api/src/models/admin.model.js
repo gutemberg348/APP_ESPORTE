@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { env } from '../config/env.js';
 import { db } from '../config/database.js';
 import { serializable } from '../lib/business-rules.js';
 import { AppError } from '../lib/errors.js';
@@ -10,11 +11,21 @@ import { withAvailability, writeAudit } from './ticket.model.js';
 
 export const adminModel = {
   async overview() {
-    const [users, matches, issued, pending] = await Promise.all([
-      db.user.count(), db.match.count(), db.ticket.aggregate({ where: { deletedAt: null, status: { in: ['ISSUED', 'USED'] } }, _sum: { quantity: true } }),
-      db.ticket.count({ where: { status: 'PENDING', expiresAt: { gt: new Date() } } }),
+    const now = new Date();
+    const clubMatch = { estadio: { tenant: { slug: env.TENANT_SLUG } } };
+    const [users, matches, issued, pending, counterMatches, counterIssued, counterPending, upcomingCounterMatches] = await Promise.all([
+      db.user.count(),
+      db.match.count(),
+      db.ticket.aggregate({ where: { deletedAt: null, status: { in: ['ISSUED', 'USED'] } }, _sum: { quantity: true, voidedQuantity: true } }),
+      db.ticket.count({ where: { deletedAt: null, status: 'PENDING', expiresAt: { gt: now } } }),
+      db.partidaIngressoV1.count({ where: clubMatch }),
+      db.ingressoV1.count({ where: { partida: clubMatch, status: { in: ['VENDIDO', 'UTILIZADO'] } } }),
+      db.pedidoIngressoV1.count({ where: { partida: clubMatch, statusPagamento: 'PENDENTE', expiraEm: { gt: now } } }),
+      db.partidaIngressoV1.findMany({ where: { ...clubMatch, dataPartida: { gt: now }, status: { in: ['PUBLICADA', 'RASCUNHO', 'ESGOTADA'] } },
+        orderBy: { dataPartida: 'asc' }, take: 5, select: { id: true, timeMandante: true, timeVisitante: true, dataPartida: true, status: true } }),
     ]);
-    return { users, matches, issuedTickets: issued._sum.quantity || 0, pendingReservations: pending };
+    return { users, matches: matches + counterMatches, issuedTickets: (issued._sum.quantity || 0) - (issued._sum.voidedQuantity || 0) + counterIssued,
+      pendingReservations: pending + counterPending, upcomingCounterMatches };
   },
   async matches({ limit, offset }) {
     return withAvailability(db, await db.match.findMany({ orderBy: { startsAt: 'desc' }, include: { sectors: { orderBy: { priceCents: 'asc' } } }, take: limit, skip: offset }));

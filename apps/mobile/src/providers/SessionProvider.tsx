@@ -1,4 +1,5 @@
-import { Linking } from 'react-native';
+import { webPortal } from '../navigation/web-portals';
+import { Linking, Platform } from 'react-native';
 import { captureInitialInvitation, captureInvitation, clearInvitation, readInvitation } from '../services/invitation';
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { Member, AuthResponse } from '@nacional/shared/types';
@@ -8,18 +9,20 @@ import { request, ApiError } from '../services/api';
 import { authClient } from '../services/auth-client';
 import { socialLogin } from '../services/social-login';
 import type { SocialProvider } from '../services/social-login-core';
+type LoginPortal = 'APP' | 'GATE' | 'SELLER' | 'FAN' | 'STAFF' | 'OWNER';
 interface Session {
   member: Member | null; token: string | null; loading: boolean; bootError: string | null; demoMode: boolean;
-  signIn: (email: string, password: string, name?: string, portal?: 'APP' | 'ADMIN' | 'GATE' | 'SELLER') => Promise<void>;
+  signIn: (email: string, password: string, name?: string, portal?: LoginPortal) => Promise<void>;
   signInSocial: (provider: SocialProvider) => Promise<void>;
   signOut: () => Promise<void>; logoutAll: () => Promise<void>; clearSession: () => Promise<void>;
   retry: () => Promise<void>; updateMember: React.Dispatch<React.SetStateAction<Member | null>>; resumeDemo: () => void;
 }
 const Context = createContext<Session | null>(null);
 export function SessionProvider({ children }: React.PropsWithChildren) {
-  const [member, setMember] = useState<Member | null>(config.demo ? demo.member as Member : null);
+  const demoEnabled = config.demo && (Platform.OS !== 'web' || typeof window === 'undefined' || webPortal(window.location.pathname) === 'app');
+  const [member, setMember] = useState<Member | null>(demoEnabled ? demo.member as Member : null);
   const [token, setToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState(!config.demo);
+  const [loading, setLoading] = useState(!demoEnabled);
   const [bootError, setBootError] = useState<string | null>(null);
   const clearSession = useCallback(async () => { await authClient.clear(); setToken(null); setMember(null); }, []);
   async function retry() {
@@ -40,13 +43,13 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
     } finally { setLoading(false); }
   }
   useEffect(() => {
-    const unsubscribe = authClient.subscribe((tokens) => { setToken(tokens?.accessToken || null); if (!tokens && !config.demo) setMember(null); });
-    if (!config.demo) void retry();
+    const unsubscribe = authClient.subscribe((tokens) => { setToken(tokens?.accessToken || null); if (!tokens && !demoEnabled) setMember(null); });
+    if (!demoEnabled) void retry();
     void captureInitialInvitation();
     const links = Linking.addEventListener('url', ({ url }) => { if (!authClient.current()) void captureInvitation(url); });
     return () => { unsubscribe(); links.remove(); };
   }, []);
-  async function signIn(email: string, password: string, name?: string, portal: 'APP' | 'ADMIN' | 'GATE' | 'SELLER' = 'APP') {
+  async function signIn(email: string, password: string, name?: string, portal: LoginPortal = 'APP') {
     await captureInitialInvitation();
     const referralCode = name ? await readInvitation() : undefined;
     const result = await request<AuthResponse>(name ? '/auth/register' : '/auth/login', { method: 'POST', body: { email, password, ...(name ? { name, ...(referralCode ? { referralCode } : {}) } : portal !== 'APP' ? { portal } : {}) } });
@@ -71,6 +74,6 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
     if (access) await request('/auth/logout-all', { token: access, method: 'POST' });
     await clearSession();
   }, [clearSession]);
-  return <Context.Provider value={{ member, token, loading, bootError, demoMode: config.demo, signIn, signInSocial, signOut, logoutAll, clearSession, retry, updateMember: setMember, resumeDemo: () => { if (config.demo) setMember(demo.member as Member); } }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ member, token, loading, bootError, demoMode: demoEnabled, signIn, signInSocial, signOut, logoutAll, clearSession, retry, updateMember: setMember, resumeDemo: () => { if (demoEnabled) setMember(demo.member as Member); } }}>{children}</Context.Provider>;
 }
 export function useSession() { const context = useContext(Context); if (!context) throw new Error('SessionProvider ausente'); return context; }

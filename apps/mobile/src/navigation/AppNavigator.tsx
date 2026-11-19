@@ -21,6 +21,7 @@ import { ProfileScreen } from '../screens/ProfileScreen';
 import { SchoolScreen } from '../screens/SchoolScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { AdminLoginScreen } from '../screens/AdminLoginScreen';
+import { accountPortal } from './web-portals';
 import { useWebPortal } from './useWebPortal';
 import { CashbackScreen } from '../screens/CashbackScreen';
 import { MerchantScreen } from '../screens/MerchantScreen';
@@ -50,22 +51,26 @@ export function AppNavigator() {
   const { member, loading, bootError, retry, demoMode, resumeDemo, clearSession } = useSession();
   const { portal, navigate } = useWebPortal();
   const recovery = usePasswordRecoveryLink();
-  if (recovery.link) return <PasswordResetScreen {...recovery.link} onDone={() => { const destination = recovery.link!.portal; void clearSession().then(() => { recovery.clear(); navigate(destination === 'ADMIN' ? 'admin' : 'app'); }); }} />;
+  if (recovery.link) return <PasswordResetScreen {...recovery.link} onDone={() => { const destination = recovery.link!.portal; void clearSession().then(() => { recovery.clear(); navigate(destination === 'OWNER' ? 'owner' : destination === 'ADMIN' ? 'staff' : 'app'); }); }} />;
   if (Platform.OS === 'web' && portal === 'business') {
     const refs = new URL(window.location.href).searchParams.getAll('ref');
     return <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <BusinessInvitationPage key={refs.join(',')} code={refs.length === 1 ? refs[0]! : null} onDone={() => navigate('app')} />
     </SafeAreaView>;
   }
-  if (Platform.OS === 'web' && portal === 'admin' && !member && !demoMode) return <AdminLoginScreen loading={loading} bootError={bootError} onRetry={() => void retry()} onOpenApp={() => navigate('app')} onOpenCounter={() => navigate('seller')} />;
-  if (member?.role === 'OWNER') return <AdminScreen key={member.id} />;
-  if (Platform.OS === 'web' && portal === 'gate' && member && !['GATE', 'ADMIN'].includes(member.role)) return <View style={[layout.center, { gap: 16, padding: 24 }]}><Text>Esta área exige uma conta de portaria ou administrador.</Text><Button label="Voltar ao aplicativo" onPress={() => navigate('app')} /><Button secondary label="Trocar conta" onPress={() => void clearSession()} /></View>;
+  if ((portal === 'staff' || portal === 'owner') && !member) {
+    return <AdminLoginScreen key={portal} portal={portal} loading={loading} bootError={bootError} onRetry={() => void retry()} onOpenApp={() => navigate('app')} />;
+  }
+  if (Platform.OS === 'web' && member && accountPortal(member.role) !== portal) {
+    return <View style={[layout.center, { padding: 24, gap: 16 }]}><Text>Esta conta não tem acesso a esta área.</Text><Button label="Trocar de conta" onPress={() => void clearSession()} /></View>;
+  }
+  if (member?.role === 'OWNER' || (portal === 'staff' && member?.role === 'ADMIN')) return <AdminScreen key={member.id} onBack={portal === 'staff' ? () => navigate('app') : undefined} />;
   if (portal === 'seller' && member && !['TICKET_SELLER','ADMIN'].includes(member.role)) return <View style={layout.center}><Text>Use uma conta de bilheteria.</Text><Button label="Trocar de conta" onPress={() => void clearSession()} /></View>;
   if (member && (member.role === 'TICKET_SELLER' || portal === 'seller')) return <AdminThemeProvider><CounterFrame><TicketCounterScreen key={member.id} /></CounterFrame></AdminThemeProvider>;
   if (portal === 'seller' && !member && !loading && !bootError && !demoMode) return <AdminThemeProvider><CounterFrame><LoginScreen sellerOnly onBack={() => navigate('app')} /></CounterFrame></AdminThemeProvider>;
   if (member?.role === 'CASHIER') return <PaymentsProvider><CashierScreen /></PaymentsProvider>;
   return <View style={{ flex: 1, backgroundColor: colors.outer, alignItems: 'center' }}><StatusBar style={isDark ? 'light' : 'dark'} /><SafeAreaView edges={member?.role === 'ADMIN' ? [] : ['top']} style={{ flex: 1, width: '100%', maxWidth: member?.role === 'ADMIN' ? undefined : Platform.OS === 'web' && member?.role === 'GATE' ? 1180 : 448, backgroundColor: colors.background }}>
-    {loading ? <View style={layout.center}><ActivityIndicator color={colors.primary} /></View> : bootError ? <View style={[layout.center, { padding: 32, gap: 16 }]}><Text style={{ color: colors.danger, textAlign: 'center' }}>{bootError}</Text><Button label="Tentar novamente" onPress={() => void retry()} /></View> : member ? member.role === 'GATE' || portal === 'gate' ? <GateScreen /> : <ClubProvider><PaymentsProvider><MainNavigator /></PaymentsProvider></ClubProvider> : demoMode ? <View style={[layout.center, { padding: 32, gap: 22 }]}><Crest size={78} height={98} /><Text heading style={{ color: colors.text, fontSize: 28, lineHeight: 36, fontWeight: '800', textAlign: 'center' }}>Sua torcida está aqui.</Text><Button label={`Voltar ao ${club.shortName}`} onPress={resumeDemo} /></View> : <LoginScreen onSellerLogin={portal === 'app' ? () => navigate('seller') : undefined} gateOnly={portal === 'gate'} onAdminLogin={Platform.OS === 'web' ? () => navigate('admin') : undefined} />}
+    {loading ? <View style={layout.center}><ActivityIndicator color={colors.primary} /></View> : bootError ? <View style={[layout.center, { padding: 32, gap: 16 }]}><Text style={{ color: colors.danger, textAlign: 'center' }}>{bootError}</Text><Button label="Tentar novamente" onPress={() => void retry()} /></View> : member ? member.role === 'GATE' ? <GateScreen /> : <ClubProvider><PaymentsProvider><MainNavigator /></PaymentsProvider></ClubProvider> : demoMode ? <View style={[layout.center, { padding: 32, gap: 22 }]}><Crest size={78} height={98} /><Text heading style={{ color: colors.text, fontSize: 28, lineHeight: 36, fontWeight: '800', textAlign: 'center' }}>Sua torcida está aqui.</Text><Button label={`Voltar ao ${club.shortName}`} onPress={resumeDemo} /></View> : <LoginScreen onSellerLogin={Platform.OS !== 'web' ? () => navigate('seller') : undefined} onStaffLogin={Platform.OS === 'web' ? () => navigate('staff') : undefined} />}
   </SafeAreaView></View>;
 }
 function MainNavigator() {

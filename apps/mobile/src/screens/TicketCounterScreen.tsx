@@ -28,7 +28,7 @@ const statusLabels: Record<string, string> = {
   ESTORNADO: 'Estornado', ESTORNADO_PARCIALMENTE: 'Estorno parcial',
 };
 
-export function TicketCounterScreen() {
+export function TicketCounterScreen({ onBack }: { onBack?: () => void }) {
   const { token, member, signOut } = useSession();
   const { colors } = useTheme();
   const wide = useWindowDimensions().width >= 900;
@@ -125,6 +125,7 @@ export function TicketCounterScreen() {
   return <Page><View style={{ gap: 20, width: '100%', maxWidth: 1120, alignSelf: 'center' }}>
     <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12, paddingBottom: 14, borderBottomWidth: 1, borderColor: colors.border }}>
       <View style={{ flex: 1, minWidth: 120 }}><Title title="Bilheteria" subtitle={member?.name} /></View>
+      {onBack && <AdminButton label="Voltar ao painel" variant="ghost" disabled={busy} onPress={onBack} />}
       <AdminButton label="Senha e sessões" icon={ShieldCheck} iconOnly={!wide} variant="ghost" disabled={busy} onPress={() => setSecurity(true)} />
       <AdminButton label="Sair" icon={LogOut} variant="ghost" disabled={busy} onPress={() => void run(signOut)} />
     </View>

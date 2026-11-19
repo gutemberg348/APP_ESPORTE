@@ -12,8 +12,8 @@ export { AdminButton as AdminAction } from './AdminControls';
 
 export const adminSections = [
   { name: 'Visão geral', icon: LayoutDashboard, group: 'Operação', description: 'Os números e as próximas ações do clube.' },
-  { name: 'Jogos', icon: CalendarDays, group: 'Operação', description: 'Partidas, setores e disponibilidade de ingressos.' },
-  { name: 'Vendas', icon: Ticket, group: 'Operação', description: 'Encontre pedidos e acompanhe os resultados.' },
+  { name: 'Partidas', icon: CalendarDays, group: 'Operação', description: 'Calendário, estádios e modelos de setores e vendas.' },
+  { name: 'Ingressos', icon: Ticket, group: 'Operação', description: 'Emissão manual, bilhetes da bilheteria e compras do app.' },
   { name: 'Loja', icon: ShoppingBag, group: 'Operação', description: 'Produtos, pedidos, estoque e opções de entrega.' },
   { name: 'Pagamentos', icon: BadgeCheck, group: 'Operação', description: 'Pix, conciliação e devoluções.' },
   { name: 'Saques', icon: BadgeCheck, group: 'Operação', description: 'Pedidos de saque, envios realizados e comprovantes do time.' },
@@ -24,12 +24,7 @@ export const adminSections = [
   { name: 'Configurações', icon: Settings2, group: 'Gestão', description: 'Regras comerciais, prazos, pontos e recompensas.' },
   { name: 'Email e acesso', icon: UserRoundCog, group: 'Gestão', description: 'Recuperação de senha, configuração SMTP e acompanhamento dos envios.' },
   { name: 'Funcionários', icon: UserRoundCog, group: 'Gestão', description: 'Equipe, acessos e escalas de portaria.' },
-  { name: 'Estádios', icon: Building2, group: 'Gestão de Ingressos', description: 'Estádios e estrutura de setores.' },
-  { name: 'Templates de setores', icon: Building2, group: 'Gestão de Ingressos', description: 'Modelos de setores e assentos.' },
-  { name: 'Templates de venda', icon: Ticket, group: 'Gestão de Ingressos', description: 'Regras comerciais por estádio.' },
-  { name: 'Partidas V1', icon: CalendarDays, group: 'Gestão de Ingressos', description: 'Crie partidas e aplique templates de venda.' },
-  { name: 'Pedidos e ingressos V1', icon: Ticket, group: 'Gestão de Ingressos', description: 'Acompanhe pedidos e ingressos do novo sistema.' },
-  { name: 'Portaria', icon: ScanLine, group: 'Gestão de Ingressos', description: 'Câmera, imagem, leitor USB e código impresso. Entradas do sistema de ingressos V1.' },
+  { name: 'Portaria', icon: ScanLine, group: 'Controle', description: 'Câmera, imagem, leitor USB e código impresso.' },
   { name: 'Histórico de portaria', icon: History, group: 'Controle', description: 'Entradas e protocolos da portaria unificada.' },
   { name: 'Auditoria', icon: History, group: 'Controle', description: 'Consulte as ações realizadas pela administração.' },
 ];
@@ -47,6 +42,7 @@ export function AdminLayout({ children, active, onSelect, onBack, onSecurity, on
     <View style={{ flexDirection: 'row', gap: 11, alignItems: 'center', paddingHorizontal: compact ? 0 : 6 }}><View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: colors.primaryStrong, alignItems: 'center', justifyContent: 'center' }}><Building2 size={18} color={colors.onPrimary} strokeWidth={1.7} /></View>{!compact && <View style={{ flex: 1, gap: 1 }}><Text style={{ color: colors.text, fontSize: 13, fontWeight: '600' }}>{owner ? 'Administração geral' : club.shortName}</Text><Text style={{ color: colors.subtle, fontSize: 11 }}>{owner ? `Empresa · ${club.shortName}` : 'Administração do clube'}</Text></View>}{!desktop && <AdminButton label="Fechar menu" icon={X} iconOnly variant="ghost" onPress={() => setDrawer(false)} />}</View>
     <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ gap: 3 }}>{adminSections.map((section, index) => <React.Fragment key={section.name}>{!compact && section.group !== adminSections[index - 1]?.group && <Text style={{ color: colors.subtle, fontSize: 10, fontWeight: '500', paddingHorizontal: 12, marginTop: index ? 22 : 1, marginBottom: 8 }}>{section.group}</Text>}<NavItem label={section.name} icon={section.icon} active={active === section.name} compact={compact} onPress={() => select(section.name)} /></React.Fragment>)}</ScrollView>
     <View style={{ borderTopWidth: 1, borderColor: colors.border, paddingTop: 14, gap: 10 }}>
+      {!owner && <NavItem label="Abrir bilheteria" icon={Ticket} compact={compact} onPress={() => select('Bilheteria')} />}
       {onBack && <NavItem label="Área do torcedor" icon={ArrowUpRight} compact={compact} onPress={() => { setDrawer(false); onBack(); }} />}
       <NavItem label="Segurança da conta" icon={ShieldCheck} compact={compact} onPress={() => { setDrawer(false); onSecurity(); }} />
       <View style={{ flexDirection: compact ? 'column' : 'row', alignItems: 'center', gap: 9 }}><View style={{ width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.soft }}><Text style={{ color: colors.muted, fontSize: 10, fontWeight: '600' }}>{initials}</Text></View>{!compact && <View style={{ flex: 1, minWidth: 0 }}><Text numberOfLines={1} style={{ color: colors.text, fontSize: 11, fontWeight: '500' }}>{member?.name}</Text><Text style={{ color: colors.subtle, fontSize: 10 }}>{owner ? 'Empresa' : 'Clube'}</Text></View>}<AdminButton label="Sair da conta" icon={LogOut} iconOnly variant="ghost" disabled={busy} onPress={onSignOut} /></View>

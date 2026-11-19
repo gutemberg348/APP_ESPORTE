@@ -171,6 +171,7 @@ export const routes = [
   { method: 'GET', path: '/v1/tickets/payment-instructions', handler: adminController.instructions, private: true },
   { method: 'POST', path: '/v1/tickets/cancel', handler: adminController.customerCancel, private: true, ticketLimit: 'checkout' },
   { method: 'GET', path: '/v1/admin/overview', handler: adminController.overview, private: true, admin: true },
+  { method: 'GET', path: '/v1/admin/ticket-directory', handler: adminController.ticketDirectory, private: true, admin: true },
   { method: 'GET', path: '/v1/admin/sales', handler: adminController.salesReport, private: true, admin: true },
   { method: 'GET', path: '/v1/admin/admissions', handler: adminController.admissionHistory, private: true, admin: true },
   { method: 'GET', path: '/v1/admin/admissions/protocol', handler: adminController.admissionProtocol, private: true, admin: true },

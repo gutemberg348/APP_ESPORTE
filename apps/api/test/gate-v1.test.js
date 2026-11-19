@@ -10,6 +10,7 @@ import { createAppGate } from '../src/services/app-gate.js';
 import { createTicketEntryService } from '../src/services/ticket-entry.service.js';
 import { createStaffModel } from '../src/models/staff.model.js';
 import { createAdminReportsStore } from '../src/models/admin-reports.store.js';
+import { listAdminTickets } from '../src/models/admin-ticket-directory.js';
 import { createGateV1Store } from '../src/models/gate-v1.store.js';
 import { signTicketV1Token, verifyTicketV1TokenSignature } from '../src/lib/ingresso-v1-token.js';
 import { gateV1AdmitSchema, gateV1InspectSchema, gateV1HistorySchema } from '../src/validators/gate-v1.js';
@@ -98,6 +99,25 @@ test('V1 gate migration, authorization, payment, single use and receipt recovery
     const order = await db.pedidoIngressoV1.create({ data: { usuarioId: admin.id, partidaId: current.partidaId, valorTotalCentavos: 3000, statusPagamento: 'PAGO' } });
     return db.ingressoV1.create({ data: { partidaId: current.partidaId, alocacaoId: current.alocacaoId, pedidoId: order.id, nomeTitular: 'Torcedor', cpfTitular: '12345678909', status: 'VENDIDO', chaveQr: signTicketV1Token(current, secret), ...extra } });
   }
+  await t.test('paid app purchases and counter tickets share one searchable directory and paginate through ties', async () => {
+    const match = await db.match.create({ data: { slug: randomUUID(), homeTeam: 'Casa', awayTeam: 'Visitante',
+      startsAt: instant, stadium: 'Teste', competition: 'Teste', sectors: { create: { name: 'Geral', priceCents: 10 } } }, include: { sectors: true } });
+    const buyer = await db.user.create({ data: { name: 'Pessoa diretório', email: 'directory@test.local', passwordHash: 'test' } });
+    const ticket = await db.ticket.create({ data: { userId: buyer.id, matchId: match.id, sectorId: match.sectors[0].id,
+      priceCents: 10, quantity: 1, status: 'ISSUED', payment: { create: { method: 'SICREDI', amountCents: 10, reference: randomUUID() } } } });
+    await issue({ id: ticket.id, nomeTitular: buyer.name, criadoEm: ticket.createdAt });
+    const list = (query = {}) => listAdminTickets(db, tenant.slug, { search: buyer.name, limit: 1, ...query });
+    const first = await list();
+    assert.equal(first.items[0].channel, 'app');
+    assert.equal(first.items[0].ticket.payment.amountCents, 10);
+    assert.ok(first.next);
+    const second = await list({ cursor: first.next });
+    assert.equal(second.items[0].channel, 'counter');
+    assert.equal(second.next, null);
+    assert.equal((await list({ matchId: match.id })).next, null);
+    assert.equal((await list({ channel: 'counter', matchId: match.id })).items.length, 0);
+    assert.equal((await list({ search: buyer.email })).items[0].ticket.id, ticket.id);
+  });
   await t.test('app and V1 scopes stay independent; a group QR, manual code and recovery refer to the same admission', async () => {
     const entry = createTicketEntryService(db, { secret, issuer: 'test', now: () => instant });
     const gate = createAppGate({ staff: createStaffModel(db), reports: createAdminReportsStore(db), entry });

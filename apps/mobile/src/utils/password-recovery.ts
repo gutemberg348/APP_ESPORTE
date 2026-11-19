@@ -1,6 +1,6 @@
 export function readPasswordRecoveryLink(
   raw: string | null | undefined,
-): { token: string; portal: "APP" | "ADMIN" } | null {
+): { token: string; portal: "APP" | "ADMIN" | "OWNER" } | null {
   if (!raw) return null;
   try {
     const url = new URL(raw);
@@ -15,7 +15,7 @@ export function readPasswordRecoveryLink(
     if (!token || token.length > 256) return null;
     return {
       token,
-      portal: params.get("portal") === "admin" ? "ADMIN" : "APP",
+      portal: params.get("portal") === "owner" ? "OWNER" : params.get("portal") === "admin" ? "ADMIN" : "APP",
     };
   } catch {
     return null;

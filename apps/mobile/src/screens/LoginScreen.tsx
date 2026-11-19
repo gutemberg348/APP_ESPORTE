@@ -23,7 +23,7 @@ function ProviderMark({ provider }: { provider: SocialProvider }) {
   return provider === 'google' ? <Svg width={20} height={20} viewBox="0 0 48 48"><Path fill="#4285F4" d="M43.6 20.5H24v8h11.3C33.9 34.1 29.2 37 24 37a13 13 0 1 1 8.6-22.7l6-6A21 21 0 1 0 45 24c0-1.2-.5-2.4-1.4-3.5Z" /><Path fill="#34A853" d="M24 45c5.6 0 10.4-1.8 14-5.1l-6.8-5.3A13 13 0 0 1 11.7 28l-7 5.5A21 21 0 0 0 24 45Z" /><Path fill="#FBBC05" d="M11.7 28a13 13 0 0 1 0-8l-7-5.5a21 21 0 0 0 0 19Z" /><Path fill="#EA4335" d="M24 11c3.2 0 6.2 1.2 8.6 3.3l6-6A21 21 0 0 0 4.7 14.5l7 5.5A13 13 0 0 1 24 11Z" /></Svg> : <Svg width={20} height={23} viewBox="0 0 24 24"><Path fill="#111111" d="M17.05 12.54c.03 3.24 2.84 4.32 2.87 4.33-.02.08-.45 1.54-1.48 3.05-.9 1.3-1.83 2.6-3.3 2.63-1.44.03-1.9-.85-3.55-.85-1.64 0-2.15.82-3.51.88-1.42.05-2.5-1.42-3.4-2.72-1.85-2.67-3.26-7.55-1.36-10.85a5.27 5.27 0 0 1 4.46-2.7c1.4-.03 2.73.95 3.58.95.85 0 2.44-1.18 4.12-1.01.7.03 2.66.28 3.92 2.12-.1.06-2.34 1.36-2.31 4.17ZM14.35 3.48c.75-.9 1.26-2.15 1.12-3.4-1.08.04-2.39.72-3.17 1.62-.7.8-1.31 2.08-1.14 3.3 1.2.1 2.43-.61 3.19-1.52Z" /></Svg>;
 }
 
-export function LoginScreen({ onAdminLogin, onSellerLogin, onBack, gateOnly = false, sellerOnly = false }: { onAdminLogin?: () => void; onSellerLogin?: () => void; onBack?: () => void; gateOnly?: boolean; sellerOnly?: boolean }) {
+export function LoginScreen({ onStaffLogin, onSellerLogin, onBack, gateOnly = false, sellerOnly = false }: { onStaffLogin?: () => void; onSellerLogin?: () => void; onBack?: () => void; gateOnly?: boolean; sellerOnly?: boolean }) {
   const staffOnly = gateOnly || sellerOnly;
   const { colors } = useTheme();
   const { signIn, signInSocial } = useSession();
@@ -55,7 +55,7 @@ export function LoginScreen({ onAdminLogin, onSellerLogin, onBack, gateOnly = fa
     setSubmitted(true); clearFeedback();
     if (Object.values(fields).some(Boolean)) return;
     Keyboard.dismiss(); setBusy(true);
-    try { await signIn(email.trim().toLowerCase(), password, registering ? name.trim() : undefined, sellerOnly ? 'SELLER' : gateOnly ? 'GATE' : 'APP'); }
+    try { await signIn(email.trim().toLowerCase(), password, registering ? name.trim() : undefined, sellerOnly ? 'SELLER' : gateOnly ? 'GATE' : Platform.OS === 'web' ? 'FAN' : 'APP'); }
     catch (err) { showError(err); }
     finally { setBusy(false); }
   }
@@ -95,7 +95,7 @@ export function LoginScreen({ onAdminLogin, onSellerLogin, onBack, gateOnly = fa
       {!sellerOnly && <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 7 }}><ShieldCheck color={colors.muted} size={15} /><Text style={{ fontSize: 11, color: colors.muted }}>Seu acesso ao {club.shortName}, em um só lugar.</Text></View>}
       {onSellerLogin && !registering && <Pressable accessibilityRole="link" disabled={locked} onPress={onSellerLogin} style={{ alignItems: 'center', padding: 12 }}><Text style={{ color: colors.muted }}>Acesso da bilheteria</Text></Pressable>}
       {onBack && <Pressable accessibilityRole="button" disabled={locked} onPress={onBack} style={{ alignItems: 'center', padding: 12 }}><Text style={{ color: colors.muted }}>Voltar ao aplicativo</Text></Pressable>}
-      {onAdminLogin && <Pressable disabled={locked} onPress={onAdminLogin} style={{ padding: 12, alignItems: 'center' }} accessibilityRole="link"><Text style={{ color: colors.muted, fontSize: 12 }}>Acessar painel administrativo</Text></Pressable>}
+      {onStaffLogin && <Pressable disabled={locked} onPress={onStaffLogin} style={{ padding: 12, alignItems: 'center' }} accessibilityRole="link"><Text style={{ color: colors.muted, fontSize: 12 }}>Acesso da equipe do clube</Text></Pressable>}
     </View>
     {forgot && <Sheet visible title="Recuperar senha" onClose={() => setForgot(false)}><PasswordRecoveryForm initialEmail={email} onDone={() => setForgot(false)} /></Sheet>}
   </KeyboardAwareScrollView>;

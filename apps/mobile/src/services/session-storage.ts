@@ -3,8 +3,10 @@ import { Platform } from 'react-native';
 import type { AuthTokens } from '@nacional/shared/types';
 import { config } from '../config/env';
 import { createWebSessionStorage } from './web-session-storage';
+import { webPortal } from '../navigation/web-portals';
 const key = 'nacional.auth.v2';
-const web = createWebSessionStorage(`${key}:${encodeURIComponent(config.apiUrl)}`, () => typeof window === 'undefined' ? null : window.sessionStorage);
+const area = Platform.OS === 'web' && typeof window !== 'undefined' ? webPortal(window.location.pathname) : 'app';
+const web = createWebSessionStorage(`${key}:${encodeURIComponent(config.apiUrl)}:${area}`, () => typeof window === 'undefined' ? null : window.sessionStorage);
 export const sessionStorage = {
   async get(): Promise<AuthTokens | null> {
     if (Platform.OS === 'web') return web.get();

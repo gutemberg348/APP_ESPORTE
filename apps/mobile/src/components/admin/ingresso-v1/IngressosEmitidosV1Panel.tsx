@@ -1,6 +1,9 @@
+import type { Match } from '@nacional/shared/types';
+import { adminApi, type AdminTicketRow } from '../../../services/admin';
+import { AppTicketActions, type SaleCallbacks } from '../AdminSalesReport';
 import QRCode from 'react-native-qrcode-svg';
 import { TicketBarcode } from '../../TicketBarcode';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, Pressable, Image } from 'react-native';
 import { Ban, QrCode } from 'lucide-react-native';
 import { Button } from '../../ui';
@@ -25,6 +28,8 @@ import {
 import { messageOf, money } from '../../../utils/format';
 
 type Props = {
+  appMatches: Match[];
+  appActions: SaleCallbacks;
   token: string;
   busy: boolean;
   onBusy: (value: boolean) => void;
@@ -33,6 +38,7 @@ type Props = {
   createOpen?: boolean;
   onConsumeCreate?: () => void;
   initialPartidaId?: string;
+  refreshKey: number;
 };
 
 export function IngressosEmitidosV1Panel({
@@ -43,12 +49,19 @@ export function IngressosEmitidosV1Panel({
   onError,
   createOpen = false,
   onConsumeCreate,
-  initialPartidaId,
+  initialPartidaId, refreshKey, appMatches, appActions,
 }: Props) {
   const { colors } = useTheme();
-  const [rows, setRows] = useState<IngressoEmitidoV1[]>([]);
+  const [rows, setRows] = useState<AdminTicketRow[]>([]);
   const [partidas, setPartidas] = useState<PartidaIngressoV1[]>([]);
-  const [filtroPartidaId, setFiltroPartidaId] = useState(initialPartidaId || '');
+  const [filtroPartidaId, setFiltroPartidaId] = useState(initialPartidaId ? 'counter:' + initialPartidaId : '');
+  const [search, setSearch] = useState('');
+  const [pages, setPages] = useState<string[]>([]);
+  const [next, setNext] = useState<string | null>(null);
+  const cursor = pages.at(-1) || '';
+  const revision = useRef(0);
+  const mapRequest = useRef(0);
+  const issuing = useRef(false);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [bilheteVisivel, setBilheteVisivel] = useState<IngressoEmitidoV1 | null>(null);
@@ -67,28 +80,39 @@ export function IngressosEmitidosV1Panel({
   const [formError, setFormError] = useState('');
 
   async function load(targetPartidaId = filtroPartidaId) {
+    const current = ++revision.current;
     setLoading(true);
     try {
-      const [listaIngressos, listaPartidas] = await Promise.all([
-        ingressoV1Api.ingressos(token, targetPartidaId || undefined),
-        ingressoV1Api.partidas(token),
-      ]);
-      setRows(listaIngressos);
-      setPartidas(listaPartidas);
+      const [channel, matchId] = targetPartidaId.split(':');
+      const result = await adminApi.ticketDirectory(token, { channel: channel || '', matchId: matchId || '', search: search.trim(), cursor });
+      if (current !== revision.current) return;
+      setRows(result.items);
+      setNext(result.next);
+
     } catch (error) {
-      onError(messageOf(error));
+      if (current === revision.current) { setRows([]); setNext(null); onError(messageOf(error)); }
     } finally {
-      setLoading(false);
+      if (current === revision.current) setLoading(false);
     }
   }
 
   useEffect(() => {
-    void load(filtroPartidaId);
-  }, [token, filtroPartidaId]);
+    setLoading(true); setNext(null); setRows([]);
+    const timer = setTimeout(() => void load(filtroPartidaId), search.trim() ? 250 : 0);
+    return () => { clearTimeout(timer); revision.current++; };
+  }, [token, filtroPartidaId, refreshKey, search, cursor]);
+
+  useEffect(() => {
+    let active = true;
+    ingressoV1Api.partidas(token).then(list => { if (active) setPartidas(list); })
+      .catch(error => { if (active) onError(messageOf(error)); });
+    return () => { active = false; };
+  }, [token, refreshKey]);
 
   useEffect(() => {
     if (initialPartidaId) {
-      setFiltroPartidaId(initialPartidaId);
+      setFiltroPartidaId('counter:' + initialPartidaId);
+      setPages([]);
     }
   }, [initialPartidaId]);
 
@@ -100,9 +124,11 @@ export function IngressosEmitidosV1Panel({
   }, [createOpen]);
 
   async function carregarMapaDoSetor(targetAlocacaoId: string, targetBloco?: number) {
+    const current = ++mapRequest.current;
     setCarregandoMapa(true);
     try {
       const res = await ingressoV1Api.mapaBloco(token, targetAlocacaoId, targetBloco);
+      if (current !== mapRequest.current) return;
       setMapaBloco(res);
       if (targetBloco && res.blocoSelecionado) {
         setBlocoEscolhido(res.blocoSelecionado.numeroBloco);
@@ -112,14 +138,15 @@ export function IngressosEmitidosV1Panel({
       }
       setAssentoEscolhido(null);
     } catch (error) {
-      setFormError(messageOf(error));
+      if (current === mapRequest.current) setFormError(messageOf(error));
     } finally {
-      setCarregandoMapa(false);
+      if (current === mapRequest.current) setCarregandoMapa(false);
     }
   }
 
   function openEmitir() {
-    setPartidaId('');
+    mapRequest.current++;
+    setPartidaId(filtroPartidaId.startsWith('counter:') ? filtroPartidaId.slice(8) : '');
     setAlocacaoId('');
     setLoteId('');
     setNomeTitular('');
@@ -133,6 +160,7 @@ export function IngressosEmitidosV1Panel({
   }
 
   function handleSelectPartida(nextPartidaId: string) {
+    mapRequest.current++;
     setPartidaId(nextPartidaId);
     setAlocacaoId('');
     setLoteId('');
@@ -145,8 +173,9 @@ export function IngressosEmitidosV1Panel({
   function handleSelectAlocacao(nextAlocacaoId: string) {
     const p = partidas.find((x) => x.id === partidaId);
     const aloc = p?.alocacoesSetor.find((a) => a.id === nextAlocacaoId);
+    mapRequest.current++;
     setAlocacaoId(nextAlocacaoId);
-    setLoteId('');
+    setLoteId(aloc?.lotes.length === 1 ? aloc.lotes[0]?.id || '' : '');
     setMapaBloco(null);
     setBlocoEscolhido(null);
     setFileiraEscolhida('');
@@ -171,12 +200,17 @@ export function IngressosEmitidosV1Panel({
   );
 
   async function emitir() {
+    if (issuing.current) return;
     if (!partidaId || !alocacaoId) {
       setFormError('Selecione a partida e o setor.');
       return;
     }
     if (!nomeTitular.trim()) {
       setFormError('Informe o nome completo do titular do ingresso.');
+      return;
+    }
+    if (!loteId) {
+      setFormError('Escolha o lote para conferir o valor da emissão.');
       return;
     }
     if (alocacaoSelecionada?.setor.numerado) {
@@ -186,6 +220,7 @@ export function IngressosEmitidosV1Panel({
       }
     }
 
+    issuing.current = true;
     onBusy(true);
     setFormError('');
     try {
@@ -206,6 +241,7 @@ export function IngressosEmitidosV1Panel({
     } catch (error) {
       setFormError(messageOf(error));
     } finally {
+      issuing.current = false;
       onBusy(false);
     }
   }
@@ -233,40 +269,59 @@ export function IngressosEmitidosV1Panel({
   );
   const qtdCadeirasFileira = mapaBloco?.blocoSelecionado?.cadeirasPorFileira || 0;
 
+
   return (
     <View style={{ gap: 18 }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
+        <View style={{ flex: 1, minWidth: 240 }}>
+          <AdminField label="Buscar ingresso" maxLength={100} placeholder="Nome, e-mail, código ou pedido" value={search} onChange={value => { setSearch(value); setPages([]); }} />
+        </View>
         <View style={{ flex: 1, minWidth: 240 }}>
           <AdminSelect
             label="Filtrar por partida"
             value={filtroPartidaId}
             disabled={busy}
             options={[
-              { value: '', label: 'Todas as partidas V1' },
+              { value: '', label: 'Todas as partidas' },
+              ...appMatches.map(m => ({ value: 'app:' + m.id, label: `${m.homeTeam} × ${m.awayTeam} · App` })),
               ...partidas.map((p) => ({
-                value: p.id,
-                label: `${p.timeMandante} × ${p.timeVisitante} (${p.estadio.nomePopular || p.estadio.nome})`,
+                value: 'counter:' + p.id,
+                label: `${p.timeMandante} × ${p.timeVisitante} (${p.estadio.nomePopular || p.estadio.nome}) · Bilheteria`,
               })),
             ]}
-            onChange={setFiltroPartidaId}
+            onChange={value => { setFiltroPartidaId(value); setPages([]); }}
           />
         </View>
       </View>
 
       <AdminTable
         loading={loading}
-        minWidth={0}
-        empty="Nenhum ingresso V1 emitido até o momento."
+        minWidth={680}
+        empty={search.trim() ? "Nenhum ingresso encontrado para a busca." : "Nenhum ingresso emitido para esta seleção."}
         columns={[
           { label: 'Titular / Jogo', flex: 1.8 },
           { label: 'Setor e Assento', flex: 1.6 },
-          { label: 'Status / QR', width: 135 },
-          { label: 'Ações', width: 84 },
+          { label: 'Situação', width: 135 },
+          { label: 'Ações', width: 110 },
         ]}
-        rows={rows.map((row) => {
+        rows={rows.map(entry => {
+          if (entry.channel === 'app') {
+            const ticket = entry.ticket;
+            const status = ticket.deletedAt ? 'Excluído' : { ISSUED: 'Emitido', USED: 'Utilizado', PENDING: 'Aguardando pagamento', EXPIRED: 'Expirado', CANCELED: 'Cancelado' }[ticket.status];
+            return { id: 'app:' + ticket.id, cells: [
+              <View style={{ gap: 4 }}><Text style={{ color: colors.text }}>{ticket.user.name}</Text>
+                <Text selectable style={{ color: colors.muted, fontSize: 11 }}>{ticket.user.email}</Text>
+                <Text style={{ color: colors.muted, fontSize: 12 }}>{ticket.match.homeTeam} × {ticket.match.awayTeam}</Text><AdminBadge label="App do torcedor" /></View>,
+              <View style={{ gap: 4 }}><Text style={{ color: colors.text }}>{ticket.quantity} × {ticket.sector.name}</Text>
+                <Text selectable style={{ color: colors.subtle, fontSize: 10 }}>{ticket.id}</Text></View>,
+              <View style={{ gap: 4 }}><AdminBadge label={status} tone={ticket.deletedAt ? 'danger' : ticket.payment ? 'success' : 'neutral'} /><Text style={{ color: colors.muted, fontSize: 12 }}>{money(ticket.priceCents)}{ticket.payment?.method === 'FREE' ? ' · Cortesia' : ticket.payment ? ' · Recebido' : ''}</Text></View>,
+              <AppTicketActions ticket={ticket} busy={busy || loading} {...appActions} />,
+            ] };
+          }
+          const row = entry.ticket;
           const hex = row.alocacao.setor.corSetorHex || '#002244';
           return {
-            id: row.id,
+            id: 'counter:' + row.id,
             cells: [
               <Pressable
                 accessibilityRole="button"
@@ -281,6 +336,7 @@ export function IngressosEmitidosV1Panel({
                   {row.partida.timeMandante} × {row.partida.timeVisitante} ·{' '}
                   {row.partida.estadio.nomePopular || row.partida.estadio.nome}
                 </Text>
+                <AdminBadge label="Bilheteria" />
               </Pressable>,
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <View
@@ -344,13 +400,17 @@ export function IngressosEmitidosV1Panel({
         })}
       />
 
+      {(pages.length > 0 || next) && <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+        <AdminButton label="Anterior" disabled={busy || loading || !pages.length} onPress={() => setPages(previous => previous.slice(0, -1))} />
+        <AdminButton label="Próxima" disabled={busy || loading || !next} onPress={() => { if (next) setPages(previous => [...previous, next]); }} />
+      </View>}
       {modalOpen && (
         <Sheet
           visible
-          title="Emitir ingresso V1 (Checkout em Tempo Real)"
+          title="Emissão manual de ingresso"
           onClose={busy ? () => {} : () => setModalOpen(false)}
         >
-          <AdminSection title="1. Partida, Setor e Categoria">
+          <AdminSection title="Partida, setor e lote">
             <AdminFormGrid>
               <AdminSelect
                 label="Partida"
@@ -389,7 +449,7 @@ export function IngressosEmitidosV1Panel({
           </AdminSection>
 
           {alocacaoSelecionada?.setor.numerado && (
-            <AdminSection title="2. Escolha de Bloco, Fileira e Assento (Matriz em Memória)">
+            <AdminSection title="Escolha do assento">
               {carregandoMapa ? (
                 <Text style={{ color: colors.muted, fontSize: 12 }}>
                   Calculando malha do bloco e verificando assentos ocupados...
@@ -514,7 +574,7 @@ export function IngressosEmitidosV1Panel({
             </AdminSection>
           )}
 
-          <AdminSection title="3. Identificação do Titular">
+          <AdminSection title="Titular do ingresso">
             <AdminFormGrid>
               <AdminField
                 label="Nome completo do titular"
@@ -529,12 +589,16 @@ export function IngressosEmitidosV1Panel({
                 value={cpfTitular}
                 onChange={setCpfTitular}
                 placeholder="000.000.000-00"
+                mask="document"
+                keyboardType="number-pad"
+                maxLength={14}
                 editable={!busy}
               />
             </AdminFormGrid>
           </AdminSection>
 
           {!!formError && <AdminNotice tone="error">{formError}</AdminNotice>}
+          <Text style={{ color: colors.muted, fontSize: 13 }}>A emissão manual registra o pedido como pago e libera o bilhete para a portaria.</Text>
           <Button
             label="Emitir ingresso e gerar bilhete"
             loading={busy}
@@ -546,7 +610,7 @@ export function IngressosEmitidosV1Panel({
       {bilheteVisivel && (
         <Sheet
           visible
-          title="Bilhete Digital — Ingresso V1"
+          title="Bilhete digital"
           onClose={() => setBilheteVisivel(null)}
         >
           <View

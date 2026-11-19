@@ -13,22 +13,26 @@ import { Filters, useAdminReport, ReportInput, ReportSelect, LocationFilters, Pe
 
 const statuses = { PENDING: 'Aguardando pagamento', ISSUED: 'Emitido', USED: 'Utilizado', CANCELED: 'Cancelado', EXPIRED: 'Expirado' };
 const initial = { deleted: 'all', limit: '25', offset: '0' };
-export function AdminSalesReport({ matches, refreshKey, busy, onPayment, onCancel, onEdit, onDelete }: { matches: Match[]; refreshKey: number; busy: boolean; onPayment: (ticket: AdminTicket) => void; onCancel: (ticket: AdminTicket) => void; onEdit: (ticket: AdminTicket) => void; onDelete: (ticket: AdminTicket) => void }) {
-  const { colors } = useTheme(), desktop = useDesktopAdmin();
-  const [draft, setDraft] = useState<Filters>({ deleted: 'all' }), [filters, setFilters] = useState<Filters>(initial), [validation, setValidation] = useState('');
-  const { data, loading, error } = useAdminReport(adminApi.salesReport, filters, refreshKey);
-  const summary = data?.summary, inventory = data?.inventory;
-  function apply() { try { setFilters(appliedFilters(draft)); setValidation(''); } catch (err) { setValidation(messageOf(err)); } }
-  const actions = (ticket: AdminTicket) => {
+export type SaleCallbacks = { onPayment: (ticket: AdminTicket) => void; onCancel: (ticket: AdminTicket) => void; onEdit: (ticket: AdminTicket) => void; onDelete: (ticket: AdminTicket) => void };
+export function AppTicketActions({ ticket, busy, onPayment, onEdit, onCancel, onDelete }: SaleCallbacks & { ticket: AdminTicket; busy: boolean }) {
+  const { colors } = useTheme();
     if (ticket.deletedAt) return <Text style={{ color: colors.subtle, fontSize: 11 }}>Excluída · pagamento e entradas preservados.</Text>;
     const unpaid = !ticket.payment && !ticket.usedQuantity;
-    return <AdminMenu disabled={busy || loading} items={[
+    return <AdminMenu disabled={busy} items={[
       ...(unpaid && ticket.status === 'PENDING' ? [{ label: 'Conferir recebimento', onPress: () => onPayment(ticket) }] : []),
       ...(['PENDING', 'ISSUED', 'USED'].includes(ticket.status) ? [{ label: 'Editar venda', onPress: () => onEdit(ticket) }] : []),
       ...(unpaid && ticket.status === 'PENDING' ? [{ label: 'Cancelar reserva', onPress: () => onCancel(ticket) }] : []),
       { label: 'Excluir venda', onPress: () => onDelete(ticket), danger: true },
     ]} />;
-  };
+}
+
+export function AdminSalesReport({ matches, refreshKey, busy, onPayment, onCancel, onEdit, onDelete }: { matches: Match[]; refreshKey: number; busy: boolean; } & SaleCallbacks) {
+  const { colors } = useTheme(), desktop = useDesktopAdmin();
+  const [draft, setDraft] = useState<Filters>({ deleted: 'all' }), [filters, setFilters] = useState<Filters>(initial), [validation, setValidation] = useState('');
+  const { data, loading, error } = useAdminReport(adminApi.salesReport, filters, refreshKey);
+  const summary = data?.summary, inventory = data?.inventory;
+  function apply() { try { setFilters(appliedFilters(draft)); setValidation(''); } catch (err) { setValidation(messageOf(err)); } }
+  const actions = (ticket: AdminTicket) => <AppTicketActions {...{ ticket, busy: busy || loading, onPayment, onEdit, onCancel, onDelete }} />;
   const badge = (ticket: AdminTicket) => <AdminBadge label={ticket.deletedAt ? 'Excluída' : statuses[ticket.status]} tone={ticket.deletedAt ? 'danger' : ticket.status === 'PENDING' ? 'warning' : ticket.payment ? 'success' : 'neutral'} />;
   return <View style={{ gap: 18 }}>
     <AdminFilterPanel title="Filtros de vendas"><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
@@ -50,7 +54,7 @@ export function AdminSalesReport({ matches, refreshKey, busy, onPayment, onCance
       { label: 'Parte do time', value: summary ? money(summary.clubCents) : '—', hint: 'Antes dos repasses manuais já registrados' },
     ]} />
     <Text style={{ color: colors.subtle, fontSize: 11, lineHeight: 18 }}>Receita baseada nos recibos confirmados dos pedidos filtrados. Excluir uma venda não estorna seu recebimento.</Text>
-    <Panel style={{ padding: 18, gap: 14, borderRadius: 10 }}><Text heading style={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>Disponibilidade {filters.matchId ? 'da partida' : 'de todas as partidas'}</Text><Text style={{ color: colors.muted, fontSize: 12 }}>{inventory ? `${inventory.available.toLocaleString('pt-BR')} livres · ${inventory.occupied.toLocaleString('pt-BR')} ocupados · ${inventory.capacity.toLocaleString('pt-BR')} de capacidade` : 'Consultando capacidade…'}</Text><Text style={{ color: colors.subtle, fontSize: 11, lineHeight: 18 }}>Capacidade física por partida/setor, independente da busca, período e situação dos pedidos. Setores pausados podem ter vagas; a abertura de vendas é definida em Jogos.</Text>
+    <Panel style={{ padding: 18, gap: 14, borderRadius: 10 }}><Text heading style={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>Disponibilidade {filters.matchId ? 'da partida' : 'de todas as partidas'}</Text><Text style={{ color: colors.muted, fontSize: 12 }}>{inventory ? `${inventory.available.toLocaleString('pt-BR')} livres · ${inventory.occupied.toLocaleString('pt-BR')} ocupados · ${inventory.capacity.toLocaleString('pt-BR')} de capacidade` : 'Consultando capacidade…'}</Text><Text style={{ color: colors.subtle, fontSize: 11, lineHeight: 18 }}>Capacidade física por partida/setor, independente da busca, período e situação dos pedidos. Setores pausados podem ter vagas; a abertura de vendas é definida em Partidas → App do torcedor.</Text>
       {!!inventory?.sectors.length && <AdminTable minWidth={650} columns={[{ label: 'Setor' }, { label: 'Confirmados', width: 100 }, { label: 'Reservados', width: 95 }, { label: 'Entradas', width: 80 }, { label: 'Livres / total', width: 110 }]} rows={inventory.sectors.map((sector) => ({ id: sector.id, cells: [<View style={{ gap: 5 }}><Text style={{ color: colors.text, fontSize: 12 }}>{sector.name}</Text><AdminBadge label={sector.salesEnabled ? 'Venda habilitada' : 'Venda pausada'} tone={sector.salesEnabled ? 'success' : 'warning'} /></View>, ...[sector.soldQuantity, sector.reservedQuantity, sector.usedQuantity, `${sector.available} / ${sector.capacity}`].map((value, index) => <Text key={index} style={{ color: colors.muted, fontSize: 12 }}>{value}</Text>)] }))} empty="Nenhum setor cadastrado." />}
       {!filters.matchId && <Text style={{ color: colors.subtle, fontSize: 11 }}>Selecione uma partida para conferir o detalhamento por setor.</Text>}
     </Panel>

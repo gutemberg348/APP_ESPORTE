@@ -182,7 +182,7 @@ const partidaInclude = {
   _count: { select: { ingressos: true, pedidos: true } },
 };
 
-const ingressoInclude = {
+export const ingressoInclude = {
   partida: {
     include: {
       estadio: {
@@ -405,6 +405,23 @@ export async function issueTicketInTransaction(tx, actorId, input, order) {
   );
 
   return createdTicket;
+}
+
+export function counterTicketWhere({ partidaId, alocacaoId, status, search }, stadium) {
+    const rawCode = search?.replace(/-/g, '');
+    const code = /^[a-z0-9]{16}$/i.test(rawCode || '') ? rawCode.match(/.{4}/g).join('-') : search;
+    const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(search || '');
+    return {
+        ...(search && { OR: [
+          { nomeTitular: { contains: search, mode: 'insensitive' } },
+          { codigoPortaria: { equals: code, mode: 'insensitive' } },
+          ...(uuid ? [{ id: search }, { pedidoId: search }] : []),
+        ] }),
+        partida: { estadio: stadium },
+        ...(partidaId ? { partidaId } : {}),
+        ...(alocacaoId ? { alocacaoId } : {}),
+        ...(status && status !== 'all' ? { status } : {}),
+      };
 }
 
 export const ingressoV1OperacaoModel = {
@@ -905,15 +922,10 @@ export const ingressoV1OperacaoModel = {
   // =========================================================================
   // 4. EMISSÃO E GESTÃO DE INGRESSOS V1
   // =========================================================================
-  async listTickets({ partidaId, alocacaoId, status } = {}) {
+  async listTickets({ partidaId, alocacaoId, status, search } = {}) {
     const tenantId = await getTenantId();
     return db.ingressoV1.findMany({
-      where: {
-        partida: { estadio: { tenantId } },
-        ...(partidaId ? { partidaId } : {}),
-        ...(alocacaoId ? { alocacaoId } : {}),
-        ...(status && status !== 'all' ? { status } : {}),
-      },
+      where: counterTicketWhere({ partidaId, alocacaoId, status, search }, { tenantId }),
       include: ingressoInclude,
       orderBy: [{ criadoEm: 'desc' }],
       take: 250,

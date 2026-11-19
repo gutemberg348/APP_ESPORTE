@@ -8,7 +8,7 @@ export interface EmailStatus {
   deliveries: Record<string, number>;
 }
 export const recoveryApi = {
-  request: (email: string, portal: "APP" | "ADMIN") =>
+  request: (email: string, portal: "APP" | "ADMIN" | "OWNER") =>
     send<{ message: string }>("/auth/forgot-password", {
       method: "POST",
       body: { email, portal },

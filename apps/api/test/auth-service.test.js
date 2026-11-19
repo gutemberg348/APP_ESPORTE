@@ -77,6 +77,24 @@ test('unknown user, incorrect password and deactivated account share the same lo
   await assert.rejects(service.login(input), { code: 'INVALID_CREDENTIALS' });
 });
 
+test('web portals issue sessions only to accounts in their own area', async () => {
+  const { service, input, people, sessions } = await fixture();
+  const { member } = await service.register(input);
+  const user = people.get(member.id);
+  for (const [role, allowed] of Object.entries({
+    USER: 'FAN', ADMIN: 'STAFF', GATE: 'STAFF', TICKET_SELLER: 'STAFF', CASHIER: 'STAFF', OWNER: 'OWNER',
+  })) {
+    user.role = role;
+    for (const portal of ['FAN', 'STAFF', 'OWNER']) {
+      const before = sessions.size;
+      if (portal === allowed) assert.equal((await service.login({ ...input, portal })).member.role, role);
+      else {
+        await assert.rejects(service.login({ ...input, portal }), { code: 'INVALID_CREDENTIALS' });
+        assert.equal(sessions.size, before);
+      }
+    }
+  }
+});
 test('company owner logs into the administrative portal and keeps the role when refreshing', async () => {
   const { service, input, people } = await fixture();
   await service.register(input);

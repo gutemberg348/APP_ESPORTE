@@ -7,7 +7,7 @@ import { AdminThemeProvider } from "../theme/AdminThemeProvider";
 import { useTheme } from "../theme/ThemeProvider";
 export function PasswordResetScreen(props: {
   token: string;
-  portal: "APP" | "ADMIN";
+  portal: "APP" | "ADMIN" | "OWNER";
   onDone: () => void;
 }) {
   return (
@@ -18,7 +18,7 @@ export function PasswordResetScreen(props: {
 }
 function ResetPage(props: {
   token: string;
-  portal: "APP" | "ADMIN";
+  portal: "APP" | "ADMIN" | "OWNER";
   onDone: () => void;
 }) {
   const { colors } = useTheme();
