@@ -1,4 +1,4 @@
-import { assertMatchSchedule } from '../lib/ticket-rules.js';
+import { assertMatchSchedule, openGateNow } from '../lib/ticket-rules.js';
 import { appOccupancy, standardLot } from './match-inventory.js';
 import { releaseExpiredCounterOrders } from './counter-reservation.js';
 import { serializable } from '../lib/business-rules.js';
@@ -151,6 +151,7 @@ const partidaInclude = {
   estadio: {
     select: {
       id: true,
+      ativo: true,
       nome: true,
       nomePopular: true,
       cidade: true,
@@ -723,20 +724,27 @@ export const ingressoV1OperacaoModel = {
       fimVendas,
       status,
       vendasAtivas,
-      portariaAtiva, portariaAbreEm, portariaFechaEm,
+      portariaAtiva, portariaAbreEm, portariaFechaEm, abrirPortariaAgora,
       alocacoesSetor,
-    }
+    },
+    client = db
   ) {
-    const tenantId = await getTenantId();
-    return serializable(db, async (tx) => {
+    return serializable(client, async (tx) => {
+      const tenantId = await getTenantId(tx);
       const current = await tx.partidaIngressoV1.findFirst({
         where: { id, estadio: { tenantId } },
-        include: { alocacoesSetor: true },
+        include: { alocacoesSetor: true, estadio: { select: { ativo: true } } },
       });
       if (!current) {
         throw new AppError(404, 'PARTIDA_NAO_ENCONTRADA', 'Partida não encontrada.');
       }
 
+      if (abrirPortariaAgora) {
+        if (!current.estadio.ativo) throw new AppError(409, 'STADIUM_INACTIVE', 'Ative o estádio antes de abrir a portaria.');
+        const gate = openGateNow({ published: ['PUBLICADA', 'ESGOTADA'].includes(current.status), startsAt: current.dataPartida, gateCloseAt: current.portariaFechaEm });
+        portariaAtiva = gate.entryEnabled;
+        portariaAbreEm = gate.gateOpenAt;
+      }
       assertGateWindow(dataPartida ?? current.dataPartida, portariaAbreEm === undefined ? current.portariaAbreEm : portariaAbreEm, portariaFechaEm === undefined ? current.portariaFechaEm : portariaFechaEm);
 
       const scheduleStart = inicioVendas === undefined ? current.inicioVendas : inicioVendas;
@@ -827,9 +835,14 @@ export const ingressoV1OperacaoModel = {
         },
         include: partidaInclude,
       });
-      await tx.$executeRaw`SELECT sync_app_match(${id}::uuid)`;
+      const editingCalendar = [timeMandante, timeVisitante, dataPartida, inicioVendas, fimVendas, status, alocacoesSetor].some(value => value !== undefined);
+      if (app || editingCalendar) await tx.$executeRaw`SELECT sync_app_match(${id}::uuid)`;
       const updated = await tx.partidaIngressoV1.findUniqueOrThrow({ where: { id }, include: partidaInclude });
-      await audit(actorId, 'INGRESSO_V1_PARTIDA_ATUALIZADA', id, { jogo: `${updated.timeMandante} x ${updated.timeVisitante}` }, tx);
+      await audit(actorId, 'INGRESSO_V1_PARTIDA_ATUALIZADA', id, {
+        jogo: `${updated.timeMandante} x ${updated.timeVisitante}`,
+        ...(portariaAtiva !== undefined ? { portariaAtiva, aberturaImediata: Boolean(abrirPortariaAgora) } : {}),
+        ...(vendasAtivas !== undefined ? { vendasAtivas } : {}),
+      }, tx);
       return updated;
     });
   },

@@ -3,12 +3,11 @@ import { AppState, Platform, Pressable, View, useWindowDimensions } from 'react-
 import { ArrowRight, Banknote, ChevronRight, CreditCard, IdCard, LogOut, Minus, Plus, QrCode, RefreshCw, ShieldCheck } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { validTaxId } from '@nacional/shared/forms';
-import QRCode from 'react-native-qrcode-svg';
 import { AdminButton, AdminField, AdminNotice, AdminSelect } from '../components/admin/AdminControls';
 import { Text } from '../components/Typography';
 import { Page, Panel, Title } from '../components/ui';
 import { PixCheckout } from '../components/PixCheckout';
-import { TicketBarcode } from '../components/TicketBarcode';
+import { PrintedTicketPresentation } from '../components/TicketPresentation';
 import { useSession } from '../providers/SessionProvider';
 import { useTheme } from '../theme/ThemeProvider';
 import { ApiError } from '../services/api';
@@ -192,7 +191,7 @@ export function TicketCounterScreen({ onBack }: { onBack?: () => void }) {
       {['EXPIRADO','CANCELADO'].includes(receipt.statusPagamento) && <AdminNotice>Reserva {receipt.statusPagamento === 'EXPIRADO' ? 'expirada' : 'cancelada'}. Os lugares foram devolvidos ao estoque.</AdminNotice>}
       {receipt.statusPagamento === 'PAGO' && <>{receipt.ingressos.map((t, i) => <View key={t.id} style={{ alignItems: 'center', gap: 8, paddingVertical: 8 }}>
         <Text style={{ color: colors.text }}>Ingresso {i + 1} · {t.alocacao.setor.nome} · {t.nomeTitular}</Text>
-        {t.status === 'VENDIDO' && receipt.statusPagamento === 'PAGO' && t.chaveQr && t.codigoPortaria ? <><View style={{ padding: 14, backgroundColor: '#fff' }}><QRCode size={160} value={t.chaveQr} /></View><View style={{ width: '100%' }}><TicketBarcode code={t.codigoPortaria} /></View></> : <Text style={{ color: colors.muted }}>{t.status}</Text>}
+        {t.status === 'VENDIDO' && receipt.statusPagamento === 'PAGO' && t.chaveQr && t.codigoPortaria ? <PrintedTicketPresentation qr={t.chaveQr} code={t.codigoPortaria} /> : <Text style={{ color: colors.muted }}>{t.status}</Text>}
       </View>)}
       <AdminButton primary label="Imprimir ingressos" disabled={busy} onPress={() => void run(() => deliverTickets(token!, receipt.chaveBalcao, true))} />
       <AdminButton label={Platform.OS === 'web' ? 'Baixar PDF para enviar' : 'Enviar PDF'} disabled={busy} onPress={() => void run(() => deliverTickets(token!, receipt.chaveBalcao, false))} />

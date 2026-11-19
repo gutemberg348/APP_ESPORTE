@@ -10,14 +10,14 @@ export function ticketStatus(ticket: Ticket, now = Date.now()): Ticket['status']
 export function activeTicket(tickets: Ticket[], matchId: string, now = Date.now()) {
   return tickets.find((ticket) => ticket.match.id === matchId && !['CANCELED', 'EXPIRED'].includes(ticketStatus(ticket, now)));
 }
-export function ticketGateState(match: Match, now = Date.now()) {
+export function ticketGateState(match: Pick<Match, 'startsAt' | 'gateOpenAt' | 'gateCloseAt' | 'entryEnabled'>, now = Date.now()) {
   const kickoff = Date.parse(match.startsAt);
   const opensAt = match.gateOpenAt ? Date.parse(match.gateOpenAt) : kickoff - 2 * 3600000;
   const closesAt = match.gateCloseAt ? Date.parse(match.gateCloseAt) : kickoff + 4 * 3600000;
   const state = now >= closesAt ? 'CLOSED'
     : !match.entryEnabled || !Number.isFinite(opensAt) || !Number.isFinite(closesAt) ? 'DISABLED'
     : now < opensAt ? 'SCHEDULED' : 'OPEN';
-  return { state, opensAt };
+  return { state, opensAt, closesAt };
 }
 export function matchSaleState(match: Match, now = Date.now()) {
   const enabled = match.sectors.filter((sector) => sector.salesEnabled !== false);

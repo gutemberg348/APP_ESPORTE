@@ -14,7 +14,7 @@ const { checkApiConnection } = await moduleFrom('../src/services/api-connection.
 test('HTML from a reverse proxy is explained without exposing its body or replaying registration', async () => {
   let calls = 0;
   const send = createApiTransport('https://api.example.test/v1', async () => { calls++; return new Response('<html>private server details</html>', { status: 404, headers: { 'content-type': 'text/html' } }); });
-  await assert.rejects(send('/auth/register', { method: 'POST', body: { email: 'test@example.test', password: 'fixture-only' } }), error => error.code === 'API_PROXY_ERROR' && error.message.includes('HTTP 404') && error.message.includes('https://api.example.test') && !error.message.includes('private server details'));
+  await assert.rejects(send('/auth/register', { method: 'POST', body: { email: 'test@example.test', password: 'fixture-only' } }), error => error.code === 'API_PROXY_ERROR' && !error.message.includes('HTTP 404') && !error.message.includes('api.example.test') && !error.message.includes('private server details'));
   assert.equal(calls, 1);
 });
 
@@ -28,8 +28,9 @@ test('web, release builds and explicit server addresses are never silently redir
   assert.equal(resolveApiUrl('http://localhost:3333/v1', 'web', '192.168.0.100:8081', true), 'http://localhost:3333/v1');
   assert.equal(resolveApiUrl('http://localhost:3333/v1', 'ios', '192.168.0.100:8081', false), 'http://localhost:3333/v1');
   assert.equal(resolveApiUrl('https://api.example.com/v1', 'ios', '192.168.0.100:8081', true), 'https://api.example.com/v1');
-  assert.throws(() => resolveApiUrl('ftp://example.com', 'ios'), /HTTP/);
-  assert.throws(() => resolveApiUrl('http://secret:password@example.com', 'ios'), /credenciais/);
+  for (const invalid of ['ftp://example.com', 'http://secret:password@example.com', 'endereço inválido']) {
+    assert.throws(() => resolveApiUrl(invalid, 'ios'), { message: 'Não foi possível conectar ao serviço. Consulte a equipe de suporte.' });
+  }
 });
 test('development web uses the browser host while native follows a changed Wi-Fi address', () => {
   assert.equal(resolveApiUrl('http://localhost:3333/v1', 'web', '192.168.0.100:8081', true, 'http://localhost:8081'), 'http://localhost:3333/v1');
@@ -63,7 +64,7 @@ test('transport resolves the current URL per request and never retries login or 
     if (sent.length === 1) throw new TypeError('Network request failed');
     return Response.json({ data: { ok: true } });
   });
-  await assert.rejects(send('/auth/login', { method: 'POST', body: { password: 'diagnostic-only' } }), (error) => error.code === 'API_UNREACHABLE' && error.message.includes('192.168.0.100:3333'));
+  await assert.rejects(send('/auth/login', { method: 'POST', body: { password: 'diagnostic-only' } }), (error) => error.code === 'API_UNREACHABLE' && !error.message.includes('192.168.0.100'));
   assert.equal(sent.length, 1, 'a failed login POST is not replayed');
   assert.deepEqual(await send('/matches'), { ok: true });
   assert.equal(sent[1].url, 'http://localhost:3333/v1/matches');
@@ -85,14 +86,14 @@ test('connection diagnostics validate API identity and readiness without credent
     assert.equal(options.headers.Authorization, undefined);
   }
   const downDatabase = await checkApiConnection('http://localhost:3333/v1', async (url) => url.endsWith('/health') ? Response.json({ data: { status: 'ok', service: 'nacional-api' } }) : Response.json({ error: { code: 'DATABASE_UNAVAILABLE' } }, { status: 503 }));
-  assert.equal(downDatabase.ready, false); assert.match(downDatabase.message, /banco/);
+  assert.equal(downDatabase.ready, false); assert.match(downDatabase.message, /temporariamente indisponível/);
   const wrongApp = await checkApiConnection('http://localhost:3333/v1', async () => Response.json({ data: { status: 'ok', service: 'another-app' } }));
   assert.equal(wrongApp.ready, false);
 });
 
 test('connection diagnostics stop on deadline instead of leaving the login stuck', async () => {
   const result = await checkApiConnection('http://localhost:3333/v1', async (url, { signal }) => new Promise((resolve, reject) => signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })), 5);
-  assert.equal(result.ready, false); assert.match(result.message, /localhost:3333/);
+  assert.equal(result.ready, false); assert.doesNotMatch(result.message, /localhost:3333/);
 });
 
 test('healthy GETs cannot mark a connection recovered while JSON POST fails or is replaced by another service', async () => {
@@ -106,7 +107,7 @@ test('healthy GETs cannot mark a connection recovered while JSON POST fails or i
       return Response.json({ data: { status: url.endsWith('/health') ? 'ok' : 'ready', service: 'nacional-api' } });
     });
     assert.equal(result.ready, false); assert.equal(result.code, 'API_POST_FAILED');
-    assert.match(result.message, /envio de dados falhou/);
+    assert.match(result.message, /enviar os dados/);
   }
 });
 
@@ -138,10 +139,29 @@ test('non-JSON and malformed API responses are not misreported as connection fai
   await assert.rejects(missing('/auth/register'), { code: 'INVALID_API_RESPONSE' });
 });
 
+test('gate denials keep their meaning and private upstream details stay off the screen', async () => {
+  for (const [status, code, message] of [
+    [409, 'TICKET_ALREADY_USED', 'Este ingresso já foi utilizado.'],
+    [503, 'DATABASE_UNAVAILABLE', 'ECONNREFUSED 127.0.0.1:5432'],
+    [422, 'VALIDATION_ERROR', 'Falha em https://private.example/gate'],
+  ]) {
+    const send = createApiTransport('https://private.example', async () => Response.json({
+      error: { message, code, details: [{ message: 'http://localhost:3333/private' }], requestId: 'teste' },
+    }, { status }));
+    await assert.rejects(send('/gate/inspect'), error => {
+      assert.equal(error.code, code);
+      assert.equal(error.requestId, 'teste');
+      assert.doesNotMatch(error.message, /https?:|localhost|127\.0\.0\.1|ECONNREFUSED/);
+      if (status === 409) assert.equal(error.message, message);
+      return true;
+    });
+  }
+});
+
 test('unreachable API and timeout have separate actionable errors without exposing a request body', async () => {
   const offline = createApiTransport('http://192.168.0.100:3333/v1', async () => { throw new TypeError('Network request failed'); });
   await assert.rejects(offline('/auth/register', { body: { password: 'must-not-appear' } }), (error) => {
-    assert.equal(error.code, 'API_UNREACHABLE'); assert.equal(error.status, 0); assert.match(error.message, /192\.168\.0\.100:3333/); assert.ok(!error.message.includes('must-not-appear')); return true;
+    assert.equal(error.code, 'API_UNREACHABLE'); assert.equal(error.status, 0); assert.doesNotMatch(error.message, /192\.168\.0\.100:3333/); assert.ok(!error.message.includes('must-not-appear')); return true;
   });
   const slow = createApiTransport('http://server/v1', async (url, { signal }) => new Promise((resolve, reject) => signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })), 5);
   await assert.rejects(slow('/auth/register'), { code: 'API_TIMEOUT', status: 0 });

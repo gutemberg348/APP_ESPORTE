@@ -1,8 +1,7 @@
 import type { Match } from '@nacional/shared/types';
 import { adminApi, type AdminTicketRow } from '../../../services/admin';
 import { AppTicketActions, type SaleCallbacks } from '../AdminSalesReport';
-import QRCode from 'react-native-qrcode-svg';
-import { TicketBarcode } from '../../TicketBarcode';
+import { PrintedTicketPresentation } from '../../TicketPresentation';
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Pressable, Image } from 'react-native';
 import { Ban, QrCode } from 'lucide-react-native';
@@ -762,18 +761,7 @@ export function IngressosEmitidosV1Panel({
                 />
               </View>
 
-              <View
-                style={{
-                  alignItems: 'center',
-                  padding: 14,
-                  borderRadius: 10,
-                  backgroundColor: '#FFFFFF',
-                  gap: 6,
-                }}
-              >
-                <QRCode value={bilheteVisivel.chaveQr} size={180} />
-                {!!bilheteVisivel.codigoPortaria && <TicketBarcode code={bilheteVisivel.codigoPortaria} />}
-              </View>
+              {bilheteVisivel.status === 'VENDIDO' && bilheteVisivel.chaveQr && <PrintedTicketPresentation qr={bilheteVisivel.chaveQr} code={bilheteVisivel.codigoPortaria} />}
 
               {!!bilheteVisivel.alocacao.setor.instrucaoAcomodacao && (
                 <Text style={{ color: colors.text, fontSize: 12 }}>

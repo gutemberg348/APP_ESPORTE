@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AppState, View } from 'react-native';
-import { TicketBarcode } from './TicketBarcode';
-import QRCode from 'react-native-qrcode-svg';
+import { TicketSymbol, type TicketFormat } from './TicketPresentation';
 import type { TicketQr } from '@nacional/shared/types';
 import { useSession } from '../providers/SessionProvider';
 import { useTheme } from '../theme/ThemeProvider';
@@ -10,9 +9,9 @@ import { ApiError } from '../services/api';
 import { Text } from './Typography';
 import { Button } from './ui';
 import { messageOf } from '../utils/format';
-export function LiveTicketQr({ ticketId, onUsed }: { ticketId: string; onUsed: () => void }) {
+export function LiveTicketQr({ ticketId, onUsed, format, width, height }: { ticketId: string; onUsed: () => void; format: TicketFormat; width: number; height: number }) {
   const { token, demoMode } = useSession();
-  const { colors, tone } = useTheme();
+  const { colors } = useTheme();
   const [qr, setQr] = useState<TicketQr | null>(null);
   const [remaining, setRemaining] = useState(0);
   const [error, setError] = useState('');
@@ -26,13 +25,14 @@ export function LiveTicketQr({ ticketId, onUsed }: { ticketId: string; onUsed: (
     async function renew(force = false) {
       if (!alive || !foreground || inFlight || (!force && performance.now() < retryAt)) return;
       inFlight = true; setBusy(true);
+      const sentAt = performance.now();
       try {
         const value = await clubApi.ticketQr(token!, ticketId);
         if (!alive || !foreground) return;
         current = value;
         // Duration comes from server timestamps so a wrong phone clock does
         // not extend the token's displayed validity. Server verifies expiry.
-        deadline = performance.now() + Math.max(0, Date.parse(value.expiresAt) - Date.parse(value.serverTime) - 1500);
+        deadline = sentAt + Math.max(0, Date.parse(value.expiresAt) - Date.parse(value.serverTime) - 1500);
         receivedAt = performance.now(); setQr(value); setError('');
         setRemaining(Math.max(0, Math.floor((deadline - performance.now()) / 1000)));
       } catch (err) {
@@ -55,8 +55,11 @@ export function LiveTicketQr({ ticketId, onUsed }: { ticketId: string; onUsed: (
     });
     return () => { alive = false; clearInterval(interval); subscription.remove(); retry.current = () => {}; };
   }, [ticketId, token, demoMode]);
-  return <View style={{ gap: 12 }}>
-    {qr && remaining > 0 ? <><View style={{ alignSelf: 'center', padding: 16, borderRadius: 18, backgroundColor: '#fff' }}><QRCode value={qr.qr} size={210} color={tone('#08150f')} /></View><TicketBarcode code={qr.code} /><Text style={{ color: colors.primary, textAlign: 'center', fontSize: 14 }}>QR e código válidos por {remaining}s · {qr.remainingQuantity} entrada(s) restantes</Text><Text style={{ color: colors.muted, textAlign: 'center', fontSize: 12 }}>Apresente o app aberto na portaria. Após uma entrada, aguarde o próximo QR ou código.</Text></> : <Text style={{ color: colors.muted, textAlign: 'center', fontSize: 14 }}>{error || 'Solicitando QR atualizado…'}</Text>}
-    <Button secondary label={busy ? 'Atualizando QR…' : 'Atualizar QR de entrada'} loading={busy} onPress={() => retry.current()} />
+  return <View style={{ alignItems: 'center', gap: 12 }}>
+    {qr && remaining > 0 ? <>
+      <TicketSymbol format={format} width={width} height={Math.max(1, height - 55)} qr={qr.qr} code={qr.code} />
+      <Text style={{ color: colors.text, textAlign: 'center' }}>Válido por {remaining}s · {qr.remainingQuantity} {qr.remainingQuantity === 1 ? 'entrada' : 'entradas'}</Text>
+    </> : <Text style={{ color: colors.muted, textAlign: 'center' }}>{error || 'Buscando seu ingresso…'}</Text>}
+    {!!error && <Button secondary label="Tentar novamente" loading={busy} onPress={() => retry.current()} />}
   </View>;
 }

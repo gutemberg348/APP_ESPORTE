@@ -10,6 +10,8 @@ import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/client/index.js';
 import { demoMatches, seedAppDemo } from '../prisma/app-demo-core.js';
+import { ingressoV1OperacaoModel } from '../src/models/ingresso-v1-operacao.model.js';
+import { partidaV1UpdateSchema } from '../src/validators/ingresso-v1.js';
 
 test('demo schedule uses Patos date, every three days into the future at 19:00', () => {
   for (const instant of ['2026-11-17T12:00:00Z', '2026-12-31T01:30:00Z']) {
@@ -88,6 +90,28 @@ test('app demo is atomic, repeatable, audited and preserves admin edits, stock a
   const catalog = await createShopStore(db, { settings: {} }).products({ limit: 24, offset: 0 }, false);
   assert.equal(catalog.items.length, 5); assert.ok(catalog.items.every(row => row.images.length && row.variants.some(size => size.available > 0)));
   const stadium = await db.estadioIngressoV1.findFirst();
+  await t.test('calendar opens the gate immediately in both channels and preserves the configured closing time', async () => {
+    const id = allocation.partidaId;
+    const closes = new Date('2099-12-02');
+    await db.partidaIngressoV1.update({ where: { id }, data: { portariaFechaEm: closes } });
+    const admin = await db.user.findFirstOrThrow({ where: { role: 'ADMIN' } });
+    const change = body => ingressoV1OperacaoModel.updateMatch(admin.id, partidaV1UpdateSchema.parse({ id, ...body }), db);
+    const before = Date.now();
+    const opened = await change({ abrirPortariaAgora: true });
+    assert.ok(opened.portariaAtiva && opened.portariaAbreEm.getTime() >= before && opened.portariaAbreEm.getTime() <= Date.now());
+    const app = await db.match.findUniqueOrThrow({ where: { partidaV1Id: id } });
+    assert.equal(app.entryEnabled, true);
+    assert.deepEqual(app.gateOpenAt, opened.portariaAbreEm);
+    assert.deepEqual(app.gateCloseAt, closes);
+    assert.equal(partidaV1UpdateSchema.safeParse({ id, abrirPortariaAgora: true, status: 'PUBLICADA' }).success, false);
+    await change({ portariaAtiva: false });
+    assert.equal((await db.match.findUniqueOrThrow({ where: { id: app.id } })).entryEnabled, false);
+    await db.partidaIngressoV1.update({ where: { id }, data: { status: 'RASCUNHO' } });
+    await assert.rejects(change({ abrirPortariaAgora: true }), { code: 'MATCH_NOT_PUBLISHED' });
+    await db.partidaIngressoV1.update({ where: { id }, data: { status: 'PUBLICADA', portariaAbreEm: null, portariaFechaEm: new Date(0) } });
+    await assert.rejects(change({ abrirPortariaAgora: true }), { code: 'GATE_CLOSED' });
+    await db.partidaIngressoV1.update({ where: { id }, data: { portariaAbreEm: null, portariaFechaEm: null } });
+  });
   await db.estadioIngressoV1.update({ where: { id: stadium.id }, data: { nome: 'Editado pelo admin', ativo: false } });
   await db.partidaIngressoV1.update({ where: { id: v1.id }, data: { vendasAtivas: false } });
   assert.equal(await db.stockMovement.count(), 20);

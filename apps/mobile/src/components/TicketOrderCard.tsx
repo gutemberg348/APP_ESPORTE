@@ -13,7 +13,7 @@ import { money, matchDate, messageOf } from '../utils/format';
 import { ticketStatus, ticketStatusLabels } from '../utils/ticket-state';
 import { PixCheckout } from './PixCheckout';
 
-export function TicketOrderCard({ ticket, now, instructions, expanded, onExpand, onChanged, onShop }: { ticket: Ticket; now: number; instructions: string; expanded: boolean; onExpand: () => void; onChanged: () => Promise<void>; onShop: () => void }) {
+export function TicketOrderCard({ ticket, now, instructions, onChanged, onShop }: { ticket: Ticket; now: number; instructions: string; onChanged: () => Promise<void>; onShop: () => void }) {
   const { token, demoMode } = useSession();
   const { colors } = useTheme();
   const [confirming, setConfirming] = useState(false);
@@ -46,7 +46,7 @@ export function TicketOrderCard({ ticket, now, instructions, expanded, onExpand,
     </>}
     {status === 'ISSUED' && <>
       <Text style={{ color: colors.text, fontSize: 14 }}>{ticket.remainingQuantity ?? ticket.quantity - (ticket.usedQuantity || 0)} entrada(s) restante(s) · {ticket.usedQuantity || 0} utilizada(s)</Text>
-      <TicketGateAccess ticketId={ticket.id} match={ticket.match} now={now} expanded={expanded} onToggle={onExpand} onUsed={() => void onChanged()} />
+      <TicketGateAccess ticketId={ticket.id} match={ticket.match} now={now} onUsed={() => void onChanged()} />
     </>}
     {status === 'USED' && <View style={{ flexDirection: 'row', gap: 8 }}><CheckCircle size={20} color={colors.primary} /><Text style={{ color: colors.muted, flex: 1, fontSize: 14 }}>Todos os acessos deste pedido foram utilizados.</Text></View>}
     {(status === 'EXPIRED' || status === 'CANCELED') && <><Text style={{ color: colors.muted, fontSize: 14 }}>{status === 'EXPIRED' ? 'O prazo terminou sem emissão. Confira com o clube caso já tenha feito o pagamento.' : 'Os lugares desta reserva foram liberados.'}</Text><Button secondary label="Consultar jogos e disponibilidade" onPress={onShop} /></>}

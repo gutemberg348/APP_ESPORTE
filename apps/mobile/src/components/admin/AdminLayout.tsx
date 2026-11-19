@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, ScrollView, Pressable, Modal, useWindowDimensions, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { LayoutDashboard, CalendarDays, Ticket, Users, BadgeCheck, UserRoundCog, ScanLine, History, ArrowUpRight, LogOut, RefreshCw, Sun, Moon, ChevronRight, Building2, Menu, X, PanelLeftClose, PanelLeftOpen, ShoppingBag, Settings2, ShieldCheck } from 'lucide-react-native';
+import { LayoutDashboard, CalendarDays, Ticket, Users, BadgeCheck, UserRoundCog, ScanLine, History, ArrowUpRight, LogOut, RefreshCw, Sun, Moon, ChevronRight, Building2, Menu, X, CalendarPlus, PanelLeftClose, PanelLeftOpen, ShoppingBag, Settings2, ShieldCheck } from 'lucide-react-native';
 import { Text } from '../Typography';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useSession } from '../../providers/SessionProvider';
@@ -29,8 +29,8 @@ export const adminSections = [
   { name: 'Auditoria', icon: History, group: 'Controle', description: 'Consulte as ações realizadas pela administração.' },
 ];
 export function useDesktopAdmin() { return useWindowDimensions().width >= 1024; }
-type LayoutProps = React.PropsWithChildren<{ active: string; onSelect: (section: string) => void; onBack?: () => void; onSecurity: () => void; onSignOut: () => void; refreshing: boolean; onRefresh: () => void; busy: boolean; action?: React.ReactNode }>;
-export function AdminLayout({ children, active, onSelect, onBack, onSecurity, onSignOut, refreshing, onRefresh, busy, action }: LayoutProps) {
+type LayoutProps = React.PropsWithChildren<{ onCreateMatch: () => void; onIssueTicket: () => void; subpages: readonly string[]; currentSubpage: string; onSubpage: (page: string) => void; active: string; onSelect: (section: string) => void; onBack?: () => void; onSecurity: () => void; onSignOut: () => void; refreshing: boolean; onRefresh: () => void; busy: boolean; action?: React.ReactNode }>;
+export function AdminLayout({ children, active, onSelect, onCreateMatch, onIssueTicket, subpages, currentSubpage, onSubpage, onBack, onSecurity, onSignOut, refreshing, onRefresh, busy, action }: LayoutProps) {
   const desktop = useDesktopAdmin(), { width } = useWindowDimensions(), { colors, isDark, toggle } = useTheme(), { member } = useSession(), insets = useSafeAreaInsets();
   const [drawer, setDrawer] = useState(false), [collapsed, setCollapsed] = useState(false);
   const sections = adminSections.filter(section => section.name !== 'Auditoria');
@@ -39,9 +39,14 @@ export function AdminLayout({ children, active, onSelect, onBack, onSecurity, on
   const owner = member?.role === 'OWNER';
   useEffect(() => { if (desktop) setDrawer(false); }, [desktop]);
   const select = (name: string) => { onSelect(name); setDrawer(false); };
-  const sidebar = (compact: boolean) => <View style={{ flex: 1, backgroundColor: colors.header, paddingHorizontal: compact ? 12 : 16, paddingTop: desktop ? 26 : Math.max(insets.top, 22), paddingBottom: Math.max(insets.bottom, 16), gap: 24 }}>
+  const sidebar = (compact: boolean) => <ScrollView style={{ flex: 1, minHeight: 0, backgroundColor: colors.header }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, paddingHorizontal: compact ? 12 : 16, paddingTop: desktop ? 26 : Math.max(insets.top, 22), paddingBottom: Math.max(insets.bottom, 16), gap: 24 }}>
     <View style={{ flexDirection: 'row', gap: 11, alignItems: 'center', paddingHorizontal: compact ? 0 : 6 }}><View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: colors.primaryStrong, alignItems: 'center', justifyContent: 'center' }}><Building2 size={18} color={colors.onPrimary} strokeWidth={1.7} /></View>{!compact && <View style={{ flex: 1, gap: 1 }}><Text style={{ color: colors.text, fontSize: 13, fontWeight: '600' }}>{owner ? 'Administração geral' : club.shortName}</Text><Text style={{ color: colors.subtle, fontSize: 11 }}>{owner ? `Empresa · ${club.shortName}` : 'Administração do clube'}</Text></View>}{!desktop && <AdminButton label="Fechar menu" icon={X} iconOnly variant="ghost" onPress={() => setDrawer(false)} />}</View>
-    <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ gap: 3 }}>{sections.map((section, index) => <React.Fragment key={section.name}>{!compact && section.group !== sections[index - 1]?.group && <Text style={{ color: colors.subtle, fontSize: 10, fontWeight: '500', paddingHorizontal: 12, marginTop: index ? 22 : 1, marginBottom: 8 }}>{section.group}</Text>}<NavItem label={section.name} icon={section.icon} active={active === section.name} compact={compact} onPress={() => select(section.name)} /></React.Fragment>)}</ScrollView>
+    <View style={{ gap: 3 }}>{sections.map((section, index) => <React.Fragment key={section.name}>{!compact && section.group !== sections[index - 1]?.group && <Text style={{ color: colors.subtle, fontSize: 10, fontWeight: '500', paddingHorizontal: 12, marginTop: index ? 22 : 1, marginBottom: 8 }}>{section.group}</Text>}<NavItem label={section.name} icon={section.icon} active={active === section.name} compact={compact} onPress={() => select(section.name)} />{!compact && active === section.name && subpages.length > 0 && <View style={{ paddingLeft: 16 }}>{subpages.map(page => <NavItem key={page} label={page} icon={ChevronRight} active={currentSubpage === page} onPress={() => { setDrawer(false); onSubpage(page); }} />)}</View>}</React.Fragment>)}</View>
+    <View style={{ gap: 3 }}>
+      {!compact && <Text style={{ color: colors.subtle, fontSize: 10, paddingHorizontal: 12, marginBottom: 6 }}>Atalhos</Text>}
+      <NavItem label="Cadastrar partida" icon={CalendarPlus} compact={compact} disabled={busy} onPress={() => { setDrawer(false); onCreateMatch(); }} />
+      <NavItem label="Emitir ingresso manual" icon={Ticket} compact={compact} disabled={busy} onPress={() => { setDrawer(false); onIssueTicket(); }} />
+    </View>
     <View style={{ borderTopWidth: 1, borderColor: colors.border, paddingTop: 14, gap: 10 }}>
       {!owner && <NavItem label="Abrir bilheteria" icon={Ticket} compact={compact} onPress={() => select('Bilheteria')} />}
       {onBack && <NavItem label="Área do torcedor" icon={ArrowUpRight} compact={compact} onPress={() => { setDrawer(false); onBack(); }} />}
@@ -49,7 +54,7 @@ export function AdminLayout({ children, active, onSelect, onBack, onSecurity, on
       <NavItem label="Logs de auditoria" icon={History} active={active === 'Auditoria'} compact={compact} onPress={() => select('Auditoria')} />
       <View style={{ flexDirection: compact ? 'column' : 'row', alignItems: 'center', gap: 9 }}><View style={{ width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.soft }}><Text style={{ color: colors.muted, fontSize: 10, fontWeight: '600' }}>{initials}</Text></View>{!compact && <View style={{ flex: 1, minWidth: 0 }}><Text numberOfLines={1} style={{ color: colors.text, fontSize: 11, fontWeight: '500' }}>{member?.name}</Text><Text style={{ color: colors.subtle, fontSize: 10 }}>{owner ? 'Master da empresa' : 'Clube'}</Text></View>}<AdminButton label="Sair da conta" icon={LogOut} iconOnly variant="ghost" disabled={busy} onPress={onSignOut} /></View>
     </View>
-  </View>;
+  </ScrollView>;
   return <View style={{ flex: 1, minHeight: 0, flexDirection: 'row', backgroundColor: colors.background, paddingTop: insets.top }}><StatusBar style={isDark ? 'light' : 'dark'} />
     {desktop && <View style={{ width: collapsed ? 68 : 226, borderRightWidth: 1, borderColor: colors.border }}>{sidebar(collapsed)}</View>}
     <View style={{ flex: 1, minWidth: 0 }}><View style={{ minHeight: 62, paddingHorizontal: desktop ? 24 : 12, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}><AdminButton label={desktop ? collapsed ? 'Expandir menu lateral' : 'Recolher menu lateral' : 'Abrir menu'} icon={desktop ? collapsed ? PanelLeftOpen : PanelLeftClose : Menu} iconOnly variant="ghost" onPress={() => desktop ? setCollapsed(!collapsed) : setDrawer(true)} /><View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 }}>{desktop && <><Text style={{ color: colors.subtle, fontSize: 12 }}>Administração</Text><ChevronRight size={13} color={colors.subtle} /></>}<Text numberOfLines={1} style={{ color: colors.text, fontSize: 12, fontWeight: '500', flexShrink: 1 }}>{active}</Text></View><AdminButton label="Atualizar dados" icon={RefreshCw} iconOnly variant="ghost" loading={refreshing} disabled={busy} onPress={onRefresh} /><AdminButton label={isDark ? 'Usar tema claro' : 'Usar tema escuro'} icon={isDark ? Sun : Moon} iconOnly variant="ghost" onPress={toggle} /></View>
@@ -58,10 +63,10 @@ export function AdminLayout({ children, active, onSelect, onBack, onSecurity, on
     {!desktop && <Modal visible={drawer} transparent animationType="fade" onRequestClose={() => setDrawer(false)}><View style={{ flex: 1, flexDirection: 'row' }}><Pressable accessibilityLabel="Fechar menu" onPress={() => setDrawer(false)} style={{ position: 'absolute', inset: 0, backgroundColor: '#00000050' }} /><View accessibilityViewIsModal style={{ width: Math.min(290, width - 40), height: '100%', borderRightWidth: 1, borderColor: colors.border }}>{sidebar(false)}</View></View></Modal>}
   </View>;
 }
-function NavItem({ label, icon: Icon, onPress, active = false, compact = false }: { label: string; icon: typeof Menu; onPress: () => void; active?: boolean; compact?: boolean }) {
+function NavItem({ label, icon: Icon, onPress, active = false, compact = false, disabled = false }: { disabled?: boolean; label: string; icon: typeof Menu; onPress: () => void; active?: boolean; compact?: boolean }) {
   const { colors } = useTheme();
   const [hover, setHover] = useState(false);
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: active }} onPress={onPress} onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)} style={({ pressed }) => ({ minHeight: 41, paddingHorizontal: compact ? 0 : 12, flexDirection: 'row', alignItems: 'center', justifyContent: compact ? 'center' : undefined, gap: 11, borderRadius: 7, backgroundColor: active ? colors.primarySoft : hover || pressed ? colors.soft : 'transparent' })}><Icon size={17} strokeWidth={1.7} color={active ? colors.primary : colors.muted} />{!compact && <Text style={{ flex: 1, color: active ? colors.primary : colors.muted, fontSize: 12, fontWeight: active ? '600' : '400' }}>{label}</Text>}</Pressable>;
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: active, disabled }} disabled={disabled} onPress={onPress} onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)} style={({ pressed }) => ({ minHeight: 41, paddingHorizontal: compact ? 0 : 12, flexDirection: 'row', alignItems: 'center', justifyContent: compact ? 'center' : undefined, gap: 11, borderRadius: 7, backgroundColor: active ? colors.primarySoft : hover || pressed ? colors.soft : 'transparent' })}><Icon size={17} strokeWidth={1.7} color={active ? colors.primary : colors.muted} />{!compact && <Text style={{ flex: 1, color: active ? colors.primary : colors.muted, fontSize: 12, fontWeight: active ? '600' : '400' }}>{label}</Text>}</Pressable>;
 }
 export function AdminBadge({ label, tone = 'neutral' }: { label: string; tone?: 'success' | 'warning' | 'neutral' | 'danger' }) {
   const { colors, isDark } = useTheme();

@@ -394,6 +394,7 @@ export interface PartidaIngressoV1 {
   atualizadoEm: string;
   estadio: {
     id: string;
+    ativo?: boolean;
     nome: string;
     nomePopular?: string | null;
     cidade: string;
@@ -679,6 +680,7 @@ export const ingressoV1Api = {
         }[];
       }[];
     }
+    | { id: string; abrirPortariaAgora: true }
   ) => request<PartidaIngressoV1>('/ingresso-v1/partidas', { token, method: 'PATCH', body }),
   excluirPartida: (token: string, id: string) =>
     request<PartidaIngressoV1>('/ingresso-v1/partidas', { token, method: 'DELETE', body: { id } }),

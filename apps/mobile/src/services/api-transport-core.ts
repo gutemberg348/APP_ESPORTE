@@ -1,5 +1,12 @@
+const unavailable = 'O serviço está temporariamente indisponível. Tente novamente em instantes.';
+export function userFacingMessage(value: unknown, fallback = 'Não foi possível concluir a operação. Tente novamente.') {
+  if (typeof value !== 'string' || !value.trim()) return fallback;
+  if (/(?:network request failed|failed to fetch|load failed|networkerror)/i.test(value)) return 'Falha de conexão. Confira sua internet e tente novamente.';
+  if (/(?:[a-z][\w+.-]*:\/\/|\blocalhost\b|\b(?:\d{1,3}\.){3}\d{1,3}\b|\bHTTP\s*\d{3}|\b(?:Prisma|ECONN\w+|ENOTFOUND|SQLSTATE|TypeError|SyntaxError|NotReadableError|NotAllowedError)\b|<html|\n\s*at\s)/i.test(value)) return fallback;
+  return value;
+}
 export class ApiError extends Error {
-  constructor(public status: number, message: string, public code = 'API_ERROR', public requestId?: string) { super(message); }
+  constructor(public status: number, message: string, public code = 'API_ERROR', public requestId?: string) { super(userFacingMessage(message)); }
 }
 export interface RequestOptions { method?: string; body?: unknown; token?: string | null; timeoutMs?: number }
 
@@ -19,23 +26,22 @@ export function createApiTransport(apiUrl: string | (() => string), fetcher: typ
       const requestId = response.headers.get('x-request-id') || undefined;
       let result;
       try { result = await response.json(); }
-      catch {
-        const host = new URL(baseUrl).origin;
+      catch (error) {
+        if (controller.signal.aborted) throw error;
         const isHtml = response.headers.get('content-type')?.includes('text/html');
-        throw new ApiError(response.ok ? 502 : response.status, isHtml
-          ? `O endereço ${host} retornou uma página do servidor (HTTP ${response.status}), em vez da API. A equipe precisa corrigir a conexão do serviço. Seu acesso não foi confirmado; tente mais tarde.`
-          : 'O servidor respondeu em um formato inesperado. Tente novamente em instantes.', isHtml ? 'API_PROXY_ERROR' : 'INVALID_API_RESPONSE', requestId);
+        throw new ApiError(response.ok ? 502 : response.status, unavailable, isHtml ? 'API_PROXY_ERROR' : 'INVALID_API_RESPONSE', requestId);
       }
       if (!response.ok) {
         const details = Array.isArray(result?.error?.details) ? result.error.details.filter((item: unknown): item is { message: string } => typeof item === 'object' && item !== null && 'message' in item && typeof item.message === 'string').map((item: { message: string }) => item.message).join(' ') : '';
-        throw new ApiError(response.status, [result?.error?.message || 'Não foi possível concluir a operação.', details].filter(Boolean).join(' '), result?.error?.code, result?.error?.requestId || requestId);
+        const message = response.status >= 500 ? unavailable : response.status === 429 ? 'Muitas tentativas seguidas. Aguarde um instante e tente novamente.'
+          : [userFacingMessage(result?.error?.message), userFacingMessage(details, '')].filter(Boolean).join(' ');
+        throw new ApiError(response.status, message, result?.error?.code, result?.error?.requestId || requestId);
       }
-      if (!result || typeof result !== 'object' || !Object.prototype.hasOwnProperty.call(result, 'data')) throw new ApiError(502, 'O servidor respondeu sem os dados esperados. Confira a URL da API.', 'INVALID_API_RESPONSE', requestId);
+      if (!result || typeof result !== 'object' || !Object.prototype.hasOwnProperty.call(result, 'data')) throw new ApiError(502, unavailable, 'INVALID_API_RESPONSE', requestId);
       return result.data as T;
     } catch (error) {
       if (error instanceof ApiError) throw error;
-      const host = new URL(baseUrl).origin;
-      throw new ApiError(0, controller.signal.aborted ? `A API em ${host} demorou para responder. Confira o servidor e tente novamente.` : `Não foi possível conectar à API em ${host}. Confira se a API está iniciada e se o endereço e o acesso pela rede estão corretos.`, controller.signal.aborted ? 'API_TIMEOUT' : 'API_UNREACHABLE');
+      throw new ApiError(0, controller.signal.aborted ? 'A resposta está demorando. Confira sua conexão e tente novamente.' : 'Falha de conexão. Confira sua internet e tente novamente.', controller.signal.aborted ? 'API_TIMEOUT' : 'API_UNREACHABLE');
     } finally { clearTimeout(timeout); }
   };
 }

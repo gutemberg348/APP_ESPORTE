@@ -99,7 +99,7 @@ export function GateV1Panel() {
   return <View style={{ gap: 18 }}>
     <Panel><AdminSection title="Conferir ingresso" description="Selecione a partida e o setor. A leitura consulta o ingresso; a entrada só é autorizada após confirmar no servidor.">
       <AdminButton label="Atualizar escala" loading={loading} disabled={blocked} onPress={() => { clearReview(); void load(); }} />
-      {!loading && !matches.length && <AdminNotice>Nenhuma escala disponível. O administrador deve liberar a partida e o setor em Funcionários.</AdminNotice>}
+      {!loading && !error && !matches.length && <AdminNotice>Nenhuma escala disponível. O administrador deve liberar a partida e o setor em Funcionários.</AdminNotice>}
       <AdminSelect label="Partida" value={matchId} disabled={blocked} options={matches.map((row) => ({ value: row.id, label: `${row.timeMandante} × ${row.timeVisitante}`, description: row.portariaAtiva ? 'Portaria habilitada · conferir horário' : 'Portaria desativada' }))} onChange={(id) => { setMatch(id); setAllocation(''); clearReview(); }} placeholder="Selecione a partida" />
       <AdminSelect label="Setor desta portaria" value={allocationId} disabled={blocked || !selected} options={(selected?.alocacoesSetor || []).map((row) => ({ value: row.id, label: row.setor.nome }))} onChange={(id) => { setAllocation(id); setGate(selected?.alocacoesSetor.find((row) => row.id === id)?.setor.portaoEntrada?.slice(0, 50) || 'PORTAO-01'); clearReview(); }} placeholder="Selecione o setor" />
       <AdminField label="Portão / catraca" value={gate} onChange={setGate} maxLength={50} editable={!blocked} required />

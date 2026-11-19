@@ -1,8 +1,8 @@
 import type { Match } from '@nacional/shared/types';
-import React, { useEffect, useState } from 'react';
-import { View, Pressable } from 'react-native';
-import { Pencil, Ticket, Trash2 } from 'lucide-react-native';
-import { Button } from '../../ui';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, View, Pressable } from 'react-native';
+import { CalendarDays, Eye, MapPin, Pencil, ScanLine, Ticket, Trash2 } from 'lucide-react-native';
+import { Button, Panel } from '../../ui';
 import { Text } from '../../Typography';
 import { Sheet } from '../../Sheet';
 import {
@@ -15,7 +15,7 @@ import {
   AdminSelect,
   AdminToggle,
 } from '../AdminControls';
-import { AdminBadge, AdminTable } from '../AdminLayout';
+import { AdminBadge } from '../AdminLayout';
 import { useTheme } from '../../../theme/ThemeProvider';
 import {
   ingressoV1Api,
@@ -28,10 +28,12 @@ import {
 import { matchDate, messageOf, money } from '../../../utils/format';
 import { parseAmount } from '../../../utils/payments';
 import { formDate, parseClubDate } from '../../../utils/admin';
+import { ticketGateState } from '../../../utils/ticket-state';
 
 type Props = {
   appMatches: Match[];
   onEditApp: (match: Match) => void;
+  onAppGate: (match: Match, open: boolean) => void;
   onSaved: () => void;
   refreshKey: number;
   token: string;
@@ -69,6 +71,22 @@ const STATUS_OPTIONS: { value: StatusPartidaIngressoV1; label: string }[] = [
   { value: 'CANCELADA', label: 'Cancelada' },
 ];
 
+function matchGate(row: PartidaIngressoV1) {
+  return ticketGateState({ startsAt: row.dataPartida, entryEnabled: row.portariaAtiva, gateOpenAt: row.portariaAbreEm, gateCloseAt: row.portariaFechaEm });
+}
+
+function CalendarActions({ gate, eligible, busy, onGate, onDetails, onIssue }: {
+  gate: string; eligible: boolean; busy: boolean; onGate: (open: boolean) => void; onDetails: () => void; onIssue?: () => void;
+}) {
+  const open = gate === 'OPEN';
+  return <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+    {eligible && gate !== 'CLOSED' && <AdminButton label={open ? 'Fechar portaria' : 'Abrir portaria agora'} icon={ScanLine}
+      size="small" disabled={busy} onPress={() => onGate(!open)} />}
+    {onIssue && <AdminButton label="Emitir ingresso" icon={Ticket} size="small" disabled={busy} onPress={onIssue} />}
+    <AdminButton label="Ver mais" icon={Eye} size="small" variant="ghost" disabled={busy} onPress={onDetails} />
+  </View>;
+}
+
 export function PartidasIngressoV1Panel({
   token,
   busy,
@@ -77,9 +95,10 @@ export function PartidasIngressoV1Panel({
   onError,
   createOpen = false,
   onConsumeCreate,
-  onOpenIngressos, appMatches, onEditApp, refreshKey, onSaved,
+  onOpenIngressos, appMatches, onEditApp, onAppGate, refreshKey, onSaved,
 }: Props) {
   const { colors } = useTheme();
+  const [gridWidth, setGridWidth] = useState(0);
   const [rows, setRows] = useState<PartidaIngressoV1[]>([]);
   const [estadios, setEstadios] = useState<EstadioIngressoV1[]>([]);
   const [templatesVenda, setTemplatesVenda] = useState<TemplateVendaIngressoV1[]>([]);
@@ -98,8 +117,15 @@ export function PartidasIngressoV1Panel({
   const [alocacoesDraft, setAlocacoesDraft] = useState<AlocacaoDraft[]>([]);
   const [formError, setFormError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<PartidaIngressoV1 | null>(null);
+  const [detailId, setDetailId] = useState('');
+  const detail = rows.find(row => row.id === detailId);
+  const detailGate = detail && matchGate(detail);
+  const [actionError, setActionError] = useState('');
+  const actionLock = useRef(false);
+  const loadSequence = useRef(0);
 
   async function load() {
+    const sequence = ++loadSequence.current;
     setLoading(true);
     try {
       const [listaPartidas, listaEstadios, listaTemplatesVenda] = await Promise.all([
@@ -107,18 +133,20 @@ export function PartidasIngressoV1Panel({
         ingressoV1Api.estadios(token),
         ingressoV1Api.templatesVenda(token),
       ]);
+      if (sequence !== loadSequence.current) return;
       setRows(listaPartidas);
       setEstadios(listaEstadios);
       setTemplatesVenda(listaTemplatesVenda);
     } catch (error) {
-      onError(messageOf(error));
+      if (sequence === loadSequence.current) onError(messageOf(error));
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
   }
 
   useEffect(() => {
     void load();
+    return () => { loadSequence.current++; };
   }, [token, refreshKey]);
 
   useEffect(() => {
@@ -177,6 +205,7 @@ export function PartidasIngressoV1Panel({
   }
 
   function openEdit(row: PartidaIngressoV1) {
+    setDetailId('');
     setEditing(row);
     setEstadioId(row.estadioId);
     setTemplateVendaId(row.templateVendaId || '');
@@ -190,6 +219,35 @@ export function PartidasIngressoV1Panel({
     setAlocacoesDraft(buildAlocacoesFromStadium(row.estadioId, row.templateVendaId || '', row));
     setFormError('');
     setModalOpen(true);
+  }
+
+  function showDetails(row: PartidaIngressoV1) {
+    setActionError('');
+    setDetailId(row.id);
+  }
+
+  async function quickUpdate(row: PartidaIngressoV1, patch: { abrirPortariaAgora: true } | { portariaAtiva: false } | { vendasAtivas: boolean }, notice: string) {
+    if (busy || actionLock.current) return;
+    actionLock.current = true;
+    onBusy(true);
+    setActionError(''); onError('');
+    try {
+      const saved = await ingressoV1Api.atualizarPartida(token, { id: row.id, ...patch });
+      loadSequence.current++;
+      setLoading(false);
+      setRows(current => current.map(item => item.id === row.id ? {
+        ...item, status: saved.status, vendasAtivas: saved.vendasAtivas, portariaAtiva: saved.portariaAtiva,
+        portariaAbreEm: saved.portariaAbreEm, portariaFechaEm: saved.portariaFechaEm, atualizadoEm: saved.atualizadoEm,
+      } : item));
+      onNotice(notice);
+      onSaved();
+    } catch (error) {
+      if (detailId) setActionError(messageOf(error));
+      else onError(messageOf(error));
+    } finally {
+      actionLock.current = false;
+      onBusy(false);
+    }
   }
 
   function handleChangeEstadio(nextEstadioId: string) {
@@ -299,106 +357,101 @@ export function PartidasIngressoV1Panel({
 
   const templatesDoEstadio = templatesVenda.filter(t => t.estadioId === estadioId && (t.ativo || t.id === editing?.templateVendaId));
 
-  const appRows = appMatches.filter(match => !match.partidaV1Id).map(match => ({
-    id: match.id, startsAt: match.startsAt,
-    cells: [
-      <View style={{ gap: 3 }}>
-        <Text style={{ color: colors.text, fontWeight: '700' }}>{match.homeTeam} × {match.awayTeam}</Text>
-        <Text style={{ color: colors.muted, fontSize: 12 }}>{match.stadium} · {matchDate(match.startsAt)}</Text>
-        <AdminBadge label="Cadastro anterior · App" />
-      </View>,
-      <Text style={{ color: colors.text, fontSize: 12 }}>{match.sectors.map(sector => sector.name).join(', ') || 'Sem setores'}</Text>,
-      <AdminBadge label={match.published ? 'Publicada' : 'Rascunho'} />,
-      <AdminButton label="Editar" icon={Pencil} size="small" disabled={busy} onPress={() => onEditApp(match)} />,
-    ],
-  }));
+  const cards = [
+    ...appMatches.filter(match => !match.partidaV1Id).map(match => ({
+      id: match.id, startsAt: match.startsAt, title: `${match.homeTeam} × ${match.awayTeam}`, stadium: match.stadium,
+      channel: 'Cadastro anterior · App', status: match.published ? 'PUBLICADA' : 'RASCUNHO',
+      sectors: match.sectors.map(s => ({ id: s.id, name: s.name, price: s.priceCents, numbered: false })),
+      occupancy: null, gate: ticketGateState(match).state, eligible: Boolean(match.published),
+      onGate: (open: boolean) => onAppGate(match, open), onDetails: () => onEditApp(match), onIssue: undefined,
+    })),
+    ...rows.map(row => ({
+      id: row.id, startsAt: row.dataPartida, title: `${row.timeMandante} × ${row.timeVisitante}`,
+      stadium: row.estadio.nomePopular || row.estadio.nome, channel: row.appMatch ? 'App e bilheteria' : 'Bilheteria', status: row.status,
+      sectors: row.alocacoesSetor.map(a => {
+        const lot = a.lotes.find(l => l.ativo && l.tipoCategoria === 'INTEIRA') || a.lotes.find(l => l.ativo);
+        return { id: a.id, name: a.setor.nome, price: lot?.precoCentavos, numbered: a.setor.numerado };
+      }),
+      occupancy: row.alocacoesSetor.reduce((sum, a) => ({
+        used: sum.used + a.quantidadeVendida + a.quantidadeReservada + (a.ocupadosApp || 0),
+        capacity: sum.capacity + a.capacidadeLiberada,
+      }), { used: 0, capacity: 0 }),
+      gate: matchGate(row).state, eligible: row.estadio.ativo !== false && ['PUBLICADA', 'ESGOTADA'].includes(row.status),
+      onGate: (open: boolean) => void quickUpdate(row, open ? { abrirPortariaAgora: true } : { portariaAtiva: false },
+        open ? 'Portaria aberta para leitura dos ingressos.' : 'Portaria fechada.'),
+      onDetails: () => showDetails(row), onIssue: onOpenIngressos ? () => onOpenIngressos(row.id) : undefined,
+    })),
+  ].sort((a, b) => Date.parse(b.startsAt) - Date.parse(a.startsAt));
+  const gap = 16;
+  const columns = Math.max(1, Math.min(3, Math.floor((gridWidth + gap) / (360 + gap))));
+  const cardWidth = gridWidth ? Math.floor((gridWidth - gap * (columns - 1)) / columns) : '100%';
   return (
     <View style={{ gap: 18 }}>
-      <AdminTable
-        loading={loading}
-        minWidth={740}
-        empty="Nenhuma partida cadastrada."
-        columns={[
-          { label: 'Partida / Estádio', flex: 2 },
-          { label: 'Setores e Lotes', flex: 1.8 },
-          { label: 'Ocupação / situação', width: 120 },
-          { label: 'Ações', width: 210 },
-        ]}
-        rows={[...appRows, ...rows.map((row) => {
-          const totalLiberada = row.alocacoesSetor.reduce((s, a) => s + a.capacidadeLiberada, 0);
-          const ocupados = row.alocacoesSetor.reduce((s, a) => s + a.quantidadeVendida + a.quantidadeReservada + (a.ocupadosApp || 0), 0);
+      <View onLayout={({ nativeEvent }) => setGridWidth(Math.floor(nativeEvent.layout.width))} style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>
+        {cards.map(card => <Panel key={card.id} style={{ width: cardWidth, maxWidth: '100%', minWidth: 0, padding: 16, borderRadius: 12, gap: 14 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <CalendarDays size={15} color={colors.primary} />
+              <Text style={{ color: colors.text, fontSize: 12, fontWeight: '600' }}>{matchDate(card.startsAt)}</Text>
+            </View>
+            <AdminBadge label={STATUS_OPTIONS.find(o => o.value === card.status)?.label ?? card.status}
+              tone={card.status === 'PUBLICADA' ? 'success' : card.status === 'ESGOTADA' ? 'warning' : card.status === 'CANCELADA' ? 'danger' : 'neutral'} />
+          </View>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Ver detalhes de ${card.title}`} disabled={busy} onPress={card.onDetails} style={{ gap: 5 }}>
+            <Text heading style={{ color: colors.text, fontSize: 18, lineHeight: 25, fontWeight: '600' }}>{card.title}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <MapPin size={14} color={colors.muted} />
+              <Text style={{ flexShrink: 1, color: colors.muted, fontSize: 12 }}>{card.stadium}</Text>
+            </View>
+          </Pressable>
+          <View style={{ gap: 8, flexGrow: 1 }}>
+            {card.sectors.map(s => <View key={s.id} style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
+              <Text style={{ flex: 1, color: colors.muted, fontSize: 12 }}>{s.name}{s.numbered ? ' · Numerado' : ''}</Text>
+              {s.price !== undefined && <Text style={{ color: colors.text, fontSize: 12, fontWeight: '600' }}>{money(s.price)}</Text>}
+            </View>)}
+            {!card.sectors.length && <Text style={{ color: colors.subtle, fontSize: 12 }}>Sem setores cadastrados</Text>}
+          </View>
+          <View style={{ gap: 7 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+              <Text style={{ color: colors.subtle, fontSize: 11 }}>{card.channel}</Text>
+              {card.occupancy && <Text style={{ color: colors.muted, fontSize: 11 }}>Ocupação · {card.occupancy.used.toLocaleString('pt-BR')} / {card.occupancy.capacity.toLocaleString('pt-BR')}</Text>}
+            </View>
+            {card.occupancy && <View style={{ height: 4, backgroundColor: colors.border, borderRadius: 4, overflow: 'hidden' }}>
+              <View style={{ width: `${Math.min(100, 100 * card.occupancy.used / Math.max(1, card.occupancy.capacity))}%`, height: '100%', backgroundColor: colors.primary }} />
+            </View>}
+          </View>
+          <View style={{ paddingTop: 12, borderTopWidth: 1, borderColor: colors.border }}>
+            <CalendarActions busy={busy} gate={card.gate} eligible={card.eligible} onGate={card.onGate} onDetails={card.onDetails} onIssue={card.onIssue} />
+          </View>
+        </Panel>)}
+        {!cards.length && <Panel style={{ width: '100%', padding: 24, alignItems: 'center', gap: 10 }}>
+          {loading && <ActivityIndicator color={colors.primary} />}
+          <Text style={{ color: colors.muted }}>{loading ? 'Carregando partidas…' : 'Nenhuma partida cadastrada.'}</Text>
+        </Panel>}
+      </View>
 
-          return {
-            id: row.id, startsAt: row.dataPartida,
-            cells: [
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => openEdit(row)}
-                disabled={busy}
-                style={{ gap: 2 }}
-              >
-                <Text numberOfLines={1} style={{ color: colors.text, fontSize: 13, fontWeight: '700' }}>
-                  {row.timeMandante} × {row.timeVisitante}
-                </Text>
-                <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 11 }}>
-                  {row.estadio.nomePopular || row.estadio.nome} ·{' '}
-                  {matchDate(row.dataPartida)}
-                </Text>
-                <AdminBadge label={row.appMatch ? 'App e bilheteria' : 'Bilheteria'} />
-              </Pressable>,
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
-                {row.alocacoesSetor.map((a) => {
-                  const lotePrincipal = a.lotes.find(lote => lote.ativo && lote.tipoCategoria === 'INTEIRA') || a.lotes.find(lote => lote.ativo);
-                  return (
-                    <AdminBadge
-                      key={a.id}
-                      label={`${a.setor.nome}${lotePrincipal ? ` (${money(lotePrincipal.precoCentavos)})` : ''}`}
-                      tone={a.setor.numerado ? 'warning' : 'neutral'}
-                    />
-                  );
-                })}
-              </View>,
-              <View style={{ gap: 2 }}>
-                <Text style={{ color: colors.text, fontSize: 12, fontWeight: '700' }}>
-                  {ocupados} / {totalLiberada.toLocaleString('pt-BR')}
-                </Text>
-                <AdminBadge
-                  label={STATUS_OPTIONS.find(option => option.value === row.status)?.label ?? row.status}
-                  tone={row.status === 'PUBLICADA' ? 'success' : 'neutral'}
-                />
-              </View>,
-              <View style={{ flexDirection: 'row', gap: 6 }}>
-                {onOpenIngressos && (
-                  <AdminButton
-                    label="Emitir ingressos"
-                    icon={Ticket}
-                    iconOnly
-                    size="small"
-                    disabled={busy}
-                    onPress={() => onOpenIngressos(row.id)}
-                  />
-                )}
-                <AdminButton
-                  label="Editar"
-                  icon={Pencil}
-                  size="small"
-                  disabled={busy}
-                  onPress={() => openEdit(row)}
-                />
-                <AdminButton
-                  label="Excluir"
-                  icon={Trash2}
-                  iconOnly
-                  variant="danger"
-                  size="small"
-                  disabled={busy}
-                  onPress={() => setConfirmDelete(row)}
-                />
-              </View>,
-            ],
-          };
-        })].sort((a, b) => Date.parse(b.startsAt) - Date.parse(a.startsAt))}
-      />
+      {detail && detailGate && <Sheet visible title="Detalhes da partida" onClose={() => setDetailId('')}>
+        <AdminSection title={`${detail.timeMandante} × ${detail.timeVisitante}`} description={`${detail.estadio.nomePopular || detail.estadio.nome} · ${matchDate(detail.dataPartida)}`}>
+          <Text style={{ color: colors.text }}>{STATUS_OPTIONS.find(option => option.value === detail.status)?.label} · {detail.vendasAtivas ? 'Vendas habilitadas' : 'Vendas pausadas'}</Text>
+          {detail.templateVenda && <Text style={{ color: colors.muted }}>Modelo de venda · {detail.templateVenda.nome}</Text>}
+          <Text style={{ color: colors.muted }}>{detail.portariaAtiva
+            ? `Portaria habilitada · ${matchDate(new Date(detailGate.opensAt).toISOString())} até ${matchDate(new Date(detailGate.closesAt).toISOString())}`
+            : 'Portaria desabilitada'}</Text>
+        </AdminSection>
+        <AdminSection title="Setores e lotes">
+          {detail.alocacoesSetor.map(a => <View key={a.id} style={{ gap: 4 }}>
+            <Text style={{ color: colors.text, fontWeight: '700' }}>{a.setor.nome} · {a.capacidadeLiberada} lugares</Text>
+            {a.lotes.map(l => <Text key={l.id} style={{ color: colors.muted }}>{l.nome} · {money(l.precoCentavos)}{l.ativo ? '' : ' · Inativo'}</Text>)}
+          </View>)}
+        </AdminSection>
+        {!!actionError && <AdminNotice tone="error">{actionError}</AdminNotice>}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          <AdminButton primary label="Editar partida" icon={Pencil} disabled={busy} onPress={() => openEdit(detail)} />
+          {detail.status === 'PUBLICADA' && <AdminButton label={detail.vendasAtivas ? 'Pausar vendas' : 'Habilitar vendas'} disabled={busy}
+            onPress={() => void quickUpdate(detail, { vendasAtivas: !detail.vendasAtivas }, detail.vendasAtivas ? 'Vendas pausadas.' : 'Vendas habilitadas para o período configurado.')} />}
+          <AdminButton label="Excluir partida" icon={Trash2} variant="ghost" disabled={busy} onPress={() => { setDetailId(''); setConfirmDelete(detail); }} />
+        </View>
+      </Sheet>}
 
       {modalOpen && (
         <Sheet

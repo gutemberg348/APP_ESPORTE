@@ -12,8 +12,11 @@ function isLocalHost(host: string) {
 
 export type ApiHostMode = 'auto' | 'local' | 'configured';
 export function resolveApiUrl(configured: string | undefined, platform: string, hostUri?: string | null, development = false, webOrigin?: string | null, hostMode: ApiHostMode = 'auto') {
-  const url = new URL(configured || 'http://localhost:3333/v1');
-  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('Configure EXPO_PUBLIC_API_URL com uma URL HTTP/HTTPS válida, sem credenciais.');
+  const invalid = 'Não foi possível conectar ao serviço. Consulte a equipe de suporte.';
+  let url: URL;
+  try { url = new URL(configured || 'http://localhost:3333/v1'); }
+  catch { throw new Error(invalid); }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error(invalid);
   // Auto resolves loopback only. Local mode also follows the development
   // computer when an old private IPv4 was compiled into an earlier bundle.
   // Configured mode always preserves intentional separate API servers.

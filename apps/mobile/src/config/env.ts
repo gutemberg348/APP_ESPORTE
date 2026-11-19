@@ -4,7 +4,7 @@ import { resolveApiUrl, type ApiHostMode } from './api-url';
 
 export function getApiUrl() {
   const mode = process.env.EXPO_PUBLIC_API_HOST_MODE || 'auto';
-  if (!['auto', 'local', 'configured'].includes(mode)) throw new Error('EXPO_PUBLIC_API_HOST_MODE deve ser auto, local ou configured.');
+  if (!['auto', 'local', 'configured'].includes(mode)) throw new Error('Não foi possível conectar ao serviço. Consulte a equipe de suporte.');
   return resolveApiUrl(process.env.EXPO_PUBLIC_API_URL, Platform.OS, Constants.expoConfig?.hostUri, __DEV__, Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : undefined, mode as ApiHostMode);
 }
 

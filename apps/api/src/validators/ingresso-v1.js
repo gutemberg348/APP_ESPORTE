@@ -386,7 +386,8 @@ export const partidaV1UpdateSchema = z
     portariaFechaEm: z.iso.datetime().nullable().optional(),
     alocacoesSetor: z.array(alocacaoSetorPartidaV1Schema).optional(),
   })
-  .strict();
+  .strict()
+  .or(z.object({ id: z.uuid(), abrirPortariaAgora: z.literal(true) }).strict());
 
 export const mapaBlocoV1QuerySchema = z
   .object({

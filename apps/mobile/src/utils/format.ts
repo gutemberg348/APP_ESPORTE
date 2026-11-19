@@ -1,3 +1,5 @@
+import { userFacingMessage } from '../services/api-transport-core';
+
 export const money = (cents: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
 export const matchDate = (value: string) => {
   const date = new Date(value);
@@ -5,4 +7,4 @@ export const matchDate = (value: string) => {
   const time = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Fortaleza' }).format(date);
   return `${day.charAt(0).toUpperCase()}${day.slice(1)} - ${time}`;
 };
-export const messageOf = (error: unknown) => error instanceof Error ? error.message : 'Não foi possível concluir a operação.';
+export const messageOf = (error: unknown) => userFacingMessage(error instanceof Error ? error.message : undefined);

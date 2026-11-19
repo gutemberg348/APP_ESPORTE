@@ -22,9 +22,9 @@ export async function checkApiConnection(apiUrl: string, fetcher: typeof fetch =
   return {
     apiOrigin: base.origin, ready: Boolean(alive && ready && post),
     code: !alive ? 'API_OFFLINE' : !ready ? 'DATABASE_UNAVAILABLE' : !post ? 'API_POST_FAILED' : 'API_READY',
-    message: !alive ? `Não houve resposta da API em ${base.origin}. Confira se o servidor está iniciado e se o endereço está correto.`
-      : !ready ? 'A API respondeu, mas o banco está indisponível ou precisa de atualização. Confira o terminal da API.'
-      : !post ? 'API e banco respondem às consultas, mas o envio de dados falhou. Confira o reinício da API e o erro de rede no navegador.'
-      : 'Conexão restabelecida: API, banco e envio de dados responderam. Tente entrar novamente.',
+    message: !alive ? 'Não foi possível conectar. Confira sua internet e tente novamente.'
+      : !ready ? 'O serviço está temporariamente indisponível. Tente novamente em instantes.'
+      : !post ? 'Não foi possível enviar os dados. Tente novamente em instantes.'
+      : 'Conexão restabelecida. Você já pode tentar entrar.',
   };
 }
