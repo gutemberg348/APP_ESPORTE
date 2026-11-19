@@ -40,6 +40,7 @@ test('app demo is atomic, repeatable, audited and preserves admin edits, stock a
   for (const key of ['camisa-torcedor', 'camisa-treino']) await access(new URL(`../public/shop/${images[key].split('/').pop()}`, import.meta.url));
   const first = await seedAppDemo(db, { images, enableShop: true, now: new Date('2026-11-17T12:00:00Z') });
   assert.equal(first.matchesCreated, 6); assert.equal(first.productsCreated, 5);
+  assert.equal(await db.product.count({ where: { category: 'Camisas', priceCents: 10 } }), 5);
   assert.deepEqual(first.v1, { templatesCreated: 2, stadiumsCreated: 1, salesTemplatesCreated: 1, matchesCreated: 6 });
   assert.equal(await db.assentoIngressoV1.count(), 20);
   const v1 = await db.partidaIngressoV1.findFirst({ include: { alocacoesSetor: { include: { lotes: true } } } });

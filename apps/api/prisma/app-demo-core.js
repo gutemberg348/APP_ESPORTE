@@ -31,7 +31,7 @@ export async function seedAppDemo(db, { images, enableShop = false, tenantSlug =
       if (await tx.product.findUnique({ where: { id } })) continue;
       const input = productSchema.parse({ name: `[TESTE] Camisa Esporte · ${name}`, category: 'Camisas',
         description: 'PRODUTO DE TESTE. Imagem conceitual; não representa mercadoria disponível para entrega. Preço e estoque fictícios. Ajuste ou arquive no painel após testar.',
-        images: [images[index % 2 ? 'camisa-treino' : 'camisa-torcedor']], priceCents: 100 + index * 100,
+        images: [images[index % 2 ? 'camisa-treino' : 'camisa-torcedor']], priceCents: 10,
         compareAtCents: null, costCents: 0, weightGrams: 250, widthCm: 22, heightCm: 5, lengthCm: 26, active: true, featured: true,
         variants: ['P', 'M', 'G', 'GG'].map((label, size) => ({ sku: `APP-TESTE-CAM-${index + 1}-${size + 1}`, label, initialStock: 10, lowStock: 2, active: true })) });
       const { variants, ...product } = input;

@@ -62,9 +62,14 @@ test('gate login rejects fan credentials without creating a session and accepts 
   await assert.rejects(service.login({ ...input, portal: 'GATE' }), { code: 'INVALID_CREDENTIALS' });
   assert.equal(sessions.size, before);
   const employee = [...people.values()][0]; employee.role = 'GATE';
-  const login = await service.login({ ...input, portal: 'GATE' });
-  assert.equal(login.member.role, 'GATE');
-  assert.equal((await service.authenticate(login.accessToken)).user.id, employee.id);
+  let login;
+  for (const portal of ['GATE', 'APP', 'STAFF']) {
+    login = await service.login({ ...input, portal });
+    assert.equal(login.member.role, 'GATE');
+    assert.equal((await service.authenticate(login.accessToken)).user.id, employee.id);
+    const refreshed = await service.refresh(login.refreshToken);
+    assert.equal(refreshed.member.role, 'GATE');
+  }
   employee.active = false;
   await assert.rejects(service.authenticate(login.accessToken), { code: 'SESSION_REVOKED' });
 });
@@ -103,7 +108,7 @@ test('company owner logs into the administrative portal and keeps the role when 
   assert.equal(result.member.role, 'OWNER');
   assert.equal((await service.refresh(result.refreshToken)).member.role, 'OWNER');
 });
-test('ticket sellers can sign into the counter and the app, with a separate gate and admin login', async () => {
+test('ticket sellers use their account in the counter, app and staff portal', async () => {
   const { service, input, people } = await fixture();
   await service.register(input);
   const user = [...people.values()][0];
@@ -112,7 +117,11 @@ test('ticket sellers can sign into the counter and the app, with a separate gate
     await assert.rejects(service.login({ ...input, portal: 'SELLER' }), { code: 'INVALID_CREDENTIALS' });
   }
   user.role = 'TICKET_SELLER';
-  for (const portal of ['SELLER', 'APP']) assert.equal((await service.login({ ...input, portal })).member.role, 'TICKET_SELLER');
+  for (const portal of ['SELLER', 'APP', 'STAFF']) {
+    const login = await service.login({ ...input, portal });
+    assert.equal(login.member.role, 'TICKET_SELLER');
+    assert.equal((await service.refresh(login.refreshToken)).member.role, 'TICKET_SELLER');
+  }
   for (const portal of ['GATE', 'ADMIN']) await assert.rejects(service.login({ ...input, portal }), { code: 'INVALID_CREDENTIALS' });
 });
 

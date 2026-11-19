@@ -29,10 +29,10 @@ Rotas exclusivas do administrador: POST `/v1/admin/shop/skus/generate` com `{exc
 
 A integração da API é gratuita e exige uma conta/token. A compra de etiquetas e o transporte são pagos separadamente. A API direta de preços dos Correios exige contrato habilitado; por isso o projeto usa Melhor Envio para consultar esses serviços. [Introdução oficial do Melhor Envio](https://docs.melhorenvio.com.br/reference/introducao-api-melhor-envio) e [requisitos dos Correios](https://www.correios.com.br/atendimento/developers/manuais/manual-api-preco-1).
 
-Campos já preparados em `apps/api/.env`, `.env.example`, ambiente Docker e script de setup:
+Na VPS, o Docker Compose lê o `.env` da raiz do projeto, ao lado de `docker-compose.yml`. Para usar o frete com Pix real, configure o token de produção e o e-mail de contato nesse arquivo.
 
 ```dotenv
-MELHOR_ENVIO_ENVIRONMENT=sandbox
+MELHOR_ENVIO_ENVIRONMENT=production
 MELHOR_ENVIO_TOKEN=
 MELHOR_ENVIO_CONTACT_EMAIL=
 MELHOR_ENVIO_SERVICES=1,2
@@ -44,7 +44,9 @@ Preencha o token obtido na sua conta e um email de contato técnico. As credenci
 
 O servidor envia CEPs e os produtos do próprio banco: dimensões em centímetros, peso convertido de gramas para quilogramas, valor unitário em reais e quantidade. Usa `custom_price` e `custom_delivery_time` quando retornados. Transportadoras indisponíveis ou respostas inválidas não viram opções de compra. A cotação é gravada por conta/carrinho/CEP, expira em **10 minutos** e precisa corresponder ao pedido. [Contrato oficial de cotação](https://docs.melhorenvio.com.br/reference/calculo-de-fretes-por-produtos).
 
-Sandbox aparece como cotação de teste. Uma API em produção com Asaas de produção recusa checkout que use cotação de frete sandbox. A compra do frete/etiqueta, impressão e atualização automática do rastreio **não fazem parte desta etapa**. Gere a etiqueta no Melhor Envio, confira a embalagem e documentação fiscal, e informe código/link de rastreio no pedido. O valor da cotação não garante o preço de uma etiqueta comprada posteriormente com embalagem ou dados diferentes.
+Para simular cotações, use `MELHOR_ENVIO_ENVIRONMENT=sandbox` com um token de sandbox. O checkout com Sicredi em produção exige uma cotação de produção para entrega pelo Melhor Envio. A etiqueta é gerada no Melhor Envio e o rastreio é informado no pedido pelo painel.
+
+No painel **Loja → Frete**, ative **Permitir retirada sem frete**, informe o endereço e salve. Na retirada, o checkout cobra apenas os produtos e dispensa o token de frete.
 
 Alternativas disponíveis: retirada gratuita ou **tabela própria por faixa de CEP**, com preço base, adicional por kg iniciado, prazo mínimo/máximo e frete grátis a partir de um subtotal. Regras podem ser editadas ou pausadas. A tabela não é usada como substituição silenciosa quando o provedor está indisponível.
 

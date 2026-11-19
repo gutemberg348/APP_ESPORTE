@@ -16,7 +16,7 @@ O entrypoint aplica as migrations de estrutura. A migration `20261117190000_defa
 O comando `db:seed:test` aplica as migrations pendentes e executa o seed completo na mesma chamada. O seed cria:
 
 - Seis jogos de teste, em 3, 6, 9, 12, 15 e 18 dias a partir da primeira execução, às 19h de Patos. Arquibancada R$ 1,00 / 100 lugares e cadeiras R$ 2,00 / 30 lugares. Publicados com venda aberta até uma hora antes do jogo.
-- Cinco camisas de teste, com imagens conceituais já servidas pela API, preços de R$ 1,00 a R$ 5,00, tamanhos P/M/G/GG e dez unidades por tamanho. Editáveis em Loja → Produtos e Estoque.
+- Cinco camisas de teste a R$ 0,10 cada, com imagens servidas pela API e dez unidades de cada tamanho (P, M, G e GG). Os preços continuam editáveis em Loja → Produtos.
 - Admin V1: estádio **[TESTE APP] Arena Esporte**, dois templates de setor (arquibancada e cadeiras), dois setores, 20 cadeiras numeradas, um template de venda com inteira/meia e seis partidas publicadas, nas mesmas datas dos jogos do app.
 - Movimentos de estoque e registro de auditoria. Não cria contas, pagamentos ou ingressos emitidos.
 

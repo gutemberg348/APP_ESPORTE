@@ -98,6 +98,27 @@ test('shop lifecycle conserves inventory, immutable receipts, reservations and r
     return { order: await store.reserve(buyer.id, body), body, quote };
   }
   async function receive(order) { const intent = await asaas.shopPix(user.id, order.id); await asaas.process(intent.id); const raw = await db.gatewayIntent.findUnique({ where: { id: intent.id } }); remoteMap.get(raw.providerReference).status = 'RECEIVED'; await asaas.process(intent.id); return { intent, raw }; }
+  await t.test('shirt repricing keeps previous orders and quotes free pickup at ten cents per shirt', async () => {
+    const shirt = await product();
+    const { order: previous, body } = await purchase(shirt);
+    const accessory = await store.saveProduct(admin.id, schema.productSchema.parse({
+      ...baseProduct, name: 'Chaveiro de camisa', category: 'Acessórios',
+      variants: [{ ...baseProduct.variants[0], sku: 'CHAVEIRO-TESTE' }],
+    }));
+    const sql = await readFile(new URL('20261119200000_shop_shirt_price/migration.sql', migrations), 'utf8');
+    await pg.exec(sql);
+    await pg.exec(sql);
+    assert.equal((await db.product.findUniqueOrThrow({ where: { id: shirt.id } })).version, shirt.version + 1);
+    assert.equal((await db.product.findUniqueOrThrow({ where: { id: accessory.id } })).priceCents, accessory.priceCents);
+    assert.equal((await db.shopOrder.findUniqueOrThrow({ where: { id: previous.id } })).totalCents, previous.totalCents);
+    await assert.rejects(store.reserve(user.id, { ...body, requestKey: randomUUID() }), { code: 'SHOP_QUOTE_EXPIRED' });
+    await store.cancel(user.id, previous.id);
+    const { order } = await purchase(shirt, { quantity: 2 });
+    assert.equal(order.items[0].unitPriceCents, 10);
+    assert.equal(order.shippingCents, 0);
+    assert.equal(order.totalCents, 20);
+    await store.cancel(user.id, order.id);
+  });
   await t.test('catalog hides internal cost and checkout is idempotent without duplicate holds', async () => {
     const value = await product(3), { order, body } = await purchase(value, { quantity: 2 });
     assert.equal((await store.reserve(user.id, body)).id, order.id); assert.equal(await db.shopOrder.count({ where: { id: order.id } }), 1);
