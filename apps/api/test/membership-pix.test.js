@@ -35,7 +35,7 @@ test('membership Pix activates only confirmed payments, preserves snapshots and 
   const pg = await PGlite.create(), migrations = new URL('../prisma/migrations/', import.meta.url);
   for (const entry of (await readdir(migrations, { withFileTypes: true })).filter(row => row.isDirectory()).sort((a,b) => a.name.localeCompare(b.name))) await pg.exec(await readFile(new URL(`${entry.name}/migration.sql`, migrations), 'utf8'));
   const defaultPlan = (await pg.query('SELECT * FROM "Plan" WHERE "name" = $1', ['Sócio Esporte'])).rows[0];
-  assert.equal(defaultPlan.priceCents,4000); assert.equal(defaultPlan.durationDays,30); assert.equal(defaultPlan.active,true);
+  assert.equal(defaultPlan.priceCents,15); assert.equal(defaultPlan.durationDays,30); assert.equal(defaultPlan.active,true);
   const defaultSql = await readFile(new URL('../prisma/migrations/20261117190000_default_membership_plan/migration.sql', import.meta.url),'utf8');
   await pg.query('UPDATE "Plan" SET "priceCents" = 4500, "active" = false WHERE "id" = $1',[defaultPlan.id]);
   await pg.exec(defaultSql);
@@ -65,12 +65,36 @@ test('membership Pix activates only confirmed payments, preserves snapshots and 
     const charge = charges.get(intent.providerReference); charge.status = 'CONCLUIDA'; charge.pix = [copy(receipt)]; receipts.set(receipt.endToEndId, receipt);
     await bank.process(intent.id); return receipt;
   }
+  await t.test('test plans charge eleven and fifteen cents and activate thirty days after Pix confirmation', async () => {
+    const canario = await db.plan.create({ data: { name: 'Sócio Canário', priceCents: 3990 } });
+    const custom = await db.plan.create({ data: { name: 'Plano personalizado', priceCents: 6500, active: false } });
+    await db.plan.update({ where: { id: defaultPlan.id }, data: { active: true } });
+    await pg.exec(await readFile(new URL('20261119210000_membership_test_prices/migration.sql', migrations), 'utf8'));
+    assert.equal((await db.plan.findUniqueOrThrow({ where: { id: custom.id } })).priceCents, 6500);
+    for (const [planId, cents] of [[canario.id, 11], [defaultPlan.id, 15]]) {
+      const buyer = await createUser();
+      const order = await store.checkout(buyer.id, { planId, expectedPriceCents: cents, requestKey: randomUUID() });
+      await bank.process(order.intentId);
+      const intent = await db.gatewayIntent.findUniqueOrThrow({ where: { id: order.intentId } });
+      assert.equal(intent.amountCents, cents);
+      assert.equal(charges.get(intent.providerReference).valor.original, (cents / 100).toFixed(2));
+      assert.equal(await db.membership.count({ where: { userId: buyer.id } }), 0);
+      await paid(order);
+      const active = await db.membership.findUniqueOrThrow({ where: { userId: buyer.id } });
+      assert.equal(active.status, 'ACTIVE');
+      assert.equal(active.validUntil - instant, 30 * 86400000);
+    }
+    await db.plan.update({ where: { id: canario.id }, data: { priceCents: 2500 } });
+    await pg.exec(defaultSql);
+    assert.equal((await db.plan.findUniqueOrThrow({ where: { id: canario.id } })).priceCents, 2500);
+    await db.plan.updateMany({ where: { id: { in: [canario.id, defaultPlan.id] } }, data: { active: false } });
+  });
   await db.businessSettings.upsert({ where: { id: 'main' }, create: { id: 'main', membershipPaymentMinutes: 7 }, update: { membershipPaymentMinutes: 7 } });
   const user = await createUser(), input = body();
   const orders = await Promise.all([store.checkout(user.id,input), store.checkout(user.id,input)]);
   assert.equal(orders[0].id, orders[1].id);
   assert.equal((await store.checkout(user.id,body())).id,orders[0].id);
-  const order = orders[0]; assert.equal(order.expiresAt - instant, 7 * 60000); assert.equal(await db.membership.count(),0);
+  const order = orders[0]; assert.equal(order.expiresAt - instant, 7 * 60000); assert.equal(await db.membership.count({ where: { userId: user.id } }),0);
   await assert.rejects(store.checkout(admin.id,body()), { code: 'MEMBERSHIP_USER_ONLY' });
   await assert.rejects(createPixQueries(db,settings).ownIntent(admin.id,order.intentId), { code: 'PAYMENT_NOT_FOUND' });
   await bank.process(order.intentId);

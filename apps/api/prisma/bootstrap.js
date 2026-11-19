@@ -15,7 +15,7 @@ try {
   const admin = await serializable(db, async (tx) => {
     const user = await provisionOwner(tx, { email: settings.ADMIN_EMAIL, name: settings.ADMIN_NAME, passwordHash });
     await tx.tenant.upsert({ where: { slug: env.TENANT_SLUG }, update: {}, create: { slug: env.TENANT_SLUG, name: 'Nacional de Patos' } });
-    await tx.plan.upsert({ where: { name: 'Sócio Canário' }, update: {}, create: { name: 'Sócio Canário', priceCents: 3990, discountPercent: 0 } });
+    await tx.plan.upsert({ where: { name: 'Sócio Canário' }, update: {}, create: { name: 'Sócio Canário', priceCents: 11, discountPercent: 0 } });
     return user;
   });
   console.log(`Administrador geral (OWNER): ${admin.email}. Entre em /acesso/.`);
