@@ -2,12 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
-async function source(path) {
-  const value = await readFile(new URL(path, import.meta.url), 'utf8');
+async function moduleUri(path, dependency) {
+  let value = await readFile(new URL(path, import.meta.url), 'utf8');
+  if (dependency) value = value.replace('./web-session-storage', dependency);
   const compiled = ts.transpileModule(value, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } });
-  return import(`data:text/javascript;base64,${Buffer.from(compiled.outputText).toString('base64')}`);
+  return `data:text/javascript;base64,${Buffer.from(compiled.outputText).toString('base64')}`;
 }
-const { createWebSessionStorage } = await source('../src/services/web-session-storage.ts');
+const source = async path => import(await moduleUri(path));
+const webStorageUri = await moduleUri('../src/services/web-session-storage.ts');
+const { createWebSessionStorage } = await import(webStorageUri);
+const { createRememberedWebSession } = await import(await moduleUri('../src/services/remembered-web-session.ts', webStorageUri));
 const { createSessionManager } = await source('../src/services/auth-session.ts');
 const { createAuthenticatedRequest } = await source('../src/services/authenticated-request.ts');
 const { ApiError } = await source('../src/services/api-transport-core.ts');
@@ -44,6 +48,35 @@ test('browser sessions are scoped to their API, and a closed tab does not carry 
   await createWebSessionStorage('api-one', () => tab, () => start).set(response('a'));
   assert.equal(await createWebSessionStorage('api-two', () => tab, () => start).get(), null);
   assert.equal(await createWebSessionStorage('api-one', () => browser(), () => start).get(), null);
+});
+
+test('remembered staff login survives a new tab and only one tab exchanges a rotating token', async () => {
+  const disk = browser();
+  let queue = Promise.resolve(), calls = 0;
+  const lock = task => { const next = queue.then(task); queue = next.catch(() => {}); return next; };
+  const now = Date.now();
+  function token(suffix, sid = 'staff-session') {
+    return { ...response(suffix),
+      accessToken: `header.${Buffer.from(JSON.stringify({ sid })).toString('base64url')}.${suffix}`,
+      accessTokenExpiresAt: new Date(now + 900000).toISOString(),
+      refreshTokenExpiresAt: new Date(now + 86400000).toISOString(),
+    };
+  }
+  const storage = () => createRememberedWebSession(createWebSessionStorage('staff', () => browser()),
+    () => createWebSessionStorage('staff:remembered', () => disk), lock, () => new ApiError(401, 'Entre novamente.'));
+  const exchange = async refreshToken => { assert.equal(refreshToken, token('before').refreshToken); calls++; return token('rotated'); };
+  const first = manager(storage(), exchange), second = manager(storage(), exchange);
+  await first.accept(token('before'), true);
+  assert.equal((await second.restore()).accessToken, token('before').accessToken);
+  await Promise.all([first.refresh(), second.refresh()]);
+  assert.equal(calls, 1);
+  assert.equal(second.current().accessToken, token('rotated').accessToken);
+  const replacement = manager(storage(), exchange);
+  await replacement.accept(token('other', 'other-session'), true);
+  await assert.rejects(first.refresh(), { status: 401 });
+  assert.equal((await manager(storage(), exchange).restore()).accessToken, token('other', 'other-session').accessToken);
+  await replacement.clear();
+  assert.equal(await manager(storage(), exchange).restore(), null);
 });
 
 test('corrupt and expired browser sessions are cleared; an expired JWT retains its valid refresh', async () => {

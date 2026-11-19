@@ -21,3 +21,19 @@ test('linked gate catalogs keep exact authorized sector IDs, including assignmen
   ]);
   assert.deepEqual(gateCatalog([app]), [app]);
 });
+
+const stationCode = await readFile(new URL('../src/utils/gate-station.ts', import.meta.url), 'utf8');
+const { outputText: stationJs } = ts.transpileModule(stationCode, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });
+const { parseStation, resolveStation } = await import('data:text/javascript;base64,' + Buffer.from(stationJs).toString('base64'));
+
+test('the selected station is reused only while the current shift still includes it', () => {
+  const saved = parseStation('{"partidaId":"game","alocacaoId":"sector","catracaId":"CATRACA-2"}');
+  const section = id => ({ id, setor: { nome: 'Geral', portaoEntrada: 'PORTAO-3' } });
+  const game = (...sections) => ({ id: 'game', alocacoesSetor: sections.map(section) });
+  assert.equal(resolveStation([game('sector', 'other')], saved), saved);
+  assert.equal(resolveStation([game('other', 'third')], saved), null);
+  assert.equal(resolveStation([], saved), null);
+  assert.deepEqual(resolveStation([game('other')], saved), { partidaId: 'game', alocacaoId: 'other', catracaId: 'PORTAO-3' });
+  assert.equal(parseStation('{"partidaId":"game","alocacaoId":"sector","catracaId":""}'), null);
+  assert.equal(parseStation('{'), null);
+});

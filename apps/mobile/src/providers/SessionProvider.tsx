@@ -12,7 +12,7 @@ import type { SocialProvider } from '../services/social-login-core';
 type LoginPortal = 'APP' | 'GATE' | 'SELLER' | 'FAN' | 'STAFF' | 'OWNER';
 interface Session {
   member: Member | null; token: string | null; loading: boolean; bootError: string | null; demoMode: boolean;
-  signIn: (email: string, password: string, name?: string, portal?: LoginPortal) => Promise<void>;
+  signIn: (email: string, password: string, name?: string, portal?: LoginPortal, remember?: boolean) => Promise<void>;
   signInSocial: (provider: SocialProvider) => Promise<void>;
   signOut: () => Promise<void>; logoutAll: () => Promise<void>; clearSession: () => Promise<void>;
   retry: () => Promise<void>; updateMember: React.Dispatch<React.SetStateAction<Member | null>>; resumeDemo: () => void;
@@ -49,11 +49,11 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
     const links = Linking.addEventListener('url', ({ url }) => { if (!authClient.current()) void captureInvitation(url); });
     return () => { unsubscribe(); links.remove(); };
   }, []);
-  async function signIn(email: string, password: string, name?: string, portal: LoginPortal = 'APP') {
+  async function signIn(email: string, password: string, name?: string, portal: LoginPortal = 'APP', remember = false) {
     await captureInitialInvitation();
     const referralCode = name ? await readInvitation() : undefined;
     const result = await request<AuthResponse>(name ? '/auth/register' : '/auth/login', { method: 'POST', body: { email, password, ...(name ? { name, ...(referralCode ? { referralCode } : {}) } : portal !== 'APP' ? { portal } : {}) } });
-    await authClient.accept(result); await clearInvitation(); setToken(result.accessToken); setMember(result.member);
+    await authClient.accept(result, remember); await clearInvitation(); setToken(result.accessToken); setMember(result.member);
   }
   async function signInSocial(provider: SocialProvider) {
     await captureInitialInvitation();
