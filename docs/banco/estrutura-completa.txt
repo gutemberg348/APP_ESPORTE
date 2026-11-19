@@ -1,3 +1,7 @@
+CPF da primeira compra · 19/11/2026
+A migração 20261119020000_purchase_document cria PurchaseDocument. A chave primária userId também referencia User.id. O campo cpf guarda os 11 dígitos validados na primeira identificação da conta.
+Ticket.purchaseDocumentId referencia o documento do comprador na reserva. A restrição Ticket_document_owner_check exige o mesmo titular do ingresso. Ingressos anteriores podem ter o vínculo nulo. A portaria recebe apenas os quatro últimos dígitos para conferência.
+
 ATUALIZACAO PLANO INICIAL 17/11/2026: migration 20261117190000_default_membership_plan cadastra plano Socio Esporte R$ 40,00 / 30 dias se ausente. Detalhes e comandos de jogos/produtos em docs/banco/associacao-pix.txt.
 
 ATUALIZACAO ASSOCIACAO PIX 17/11/2026: MembershipOrder, planos publicados/duracao, vinculo do periodo ao pagamento e prazo configuravel. Detalhes em docs/banco/associacao-pix.txt. Migration preparada e testada em banco descartavel; nao aplicada na VPS pelo agente.

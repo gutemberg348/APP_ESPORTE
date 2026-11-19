@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import type { BusinessSettings, AdminReward } from '@nacional/shared/settings';
+import { clubChannelUrl } from '@nacional/shared/club-channel';
+import { club } from '../../config/club';
 import { settingsApi } from '../../services/settings';
 import { useSession } from '../../providers/SessionProvider';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -51,17 +53,28 @@ export function AdminSettingsPanel({ refreshKey, onSelect }: { refreshKey: numbe
 function SettingsForm({ settings, onSaved }: { settings: BusinessSettings; onSaved: () => Promise<void> }) {
   const { token } = useSession();
   const [values, setValues] = useState(() => Object.fromEntries(fields.map(([key]) => [key, String(settings[key])]))), [enabled, setEnabled] = useState(settings.checkInEnabled);
+  const [instagram, setInstagram] = useState(settings.instagramUrl || '');
+  const [youtube, setYoutube] = useState(settings.youtubeUrl || '');
   const { busy, error, run } = useShopAction();
   const change = (key: string, value: string) => { setValues((old) => ({ ...old, [key]: value })); };
-  return <Panel><AdminSection title="Reservas e participação" description="O prazo do ingresso também respeita o encerramento das vendas e o início do jogo.">
+  return <Panel style={{ gap: 20 }}><AdminSection title={club.tvName} description="Escolha os canais que aparecem no app. Apague o endereço para retirar o botão.">
+    <AdminFormGrid>
+      <AdminField label="Instagram oficial" placeholder="https://www.instagram.com/perfil" value={instagram} onChange={setInstagram} keyboardType="url" autoCapitalize="none" autoCorrect={false} maxLength={2048} editable={!busy} />
+      <AdminField label="Canal do YouTube" placeholder="https://www.youtube.com/@canal" value={youtube} onChange={setYoutube} keyboardType="url" autoCapitalize="none" autoCorrect={false} maxLength={2048} editable={!busy} />
+    </AdminFormGrid>
+  </AdminSection><AdminSection title="Reservas e participação" description="O prazo do ingresso também respeita o encerramento das vendas e o início do jogo.">
     <AdminFormGrid>{fields.map(([key, label, min, max]) => <AdminField key={key} label={label} value={values[key] || ''} onChange={(value) => change(key, value)} keyboardType="number-pad" maxLength={6} hint={`${min} a ${max}`} editable={!busy} required />)}</AdminFormGrid>
     <AdminToggle label="Check-in diário habilitado" value={enabled} onChange={(value) => { setEnabled(value); }} disabled={busy} />
+  </AdminSection>
     {!!error && <AdminNotice tone="error">{error}</AdminNotice>}
     <AdminButton label="Salvar configurações" primary loading={busy} onPress={() => void run(async () => {
       const data = Object.fromEntries(fields.map(([key, label, min, max]) => [key, integer(values[key] || '', min, max, label)])) as unknown as Pick<BusinessSettings, typeof fields[number][0]>;
-      await settingsApi.save(token!, { ...data, checkInEnabled: enabled, version: settings.version }); await onSaved();
+      const instagramUrl = clubChannelUrl('instagram', instagram), youtubeUrl = clubChannelUrl('youtube', youtube);
+      if (instagram.trim() && !instagramUrl) throw new Error('Confira o link HTTPS do perfil no Instagram.');
+      if (youtube.trim() && !youtubeUrl) throw new Error('Confira o link HTTPS do canal no YouTube.');
+      await settingsApi.save(token!, { ...data, instagramUrl, youtubeUrl, checkInEnabled: enabled, version: settings.version }); await onSaved();
     })} />
-  </AdminSection></Panel>;
+  </Panel>;
 }
 function RewardForm({ current, onClose, onSaved }: { current: AdminReward | null; onClose: () => void; onSaved: () => Promise<void> }) {
   const { token } = useSession();

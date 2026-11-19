@@ -30,7 +30,7 @@ test('PostgreSQL: sales inventory, audit, stale edits and payment/delete races',
   const store = createAdminTicketStore(db);
   let number = 0;
   async function reserve(sectorId = sol.id, quantity = 2, priceCents = 5000) {
-    const user = await db.user.create({ data: { name: 'Comprador teste', email: `sales-buyer-${++number}-${suffix}@test.local`, passwordHash: 'test-only-no-login' } }); users.push(user.id);
+    const user = await db.user.create({ data: { purchaseDocument: { create: { cpf: '52998224725' } }, name: 'Comprador teste', email: `sales-buyer-${++number}-${suffix}@test.local`, passwordHash: 'test-only-no-login' } }); users.push(user.id);
     return db.ticket.create({ data: { userId: user.id, matchId: match.id, sectorId, quantity, priceCents, expiresAt: new Date(Date.now() + 900000) }, include: ticketInclude });
   }
   const input = (ticket) => ({ ticketId: ticket.id, revision: adminTicketRevision(ticket), sectorId: ticket.sectorId, quantity: ticket.quantity });

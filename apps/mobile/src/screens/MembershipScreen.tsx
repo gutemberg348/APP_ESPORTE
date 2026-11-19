@@ -11,8 +11,12 @@ import { money, messageOf } from '../utils/format';
 import { Text } from '../components/Typography';
 import { Page, Title, Panel, Button, TextAction } from '../components/ui';
 import { PixCheckout } from '../components/PixCheckout';
+import { usePurchaseCpf } from '../components/PurchaseCpfField';
+
 const statuses: Record<string,string> = { PAID: 'Plano ativado', PARTIAL_REFUND: 'Estorno parcial · associação suspensa', REFUNDING: 'Estorno em acompanhamento', REFUNDED: 'Estornado', EXPIRED: 'Prazo encerrado' };
 export function MembershipScreen({ onBack }: { onBack: () => void }) {
+  const cpf = usePurchaseCpf();
+  const [purchasingPlan, setPurchasingPlan] = useState<string | null>(null);
   const { token, member, demoMode } = useSession(), { refresh } = useClub(), { colors } = useTheme();
   const [plans, setPlans] = useState<ClubPlan[]>([]), [orders, setOrders] = useState<MembershipOrder[]>([]), [selected, setSelected] = useState<string | null>(null);
   const [detailPlan, setDetailPlan] = useState<string | null>(null);
@@ -36,9 +40,10 @@ export function MembershipScreen({ onBack }: { onBack: () => void }) {
   }, [token, demoMode]);
   async function buy(plan: ClubPlan) {
     if (!token || lock.current || demoMode) return;
+    if (cpf.needed && purchasingPlan !== plan.id) { setPurchasingPlan(plan.id); setError(''); return; }
     lock.current = true; setBusy(true); setError('');
     if (!attempt.current || attempt.current.planId !== plan.id || attempt.current.expectedPriceCents !== plan.priceCents) attempt.current = { planId: plan.id, expectedPriceCents: plan.priceCents, requestKey: requestKey() };
-    try { const order = await membershipApi.checkout(token, attempt.current); setOrders(rows => [order, ...rows.filter(row => row.id !== order.id)]); setSelected(order.id); attempt.current = null; }
+    try { await cpf.save(); const order = await membershipApi.checkout(token, attempt.current); setOrders(rows => [order, ...rows.filter(row => row.id !== order.id)]); setSelected(order.id); attempt.current = null; }
     catch (err) { setError(messageOf(err)); }
     finally { lock.current = false; setBusy(false); }
   }
@@ -74,7 +79,8 @@ export function MembershipScreen({ onBack }: { onBack: () => void }) {
       <Text style={{ color: colors.muted, fontSize: 13 }}>Carteirinha digital{plan.discountPercent > 0 ? ` · ${plan.discountPercent}% em ingressos elegíveis` : ''}</Text>
       {!!plan.description && <TextAction icon={detailPlan === plan.id ? ChevronUp : ChevronDown} label={detailPlan === plan.id ? 'Ocultar detalhes' : 'Detalhes do plano'} onPress={() => setDetailPlan(detailPlan === plan.id ? null : plan.id)} />}
       {detailPlan === plan.id && <Text style={{ color: colors.muted, fontSize: 14 }}>{plan.description}</Text>}
-      <Button label={active ? 'Associação já ativa' : plan.priceCents ? 'Assinar com Pix' : 'Ativação pelo clube'} loading={busy && attempt.current?.planId === plan.id} disabled={busy || !!active || !plan.priceCents || demoMode} onPress={() => void buy(plan)} />
+      {purchasingPlan === plan.id && cpf.field}
+      <Button label={active ? 'Associação já ativa' : plan.priceCents ? (cpf.needed && purchasingPlan === plan.id ? 'Continuar com Pix' : 'Assinar com Pix') : 'Ativação pelo clube'} loading={busy && attempt.current?.planId === plan.id} disabled={busy || !!active || !plan.priceCents || demoMode} onPress={() => void buy(plan)} />
     </Panel>)}
     {!!orders.length && <Title title="Meus pedidos" />}
     {orders.map(order => <Panel key={order.id} style={{ gap: 6, padding: 16 }}>

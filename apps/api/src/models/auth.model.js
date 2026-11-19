@@ -1,7 +1,7 @@
 import { db } from '../config/database.js';
 import { serializable } from '../lib/business-rules.js';
 import { invitationOwner } from './friend-invitation.js';
-export const authUserInclude = { membership: { include: { plan: true } } };
+export const authUserInclude = { purchaseDocument: { select: { userId: true } }, membership: { include: { plan: true } } };
 
 export function createAuthModel(client = db) {
   return {

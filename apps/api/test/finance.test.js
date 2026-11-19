@@ -155,6 +155,7 @@ test(
     });
     const buyer = await db.user.create({
       data: {
+        purchaseDocument: { create: { cpf: "52998224725" } },
         name: "Comprador financeiro",
         email: "finance-buyer@test.local",
         passwordHash: "test",

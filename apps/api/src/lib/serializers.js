@@ -2,6 +2,7 @@ export function toMember(user) {
   const membership = user.membership;
   return {
     id: user.id, name: user.name, email: user.email, avatar: user.avatar, points: user.points, role: user.role ?? 'USER', active: user.active ?? true,
+    hasPurchaseCpf: Boolean(user.purchaseDocument),
     city: user.city, contact: user.contact, preferences: user.preferences, schoolInterested: user.schoolInterested,
     membership: membership ? {
       memberId: membership.memberId,

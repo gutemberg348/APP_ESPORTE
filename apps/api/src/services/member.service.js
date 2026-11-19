@@ -5,7 +5,10 @@ import { issueMembershipCard } from './membership-card.js';
 import { AppError } from '../lib/errors.js';
 import { env } from '../config/env.js';
 import { engagementService } from './engagement.service.js';
+import { db } from '../config/database.js';
+import { savePurchaseDocument } from '../models/purchase-document.js';
 export const memberService = {
+  savePurchaseCpf: (userId, cpf) => savePurchaseDocument(db, userId, cpf),
   profile: (user) => toMember(user),
   async update(user, data) { return toMember(await userModel.update(user.id, data)); },
   async preferences(user, preferences) { return toMember(await userModel.update(user.id, { preferences })); },

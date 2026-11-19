@@ -53,6 +53,7 @@ test('fluxo completo API + PostgreSQL: cadastro, associação, ingresso, palpite
   assert.equal((await call('/me/card-token', { token })).status, 200);
   const match = await db.match.create({ data: { slug: `test-${nonce}`, published: true, homeTeam: 'NACIONAL', awayTeam: 'TESTE', startsAt: new Date(Date.now() + 86400000), stadium: 'Estádio Teste', competition: 'Teste', sectors: { create: { name: 'Cativas', priceCents: 8000 } } }, include: { sectors: true } }); matchId = match.id;
   const ticketBody = { matchId, sectorId: match.sectors[0].id, quantity: 2 };
+  assert.equal((await call('/me/purchase-cpf', { method: 'PUT', token, body: { cpf: '52998224725' } })).status, 200);
   const ticket = await call('/tickets', { method: 'POST', token, body: ticketBody });
   assert.equal(ticket.status, 201);
   assert.equal(ticket.body.data.status, 'PENDING');

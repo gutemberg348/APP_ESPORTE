@@ -56,7 +56,7 @@ test('shop lifecycle conserves inventory, immutable receipts, reservations and r
   let clock = new Date(), counter = 0, remoteCounter = 0, refunds = 0;
   const runtime = { PAYMENT_MODE: 'asaas', ASAAS_ENVIRONMENT: 'sandbox', ASAAS_DATA_SECRET: 'a'.repeat(64), ASAAS_WEBHOOK_TOKEN: 'b'.repeat(64) };
   const store = createShopStore(db, { now: () => clock, settings: runtime, shipping: { quote: async () => [{ id: 'melhorenvio:1', name: 'Correios · PAC', amountCents: 2000, minDays: 4, maxDays: 7, testMode: true }] } });
-  const users = await Promise.all(['ADMIN','USER','USER'].map((role, index) => db.user.create({ data: { name: 'Pessoa teste', email: `shop${index}@test.local`, passwordHash: 'test', role } })));
+  const users = await Promise.all(['ADMIN','USER','USER'].map((role, index) => db.user.create({ data: { purchaseDocument: { create: { cpf: '52998224725' } }, name: 'Pessoa teste', email: `shop${index}@test.local`, passwordHash: 'test', role } })));
   const [admin, user, other] = users;
   await t.test('SKU suggestions avoid unsaved, existing, inactive and archived references; saving never duplicates a SKU', async () => {
     const existing = await store.saveProduct(admin.id, schema.productSchema.parse({ ...baseProduct, active: false, variants: [{ ...baseProduct.variants[0], sku: 'PRD-TAKEN', active: false }] }));

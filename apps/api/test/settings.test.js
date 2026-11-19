@@ -6,6 +6,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/client/index.js';
+import { savePurchaseDocument, purchaseDocumentSchema } from '../src/models/purchase-document.js';
 import { createSettingsStore } from '../src/models/settings.store.js';
 import { createEngagementModel } from '../src/models/engagement.model.js';
 import { createShopStore } from '../src/models/shop.store.js';
@@ -21,7 +22,7 @@ import { createApp } from '../src/http/app.js';
 import { inject } from './helpers/inject.js';
 
 test('business administration rejects unauthorized roles and invalid monetary/operational settings', async () => {
-  for (const role of ['USER', 'GATE', 'CASHIER']) {
+  for (const role of ['USER', 'GATE', 'CASHIER', 'TICKET_SELLER']) {
     const app = createApp({ routes, logger: { info() {}, error() {} }, authenticate: async () => ({ user: { id: randomUUID(), role, active: true } }) });
     for (const route of routes.filter((r) => ['/v1/admin/settings', '/v1/admin/rewards'].includes(r.path))) {
       assert.equal((await inject(app, route.path, { method: route.method, headers: { Authorization: 'Bearer test.header.signature', 'Content-Type': 'application/json' }, body: route.method === 'GET' ? undefined : '{}' })).status, 403);
@@ -59,7 +60,23 @@ test('persisted business configuration controls reservations, points and reward 
   const [admin, user, other] = users, store = createSettingsStore(db), engagement = createEngagementModel(db);
   const editable = ({ id, updatedAt, ...row }) => row;
   const initial = await store.settings();
-  const changed = await store.saveSettings(admin.id, businessSettingsSchema.parse({ ...editable(initial), ticketReservationMinutes: 7, shopReservationMinutes: 9, shopQuoteMinutes: 2, cashChargeMinutes: 6, shopPendingOrderLimit: 1, checkInPoints: 73 }));
+  const base = editable(initial);
+  assert.deepEqual(await store.channels(), { instagramUrl: null, youtubeUrl: null });
+  for (const [key, value] of [
+    ['instagramUrl', 'https://instagram.com.example.com/clube'],
+    ['instagramUrl', 'https://www.instagram.com/accounts/login/'],
+    ['youtubeUrl', 'https://www.youtube.com/redirect?q=https://example.com'],
+    ['youtubeUrl', 'http://www.youtube.com/@clube'],
+    ['youtubeUrl', 'https://example.com@youtube.com/@clube'],
+  ]) assert.equal(businessSettingsSchema.safeParse({ ...base, [key]: value }).success, false);
+  const published = await store.saveSettings(admin.id, businessSettingsSchema.parse({
+    ...base, instagramUrl: 'https://www.instagram.com/clube/?igsh=abc', youtubeUrl: 'https://www.youtube.com/@clube?si=abc',
+  }));
+  const channels = { instagramUrl: 'https://www.instagram.com/clube', youtubeUrl: 'https://www.youtube.com/@clube' };
+  assert.deepEqual(await store.channels(), channels);
+  const { instagramUrl, youtubeUrl, ...legacy } = editable(published);
+  const changed = await store.saveSettings(admin.id, businessSettingsSchema.parse({ ...legacy, ticketReservationMinutes: 7, shopReservationMinutes: 9, shopQuoteMinutes: 2, cashChargeMinutes: 6, shopPendingOrderLimit: 1, checkInPoints: 73 }));
+  assert.deepEqual(await store.channels(), channels, 'older admin clients preserve published links');
   await assert.rejects(store.saveSettings(admin.id, editable(initial)), { code: 'SETTINGS_CHANGED' });
   assert.equal((await store.settings()).checkInPoints, 73);
   const entry = await engagement.checkIn(user.id, '2026-11-09'); assert.equal(entry.entry.amount, 73);
@@ -72,14 +89,27 @@ test('persisted business configuration controls reservations, points and reward 
   assert.equal((await db.redemption.findUnique({ where: { id: redemption.id } })).cost, 50);
   assert.equal((await db.user.findUnique({ where: { id: user.id } })).points, 23);
   assert.equal(await engagement.earnedPoints(user.id), 73);
-  const paused = await store.saveSettings(admin.id, { ...editable(changed), checkInEnabled: false, checkInPoints: 100 });
+  const paused = await store.saveSettings(admin.id, businessSettingsSchema.parse({ ...editable(changed), instagramUrl: '', checkInEnabled: false, checkInPoints: 100 }));
+  assert.deepEqual(await store.channels(), { instagramUrl: null, youtubeUrl: channels.youtubeUrl });
   await assert.rejects(engagement.checkIn(other.id, '2026-11-10'), { code: 'CHECK_IN_DISABLED' });
   assert.equal((await db.pointEntry.findUnique({ where: { id: entry.entry.id } })).amount, 73);
 
   const clock = new Date(), match = await db.match.create({ data: { slug: 'settings-match', competition: 'Teste', homeTeam: 'Esporte', awayTeam: 'Teste', stadium: 'Estádio', startsAt: new Date(clock.getTime() + 7200000), published: true, salesEnabled: true } });
   const sector = await db.sector.create({ data: { matchId: match.id, name: 'Arquibancada', capacity: 20, priceCents: 5000 } });
   const tickets = createTicketCheckoutStore(db, { now: () => clock });
-  const ticket = await tickets.reserve(user.id, { matchId: match.id, sectorId: sector.id, quantity: 1, expectedTotalCents: 5000 });
+  const ticketInput = { matchId: match.id, sectorId: sector.id, quantity: 1, expectedTotalCents: 5000 };
+  await assert.rejects(tickets.reserve(user.id, ticketInput), { code: 'PURCHASE_CPF_REQUIRED' });
+  assert.equal(purchaseDocumentSchema.safeParse({ cpf: '111.111.111-11' }).success, false);
+  const { cpf } = purchaseDocumentSchema.parse({ cpf: '529.982.247-25' });
+  for (const result of await Promise.all([savePurchaseDocument(db, user.id, cpf), savePurchaseDocument(db, user.id, cpf)])) {
+    assert.deepEqual(result, { hasPurchaseCpf: true });
+  }
+  await assert.rejects(savePurchaseDocument(db, user.id, '11144477735'), { code: 'PURCHASE_CPF_EXISTS' });
+  const ticket = await tickets.reserve(user.id, ticketInput);
+  const storedTicket = await db.ticket.findUnique({ where: { id: ticket.id }, include: { purchaseDocument: true } });
+  assert.equal(storedTicket.purchaseDocument.cpf, cpf);
+  assert.ok(!JSON.stringify(ticket).includes(cpf));
+  assert.ok(!('purchaseDocumentId' in ticket));
   assert.equal(new Date(ticket.expiresAt).getTime() - clock.getTime(), 7 * 60000);
   const originalPolicy = (await db.ticket.findUnique({ where: { id: ticket.id } })).financialPolicy;
   assert.equal(originalPolicy.companyBps, 1000);

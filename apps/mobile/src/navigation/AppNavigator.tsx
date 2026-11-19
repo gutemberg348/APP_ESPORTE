@@ -72,7 +72,7 @@ function MainNavigator() {
   const { colors, isDark, toggle } = useTheme();
   const { member } = useSession();
   const { data, error, loading, refresh } = useClub();
-  const { wallet } = usePayments();
+  const { wallet, showCashback } = usePayments();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const [tab, setTab] = useState<Tab>('home');
@@ -118,7 +118,7 @@ function MainNavigator() {
         <LinearGradient colors={[colors.primaryStrong, '#d5aa64']} style={{ width: width <= 360 ? 39 : 44, height: width <= 360 ? 39 : 44, borderRadius: 25, padding: 2, alignItems: 'center', justifyContent: 'center' }}><View style={{ width: '100%', height: '100%', borderRadius: 24, backgroundColor: colors.header, alignItems: 'center', justifyContent: 'center' }}><Crest size={width <= 360 ? 29 : 33} height={width <= 360 ? 29 : 33} /></View></LinearGradient>
         <View style={{ flex: 1, minWidth: 0, gap: 1 }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><Text numberOfLines={1} style={{ color: colors.primary, fontSize: width <= 360 ? 10 : 11, fontWeight: '800', letterSpacing: 0.8, flexShrink: 1 }}>{club.supporterLabel}</Text><Crown size={11} color={colors.gold} /></View><Text numberOfLines={1} heading style={{ fontSize: width <= 360 ? 15 : 17, lineHeight: 24, color: colors.text, fontWeight: '800' }}>{member?.name.trim().split(/\s+/)[0]}</Text></View>
       </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="Abrir meu cashback" onPress={() => open('Cashback')} style={{ minHeight: width <= 360 ? 34 : 39, paddingHorizontal: width <= 360 ? 9 : 12, borderRadius: 24, borderWidth: 1, borderColor: colors.brandBorder, backgroundColor: colors.primarySoft, justifyContent: 'center' }}><Text style={{ color: colors.primary, fontSize: width <= 360 ? 12 : 14, fontWeight: '800' }}>{wallet ? money(wallet.availableCents) : '—'}</Text></Pressable>
+      {showCashback && <Pressable accessibilityRole="button" accessibilityLabel="Abrir meu cashback" onPress={() => open('Cashback')} style={{ minHeight: width <= 360 ? 34 : 39, paddingHorizontal: width <= 360 ? 9 : 12, borderRadius: 24, borderWidth: 1, borderColor: colors.brandBorder, backgroundColor: colors.primarySoft, justifyContent: 'center' }}><Text style={{ color: colors.primary, fontSize: width <= 360 ? 12 : 14, fontWeight: '800' }}>{wallet ? money(wallet.availableCents) : '—'}</Text></Pressable>}
       <View style={{ flexDirection: 'row', gap: 6 }}><Pressable onPress={toggle} accessibilityRole="button" accessibilityLabel={isDark ? 'Ativar tema claro' : 'Ativar tema escuro'} style={roundButton}>{isDark ? <Sun size={21} color={colors.gold} strokeWidth={1.6} /> : <Moon size={21} color={colors.muted} strokeWidth={1.6} />}</Pressable><Pressable onPress={() => open(tab === 'card' ? 'Opções da carteira' : 'Notificações')} accessibilityRole="button" accessibilityLabel={tab === 'card' ? 'Opções da carteira' : 'Notificações'} style={roundButton}>{tab === 'card' ? <Ellipsis size={21} color={colors.muted} /> : <Bell size={21} color={colors.muted} strokeWidth={1.6} />}</Pressable></View>
     </View>
     {error && data ? <Pressable onPress={() => void refresh()}><Text style={{ color: colors.danger, padding: 12, fontSize: 12 }}>{error} Toque para tentar novamente.</Text></Pressable> : null}

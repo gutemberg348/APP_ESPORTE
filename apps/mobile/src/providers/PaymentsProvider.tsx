@@ -7,6 +7,7 @@ import { club } from '../config/club';
 const demoSetup: MerchantSetup = { demo: true, enabled: true, merchants: [{ id: 'demo-merchant', name: 'Farmácia Bem-Estar · demo', fixedQr: 'nacional://merchant/00000000-0000-4000-8000-000000000001', offers: [{ id: 'demo-offer', tenant: { slug: club.id, name: club.name }, cashbackBps: 1000, commissionBps: 200, customerQrEnabled: false }] }] };
 const initialWallet: CashWallet = { tenant: { slug: club.id, name: club.name }, customerCode: 'NC-DEMO-ALEX-SEM-VALIDADE', availableCents: 0, debtCents: 0, demo: true, entries: [], charges: [] };
 interface Payments {
+  showCashback: boolean;
   wallet: CashWallet | null; setup: MerchantSetup | null; charges: CashCharge[]; error: string; loading: boolean;
   refresh: () => Promise<void>;
   create: (offerId: string, amountCents: number, customerCode: string, key: string) => Promise<CashCharge>;
@@ -33,9 +34,14 @@ export function PaymentsProvider({ children }: React.PropsWithChildren) {
     const current = ++revision.current;
     setLoading(true); setError('');
     try {
-      const [freshWallet, freshSetup, merchantCharges] = await Promise.all([member?.role === 'CASHIER' ? Promise.resolve(null) : paymentsApi.wallet(token), paymentsApi.setup(token), paymentsApi.merchantCharges(token)]);
+      const results = await Promise.allSettled([member?.role === 'CASHIER' ? Promise.resolve(null) : paymentsApi.wallet(token), paymentsApi.setup(token), paymentsApi.merchantCharges(token)] as const);
       if (current !== revision.current) return;
-      setWallet(freshWallet); setSetup(freshSetup); setCharges(merchantCharges);
+      const [freshWallet, freshSetup, merchantCharges] = results;
+      if (freshWallet.status === 'fulfilled') setWallet(freshWallet.value);
+      setSetup(freshSetup.status === 'fulfilled' ? freshSetup.value : null);
+      if (merchantCharges.status === 'fulfilled') setCharges(merchantCharges.value);
+      const failed = results.find(result => result.status === 'rejected');
+      if (failed?.status === 'rejected') throw failed.reason;
     } catch (err) { if (current === revision.current) setError(err instanceof Error ? err.message : 'Não foi possível carregar a carteira.'); }
     finally { if (current === revision.current) setLoading(false); }
   }, [demoMode, token, member?.role]);
@@ -97,6 +103,7 @@ export function PaymentsProvider({ children }: React.PropsWithChildren) {
       });
     });
   }
-  return <Context.Provider value={{ wallet, setup, charges, error, loading, refresh, create, resolve, claim, fixedCharge, simulate }}>{children}</Context.Provider>;
+  const showCashback = Boolean(setup?.enabled || (wallet && (wallet.availableCents || wallet.debtCents || wallet.entries.length || wallet.charges.length)));
+  return <Context.Provider value={{ showCashback, wallet, setup, charges, error, loading, refresh, create, resolve, claim, fixedCharge, simulate }}>{children}</Context.Provider>;
 }
 export function usePayments() { const value = useContext(Context); if (!value) throw new Error('PaymentsProvider ausente'); return value; }

@@ -107,6 +107,7 @@ export function GateV1Panel() {
     </AdminSection></Panel>
     {review && !pending && <Panel><AdminSection title="Confira antes de liberar" description="Entrada ainda não autorizada.">
       <Text style={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>{review.nomeTitular}</Text>
+      {!!review.cpfFinal && review.nomeTitular !== `CPF final ${review.cpfFinal}` && <Text style={{ color: colors.muted }}>CPF do titular · final {review.cpfFinal}</Text>}
       <Text style={{ color: colors.muted }}>{review.alocacao.setor.nome} · {selected?.source ? `Saldo de ${review.remainingQuantity} entrada(s)` : review.blocoEscolhido ? `Bloco ${review.blocoEscolhido} · Fileira ${review.fileiraEscolhida} · Assento ${review.assentoEscolhido}` : 'Assento livre'}</Text>
       {!!review.alocacao.setor.instrucaoAcomodacao && <Text style={{ color: colors.muted }}>{review.alocacao.setor.instrucaoAcomodacao}</Text>}
       <AdminButton label="Confirmar e registrar uma entrada" primary disabled={busy} loading={busy} onPress={() => void admit()} />

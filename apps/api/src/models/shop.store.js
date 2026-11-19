@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import { serializable } from '../lib/business-rules.js';
 import { AppError } from '../lib/errors.js';
 import { publicShopOrder, reservedStock, settleShopOrder, shopError, shopOrderInclude, applyShopRefund } from '../lib/shop-inventory.js';
+import { requirePurchaseDocument } from './purchase-document.js';
+
 const hash = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const audit = (tx, actorId, action, entityId, details) => tx.auditLog.create({ data: { actorId, action, entityId, details } });
 const missing = () => new AppError(404, 'SHOP_NOT_FOUND', 'Registro da loja não encontrado.');
@@ -144,6 +146,7 @@ export function createShopStore(client, { now = () => new Date(), shipping, sett
         if (totalCents !== input.expectedTotalCents) throw shopError('SHOP_PRICE_CHANGED', 'O total mudou. Revise o pedido.');
         if (await tx.shopOrder.count({ where: { userId, status: 'PENDING', expiresAt: { gt: now() } } }) >= value.business.shopPendingOrderLimit) throw shopError('SHOP_PENDING_LIMIT', 'Conclua ou cancele seus pedidos pendentes antes de reservar mais produtos.');
         if (quote.expiresAt <= now()) throw shopError('SHOP_QUOTE_EXPIRED', 'A cotação venceu. Calcule novamente.');
+        await requirePurchaseDocument(tx, userId);
         let order = await tx.shopOrder.create({ data: { userId, requestKey: input.requestKey, requestHash, recipient: input.recipient, phone: input.phone, address: input.deliveryMethod === 'DELIVERY' ? input.address : { pickupAddress: value.settings.pickupAddress }, deliveryMethod: input.deliveryMethod, shippingName: choice.name, shippingService: choice.id, shippingDays: choice.maxDays, shippingSnapshot: { option: choice, originPostalCode: value.settings.originPostalCode, environment: runtime.MELHOR_ENVIO_ENVIRONMENT || null }, subtotalCents: value.subtotalCents, shippingCents: choice.amountCents, totalCents, expiresAt: new Date(now().getTime() + value.business.shopReservationMinutes * 60000), items: { create: value.items.map(({ variant, quantity }) => ({ variantId: variant.id, quantity, productName: variant.product.name, variantLabel: variant.label, sku: variant.sku, image: variant.product.images[0] || '', unitPriceCents: variant.product.priceCents, costCents: variant.product.costCents })) } }, include: shopOrderInclude });
         if (totalCents === 0) { await settleShopOrder(tx, order, { method: 'FREE', reference: `FREE:${order.id}`, actorId: userId, amountCents: 0, now }); order = await tx.shopOrder.findUnique({ where: { id: order.id }, include: shopOrderInclude }); }
         await audit(tx, userId, 'SHOP_ORDER_RESERVED', order.id, { totalCents, shippingService: choice.id, items: value.items.length }); return publicShopOrder(order, now());

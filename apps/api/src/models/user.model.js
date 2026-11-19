@@ -1,5 +1,5 @@
 import { db } from '../config/database.js';
-const include = { membership: { include: { plan: true } } };
+import { authUserInclude as include } from './auth.model.js';
 export const userModel = {
   byEmail: (email) => db.user.findUnique({ where: { email }, include }),
   byId: (id) => db.user.findUnique({ where: { id }, include }),

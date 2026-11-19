@@ -144,7 +144,10 @@ test('wrong match, wrong gate sector, stale version and cancelled ticket are rej
 test('only the owner can get QR data; inspection is read-only and never authorizes entrance', async () => {
   const { store, state } = fixture(); const value = state().ticket;
   await assert.rejects(store.ownedTicket(randomUUID(), value.id), { code: 'TICKET_NOT_FOUND' });
+  value.purchaseDocument = { cpf: '52998224725' };
   const review = await store.inspect(claimsOf(value), { matchId: value.matchId, sectorId: value.sectorId });
+  assert.equal(review.cpfFinal, '4725');
+  assert.ok(!JSON.stringify(review).includes(value.purchaseDocument.cpf));
   assert.equal(review.decision, 'REVIEW'); assert.equal(state().ticket.usedQuantity, 0);
   assert.equal(state().admissions.length, 0); assert.equal(review.entryQr, null);
 });

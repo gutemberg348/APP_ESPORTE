@@ -15,7 +15,7 @@ export function ProfileScreen({ onFeature }: { onFeature: (name: string) => void
   const { colors, isDark, tone } = useTheme();
   const { member, signOut, demoMode } = useSession();
   const { preferences, toggleSeason, preseason } = useClub();
-  const { setup } = usePayments();
+  const { setup, showCashback, error: walletError } = usePayments();
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -28,7 +28,7 @@ export function ProfileScreen({ onFeature }: { onFeature: (name: string) => void
     <View>{[
       { icon: CircleDot, title: 'Fan Zone', sub: 'Missões, pontos, prêmios e ranking', feature: 'Fan Zone' },
       { icon: Wallet, title: 'Meus ingressos', sub: 'Comprar, acompanhar e apresentar QR', feature: 'Meus ingressos' },
-      { icon: Wallet, title: 'Meu cashback', sub: 'Compras, saldo e extrato em reais', feature: 'Cashback' },
+      ...(showCashback || walletError ? [{ icon: Wallet, title: 'Meu cashback', sub: 'Compras, saldo e extrato em reais', feature: 'Cashback' }] : []),
       { icon: User, title: 'Meus dados', sub: 'Nome, cidade e contato', feature: 'Meus Dados' },
       { icon: Settings, title: 'Segurança', sub: 'Senha e sessões conectadas', feature: 'Segurança' },
       { icon: Wallet, title: 'Meu plano e pagamentos', sub: demoMode ? 'Assinatura e histórico demo' : 'Assinatura e histórico', feature: 'Meu plano' },

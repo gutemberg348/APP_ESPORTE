@@ -13,7 +13,7 @@ interface Session {
   signIn: (email: string, password: string, name?: string, portal?: 'APP' | 'ADMIN' | 'GATE' | 'SELLER') => Promise<void>;
   signInSocial: (provider: SocialProvider) => Promise<void>;
   signOut: () => Promise<void>; logoutAll: () => Promise<void>; clearSession: () => Promise<void>;
-  retry: () => Promise<void>; updateMember: (member: Member) => void; resumeDemo: () => void;
+  retry: () => Promise<void>; updateMember: React.Dispatch<React.SetStateAction<Member | null>>; resumeDemo: () => void;
 }
 const Context = createContext<Session | null>(null);
 export function SessionProvider({ children }: React.PropsWithChildren) {

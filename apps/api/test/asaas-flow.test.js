@@ -42,7 +42,7 @@ test('Asaas complete payment saga against isolated PostgreSQL and mocked provide
   const sectorId = match.sectors[0].id;
   let index = 0;
   async function purchase() {
-    const user = await db.user.create({ data: { name: 'Torcedor teste', email: `asaas-${++index}@test.local`, passwordHash: 'test-only' } });
+    const user = await db.user.create({ data: { purchaseDocument: { create: { cpf: '52998224725' } }, name: 'Torcedor teste', email: `asaas-${++index}@test.local`, passwordHash: 'test-only' } });
     await store.saveProfile(user.id, '52998224725');
     const ticket = await checkout.reserve(user.id, { matchId: match.id, sectorId, quantity: 2 });
     const intent = await store.ticketPix(user.id, ticket.id);

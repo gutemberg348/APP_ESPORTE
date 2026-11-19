@@ -6,7 +6,7 @@ export interface GateV1Match {
   alocacoesSetor: { id: string; setorId: string; setor: { nome: string; portaoEntrada: string | null } }[];
 }
 export interface GateV1Ticket {
-  id: string; nomeTitular: string | null; remainingQuantity?: number; status: string; blocoEscolhido?: number | null; fileiraEscolhida?: string | null; assentoEscolhido?: number | null;
+  id: string; nomeTitular: string | null; cpfFinal?: string | null; remainingQuantity?: number; status: string; blocoEscolhido?: number | null; fileiraEscolhida?: string | null; assentoEscolhido?: number | null;
   utilizadoEm?: string | null; catracaId?: string | null;
   partida: Pick<GateV1Match, 'id' | 'timeMandante' | 'timeVisitante' | 'dataPartida' | 'estadio'>;
   alocacao: { id: string; setor: { id: string; nome: string; portaoEntrada: string | null; localizacao?: string | null; instrucaoAcomodacao?: string | null } };

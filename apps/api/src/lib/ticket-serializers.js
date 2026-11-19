@@ -1,7 +1,7 @@
 import { adminTicketRevision } from './admin-ticket-revision.js';
 export const ticketInclude = { match: { include: { sectors: true } }, sector: true, payment: { include: { financial: true } }, paymentIntents: { select: { id: true, state: true }, orderBy: { createdAt: 'desc' }, take: 10 } };
 export function toTicket(ticket, now = new Date()) {
-  const { entryToken, entryVersion, userId, user, admissions, payment, paymentIntents, financialPolicy, ...safe } = ticket;
+  const { entryToken, entryVersion, userId, user, purchaseDocumentId, purchaseDocument, admissions, payment, paymentIntents, financialPolicy, ...safe } = ticket;
   return {
     ...safe,
     status: ticket.status === 'PENDING' && ticket.expiresAt && ticket.expiresAt <= now ? 'EXPIRED' : ticket.status,

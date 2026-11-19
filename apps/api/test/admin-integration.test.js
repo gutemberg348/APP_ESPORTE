@@ -61,6 +61,10 @@ test('real accounts: admin publication, inventory, payment, entry, membership an
   assert.equal(await db.ticket.count({ where: { matchId: match.id } }), 0);
   assert.equal((await call('/tickets', { method: 'POST', token: alice.token, body: { matchId: match.id, sectorId: sector.id, quantity: 2, expectedTotalCents: 9000 } })).status, 409);
   const request = { matchId: match.id, sectorId: sector.id, quantity: 2, expectedTotalCents: quoteResponse.data.totalCents };
+  for (const { token } of [alice, bob]) {
+    assert.equal((await call('/me/purchase-cpf', { method: 'PUT', token, body: { cpf: '52998224725' } })).status, 200);
+    assert.equal((await call('/me', { token })).data.hasPurchaseCpf, true);
+  }
   const orders = await Promise.all([call('/tickets', { method: 'POST', token: alice.token, body: request }), call('/tickets', { method: 'POST', token: bob.token, body: request })]);
   assert.deepEqual(orders.map((item) => item.status).sort(), [201, 409]);
   const winner = orders[0].status === 201 ? alice : bob, loser = winner === alice ? bob : alice;
@@ -85,6 +89,7 @@ test('real accounts: admin publication, inventory, payment, entry, membership an
   await db.match.update({ where: { id: match.id }, data: { entryEnabled: true, gateOpenAt: new Date(Date.now() - 60000), gateCloseAt: new Date(Date.now() + 3600000) } });
   const entryToken = (await call('/tickets/entry-qr?ticketId=' + ticket.id, { token: winner.token })).data.token;
   const inspect = await call('/admin/tickets/inspect', { method: 'POST', token: adminToken, body: { token: entryToken, matchId: match.id, sectorId: sector.id } });
+  assert.equal(inspect.data.cpfFinal, '4725');
   assert.equal(inspect.data.remainingQuantity, 2);
   assert.ok(!Object.hasOwn(inspect.data, 'entryToken'));
   assert.equal(inspect.data.entryQr, null);

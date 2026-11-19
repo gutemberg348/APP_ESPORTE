@@ -1,6 +1,18 @@
 import { z } from 'zod';
+import { clubChannelUrl } from '@nacional/shared/club-channel';
+
+const channel = (platform) => z.string().trim().max(2048).nullable().optional().transform((value, ctx) => {
+  if (value == null) return value;
+  if (!value) return null;
+  const url = clubChannelUrl(platform, value);
+  if (url) return url;
+  ctx.addIssue({ code: 'custom', message: `Informe o endereço HTTPS do canal no ${platform === 'youtube' ? 'YouTube' : 'Instagram'}.` });
+  return z.NEVER;
+});
 export const businessSettingsSchema = z.object({
   version: z.number().int().nonnegative(),
+  instagramUrl: channel('instagram'),
+  youtubeUrl: channel('youtube'),
   membershipPaymentMinutes: z.number().int().min(1).max(1440).optional(),
   ticketReservationMinutes: z.number().int().min(1).max(1440),
   shopReservationMinutes: z.number().int().min(1).max(1440),

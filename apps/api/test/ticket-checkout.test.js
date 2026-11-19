@@ -14,6 +14,7 @@ function fixture() {
   };
   const view = () => state.order ? structuredClone({ ...state.order, match: state.match, sector: state.match.sectors[0] }) : null;
   const tx = {
+    purchaseDocument: { findUnique: async () => ({ userId }) },
     financialSettings: { upsert: async () => ({ companyBps: 1000, commissionBase: 'NET', gatewayBps: 0, gatewayFixedCents: 0, version: 0 }) },
     businessSettings: { upsert: async () => ({ ticketReservationMinutes: 15 }) },
     match: { findUnique: async ({ where }) => where.id === matchId ? structuredClone(state.match) : null },

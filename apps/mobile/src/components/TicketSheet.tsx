@@ -16,9 +16,12 @@ import { activeTicket, availablePlaces, matchSaleState, ticketStatus, ticketStat
 import { PixCheckout } from './PixCheckout';
 import { TicketGateAccess } from './TicketGateAccess';
 
+import { usePurchaseCpf } from './PurchaseCpfField';
+
 type QuoteUpdate = 'initial' | 'updating' | 'updated' | 'changed' | 'failed';
 
 export function TicketSheet({ visible, onClose, selectedMatch, onMyTickets }: { visible: boolean; onClose: () => void; selectedMatch?: Match; onMyTickets?: () => void }) {
+  const cpf = usePurchaseCpf();
   const { data, requestTicket, refresh } = useClub();
   const { member, demoMode, token } = useSession();
   const { colors } = useTheme();
@@ -99,7 +102,11 @@ export function TicketSheet({ visible, onClose, selectedMatch, onMyTickets }: { 
   async function submit() {
     if (lock.current || !quote || !quoteLive || performance.now() >= deadline || uncertain) return;
     lock.current = true; setBusy(true); setError('');
-    try { setSuccess(await requestTicket(quote.sector.id, quote.quantity, quote.match.id, quote.totalCents)); }
+    try {
+      try { await cpf.save(); } catch (err) { setError(messageOf(err)); return; }
+      if (performance.now() >= deadline) return;
+      setSuccess(await requestTicket(quote.sector.id, quote.quantity, quote.match.id, quote.totalCents));
+    }
     catch (err) {
       if (err instanceof ApiError && err.code === 'TICKET_PRICE_CHANGED') {
         setQuoteTiming((current) => ({ ...current, deadline: 0 }));
@@ -141,6 +148,7 @@ export function TicketSheet({ visible, onClose, selectedMatch, onMyTickets }: { 
           <View style={{ borderTopWidth: 1, borderColor: colors.border, paddingTop: 12, flexDirection: 'row', justifyContent: 'space-between' }}><Text style={{ color: colors.text, fontWeight: '700' }}>Total</Text><Text heading style={{ color: colors.primary, fontSize: 24, lineHeight: 32, fontWeight: '800' }}>{money(quote.totalCents)}</Text></View>
         </Panel>
         <Text style={{ color: colors.muted, fontSize: 14 }}>{quote.totalCents === 0 ? 'Ingresso gratuito. A confirmação emite o ingresso na sua conta.' : quote.paymentInstructions}</Text>
+        {cpf.field}
         <QuoteNotice remaining={remaining} duration={duration} live={quoteLive} update={quoteUpdate} />
         <Button label={quote.totalCents === 0 ? 'Confirmar emissão gratuita' : `Confirmar reserva · ${money(quote.totalCents)}`} loading={busy && quoteUpdate !== 'updating'} disabled={!quoteLive} onPress={() => void submit()} />
         <TextAction icon={SlidersHorizontal} label="Alterar setor ou quantidade" disabled={busy} onPress={() => { setQuote(null); setError(''); }} />

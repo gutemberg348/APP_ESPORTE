@@ -57,7 +57,7 @@ test('membership Pix activates only confirmed payments, preserves snapshots and 
   const store = createMembershipStore(db, settings, () => instant), bank = createSicrediStore(db, { settings, api, now: () => instant });
   const admin = await db.user.create({ data: { name: 'Admin', email: 'admin@member.test', role: 'ADMIN', passwordHash: 'test' } });
   const plan = await db.plan.create({ data: { name: 'Sócio', priceCents: 1990, durationDays: 30, discountPercent: 10 } });
-  const createUser = () => db.user.create({ data: { name: 'Torcedor', email: `${++index}@member.test`, passwordHash: 'test' } });
+  const createUser = () => db.user.create({ data: { purchaseDocument: { create: { cpf: '52998224725' } }, name: 'Torcedor', email: `${++index}@member.test`, passwordHash: 'test' } });
   const body = () => ({ planId: plan.id, expectedPriceCents: 1990, requestKey: randomUUID() });
   async function paid(order, override = {}) {
     const intent = await db.gatewayIntent.findUnique({ where: { id: order.intentId } });

@@ -8,7 +8,7 @@ function matchView(match) {
 }
 function ticketView(ticket) {
   return {
-    id: ticket.id, nomeTitular: ticket.holder, status: ticket.status, remainingQuantity: ticket.remainingQuantity,
+    id: ticket.id, nomeTitular: ticket.holder, cpfFinal: ticket.cpfFinal ?? null, status: ticket.status, remainingQuantity: ticket.remainingQuantity,
     partida: matchView(ticket.match), alocacao: { id: ticket.sector.id, setor: { id: ticket.sector.id, nome: ticket.sector.name, portaoEntrada: null } },
   };
 }

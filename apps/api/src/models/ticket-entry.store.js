@@ -3,7 +3,7 @@ import { AppError } from '../lib/errors.js';
 import { assertEntryContext, assertGateOpen, assertTicketPaid, assertAdmission } from '../lib/ticket-rules.js';
 import { ticketInclude, toTicket } from '../lib/ticket-serializers.js';
 const include = { ...ticketInclude, user: { select: { id: true, name: true, active: true } } };
-function view(ticket) { return { ...toTicket(ticket), holder: ticket.user.name }; }
+function view(ticket) { return { ...toTicket(ticket), holder: ticket.user.name, cpfFinal: ticket.purchaseDocument?.cpf.slice(-4) ?? null }; }
 function receipt(ticket, admission, duplicate) {
   return { ticket: view(ticket), duplicate, decision: duplicate ? 'ALREADY_RECORDED' : 'ALLOW', admission: { id: admission.id, quantity: admission.quantity, createdAt: admission.createdAt } };
 }
@@ -20,7 +20,7 @@ export function createTicketEntryStore(client, { now = () => new Date(), authori
       return { ticket, gate };
     },
     async inspect(claims, input) {
-      const ticket = await client.ticket.findUnique({ where: { id: claims.ticketId }, include });
+      const ticket = await client.ticket.findUnique({ where: { id: claims.ticketId }, include: { ...include, purchaseDocument: { select: { cpf: true } } } });
       if (!ticket) throw new AppError(404, 'TICKET_NOT_FOUND', 'Ingresso não encontrado.');
       assertEntryContext(ticket, claims, input.matchId, now(), input.sectorId);
       return { ...view(ticket), qrExpiresAt: claims.expiresAt.toISOString(), serverTime: now().toISOString(), decision: 'REVIEW', message: 'Confira o titular e a quantidade. A leitura ainda não autorizou entrada.' };

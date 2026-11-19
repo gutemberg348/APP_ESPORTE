@@ -42,7 +42,7 @@ test('Sicredi durable Pix saga with isolated PostgreSQL, refunds and legacy isol
   await db.financialSettings.upsert({ where: { id: 'main' }, create: { companyBps: 1000, gatewayFixedCents: 99 }, update: { gatewayFixedCents: 99 } });
   let index = 0;
   async function purchase() {
-    const user = await db.user.create({ data: { name: 'Torcedor', email: `sicredi-${++index}@test.local`, passwordHash: 'test' } });
+    const user = await db.user.create({ data: { purchaseDocument: { create: { cpf: '52998224725' } }, name: 'Torcedor', email: `sicredi-${++index}@test.local`, passwordHash: 'test' } });
     const ticket = await checkout.reserve(user.id, { matchId: match.id, sectorId: match.sectors[0].id, quantity: 2 });
     const intent = await store.ticketPix(user.id, ticket.id);
     return { user, ticket, intent };

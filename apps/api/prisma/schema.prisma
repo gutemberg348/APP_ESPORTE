@@ -58,6 +58,7 @@ model User {
   createdAt               DateTime             @default(now())
   updatedAt               DateTime             @updatedAt
   membershipOrders        MembershipOrder[]
+  purchaseDocument          PurchaseDocument?
   membership              Membership?
   sessions                Session[]
   socialIdentities        SocialIdentity[]
@@ -246,7 +247,16 @@ model Sector {
   @@unique([matchId, name])
 }
 
+model PurchaseDocument {
+  userId  String   @id @db.Uuid
+  cpf     String   @db.Char(11)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tickets Ticket[]
+}
+
 model Ticket {
+  purchaseDocumentId String? @db.Uuid
+  purchaseDocument PurchaseDocument? @relation(fields: [purchaseDocumentId], references: [userId], onDelete: Restrict)
   id              String             @id @default(uuid()) @db.Uuid
   userId          String             @db.Uuid
   matchId         String             @db.Uuid
@@ -355,6 +365,8 @@ model PointEntry {
 
 model BusinessSettings {
   id String @id @default("main")
+  instagramUrl String? @db.VarChar(2048)
+  youtubeUrl String? @db.VarChar(2048)
   membershipPaymentMinutes Int @default(15)
   ticketReservationMinutes Int @default(15)
   shopReservationMinutes Int @default(30)

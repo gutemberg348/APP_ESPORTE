@@ -2,6 +2,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { serializable } from '../lib/business-rules.js';
 import { readBusinessSettings } from '../lib/business-settings.js';
 import { AppError } from '../lib/errors.js';
+import { requirePurchaseDocument } from './purchase-document.js';
+
 export const membershipSignature = row => createHash('sha256').update(JSON.stringify(row ? [row.id, row.planId, row.status, row.validUntil, row.lastOrderId] : null)).digest('hex');
 const fail = (code, message) => new AppError(409, code, message);
 const render = row => ({ id: row.id, planName: row.planName, priceCents: row.priceCents, durationDays: row.durationDays, status: row.status, expiresAt: row.expiresAt, validUntil: row.validUntil, intentId: row.intent?.id || null, createdAt: row.createdAt });
@@ -21,6 +23,7 @@ export function createMembershipStore(db, settings, now = () => new Date()) {
       const plan = await tx.plan.findUnique({ where: { id: input.planId } });
       if (!plan?.active || plan.priceCents <= 0) throw fail('PLAN_UNAVAILABLE', 'Este plano não está disponível para compra por Pix. Consulte o clube.');
       if (plan.priceCents !== input.expectedPriceCents) throw fail('PLAN_PRICE_CHANGED', 'O valor mudou. Atualize os planos e confira antes de pagar.');
+      await requirePurchaseDocument(tx, userId);
       const rules = await readBusinessSettings(tx);
       const id = randomUUID(), expiresAt = new Date(now().getTime() + rules.membershipPaymentMinutes * 60000);
       const order = await tx.membershipOrder.create({ data: { id, userId, planId: plan.id, planName: plan.name, priceCents: plan.priceCents, durationDays: plan.durationDays, requestKey: input.requestKey, beforeSignature: membershipSignature(user.membership), expiresAt, createdAt: now(), intent: { create: {

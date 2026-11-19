@@ -8,7 +8,8 @@ import { verifyTicketV1TokenSignature } from '../lib/ingresso-v1-token.js';
 const error = (code, message, status = 409) => new AppError(status, code, message);
 const include = { partida: { include: { estadio: { select: { nome: true, nomePopular: true, ativo: true, tenantId: true } } } }, alocacao: { include: { setor: { select: { id: true, nome: true, ativo: true, portaoEntrada: true, localizacao: true, instrucaoAcomodacao: true } } } }, pedido: true, admission: true };
 function view(t) {
-  return { id: t.id, nomeTitular: t.nomeTitular, status: t.status, blocoEscolhido: t.blocoEscolhido, fileiraEscolhida: t.fileiraEscolhida, assentoEscolhido: t.assentoEscolhido, utilizadoEm: t.utilizadoEm, catracaId: t.catracaId,
+  const cpf = t.cpfTitular?.replace(/\D/g, '');
+  return { id: t.id, nomeTitular: t.nomeTitular, cpfFinal: cpf?.length === 11 ? cpf.slice(-4) : null, status: t.status, blocoEscolhido: t.blocoEscolhido, fileiraEscolhida: t.fileiraEscolhida, assentoEscolhido: t.assentoEscolhido, utilizadoEm: t.utilizadoEm, catracaId: t.catracaId,
     partida: { id: t.partida.id, timeMandante: t.partida.timeMandante, timeVisitante: t.partida.timeVisitante, dataPartida: t.partida.dataPartida, estadio: { nome: t.partida.estadio.nome, nomePopular: t.partida.estadio.nomePopular } },
     alocacao: { id: t.alocacaoId, setor: t.alocacao.setor } };
 }

@@ -7,6 +7,7 @@ export interface AuthTokens {
 export interface AuthResponse extends AuthTokens { member: Member }
 export interface AuthSession { id: string; createdAt: string; lastUsedAt: string; expiresAt: string; current: boolean }
 export interface Member {
+  hasPurchaseCpf?: boolean;
   id: string;
   name: string;
   email: string;

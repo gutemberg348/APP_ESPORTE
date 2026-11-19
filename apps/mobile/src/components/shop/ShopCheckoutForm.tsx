@@ -11,10 +11,12 @@ import { requestKey } from '../../utils/payments';
 import { Text } from '../Typography';
 import { Button } from '../ui';
 import { Sheet } from '../Sheet';
+import { usePurchaseCpf } from '../PurchaseCpfField';
 import { AdminField, AdminSelect, AdminFormGrid, AdminNotice } from '../admin/AdminControls';
 export type CartLine = { product: Product; variant: ProductVariant; quantity: number };
 const states = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 export function ShopCheckoutForm({ lines, settings, onClose, onSaved }: { lines: CartLine[]; settings: ShopSettings; onClose: () => void; onSaved: (order: ShopOrder) => void }) {
+  const cpf = usePurchaseCpf();
   const { token, member } = useSession(), { colors } = useTheme();
   const [recipient, setRecipient] = useState(member?.name || ''), [phone, setPhone] = useState(/^[\d\s()+-]+$/.test(member?.contact || '') ? member!.contact : '');
   const [method, setMethod] = useState<'PICKUP' | 'DELIVERY'>(settings.pickupEnabled ? 'PICKUP' : 'DELIVERY');
@@ -62,6 +64,7 @@ export function ShopCheckoutForm({ lines, settings, onClose, onSaved }: { lines:
       if (!quote || !choice) throw new Error('Calcule e selecione a entrega primeiro.');
       if (recipient.trim().length < 2 || !/^[1-9]{2}[2-9]\d{7,8}$/.test(digits(phone, 11))) throw new Error('Informe o nome e um telefone com DDD.');
       if (method === 'DELIVERY' && (!address.street.trim() || !address.number.trim() || !address.district.trim() || !address.city.trim())) throw new Error('Complete o endereço para entrega.');
+      await cpf.save();
       body = { ...cart(), quoteId: quote.id, shippingOptionId: choice.id, recipient: recipient.trim(), phone: digits(phone, 11), ...(method === 'DELIVERY' ? { address: { ...address, postalCode: digits(address.postalCode, 8) } } : {}), expectedTotalCents: choice.totalCents, requestKey: requestKey() };
       attempt.current = body;
     }
@@ -73,6 +76,7 @@ export function ShopCheckoutForm({ lines, settings, onClose, onSaved }: { lines:
     {method === 'PICKUP' ? <AdminNotice>{settings.pickupAddress}</AdminNotice> : <><AdminField label="CEP" value={address.postalCode} onChange={(postalCode) => changeAddress({ postalCode })} mask="postalCode" keyboardType="number-pad" autoComplete="postal-code" placeholder="00000-000" required editable={editable} /><Button secondary label="Consultar CEP novamente" loading={lookingUp} disabled={!editable || digits(address.postalCode).length !== 8} onPress={() => void lookup()} />{!!addressNotice && <Text accessibilityRole="alert" style={{ color: colors.muted, fontSize: 12 }}>{addressNotice}</Text>}<AdminField label="Rua / avenida" value={address.street} onChange={(street) => changeAddress({ street })} required editable={editable} autoComplete="street-address" maxLength={150} /><AdminFormGrid><AdminField label="Número" value={address.number} onChange={(number) => changeAddress({ number })} required grow editable={editable} maxLength={20} /><AdminField label="Complemento (opcional)" value={address.complement} onChange={(complement) => changeAddress({ complement })} grow editable={editable} maxLength={100} /></AdminFormGrid><AdminField label="Bairro" value={address.district} onChange={(district) => changeAddress({ district })} required editable={editable} maxLength={100} /><AdminFormGrid><AdminField label="Cidade" value={address.city} onChange={(city) => changeAddress({ city })} required grow editable={editable} maxLength={100} /><AdminSelect label="UF" value={address.state} onChange={(state) => changeAddress({ state })} options={states.map((value) => ({ value, label: value }))} grow disabled={!editable} /></AdminFormGrid></>}
     <Button secondary label={method === 'PICKUP' ? 'Conferir total para retirada' : quote ? 'Recalcular frete' : 'Calcular frete'} loading={busy} disabled={!editable || lookingUp} onPress={() => void run(calculate)} />
     {quote && <><AdminSelect label="Opção de entrega" value={optionId} onChange={setOptionId} disabled={!editable} options={quote.options.map((option) => ({ value: option.id, label: `${option.name} · ${option.amountCents ? money(option.amountCents) : 'Grátis'}`, description: method === 'PICKUP' ? 'Aguarde a confirmação para retirar.' : `${option.minDays}–${option.maxDays} dias úteis após postagem${option.testMode ? ' · cotação de teste' : ''}` }))} /><View style={{ gap: 8 }}><Text style={{ color: colors.muted, fontSize: 13 }}>Produtos: {money(quote.subtotalCents)}</Text><Text style={{ color: colors.muted, fontSize: 13 }}>Frete: {money(choice?.amountCents || 0)}</Text><Text style={{ color: colors.text, fontSize: 23, fontWeight: '700' }}>Total {money(choice?.totalCents || 0)}</Text></View><Text style={{ color: colors.subtle, fontSize: 11 }}>Os produtos ficam reservados por {quote.reservationMinutes} minutos após confirmar. A disponibilidade será conferida novamente.</Text></>}
+    {quote && cpf.field}
     {!!error && <AdminNotice tone="error">{error}</AdminNotice>}{uncertain && <AdminNotice tone="warning">A resposta da compra não chegou. Tente consultar a mesma operação pelo botão abaixo ou feche e confira Meus pedidos antes de criar outra compra. Os dados foram mantidos para evitar duplicidade.</AdminNotice>}<Button label={uncertain ? 'Consultar a mesma compra' : 'Confirmar pedido'} loading={busy} disabled={lookingUp || (!uncertain && (!quote || !choice || !recipient.trim() || !phone.trim()))} onPress={() => void run(submit)} />
   </Sheet>;
 }

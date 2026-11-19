@@ -1,6 +1,7 @@
 import type { Member, Dashboard, Match, Ticket, TicketQuote, CardToken, Preferences, Redemption, TicketQr } from '@nacional/shared/types';
 import { request } from './api';
 export const clubApi = {
+  savePurchaseCpf: (token: string, cpf: string) => request<{ hasPurchaseCpf: true }>('/me/purchase-cpf', { token, method: 'PUT', body: { cpf } }),
   dashboard: (token: string) => request<Dashboard>('/dashboard', { token }),
   card: (token: string) => request<CardToken>('/me/card-token', { token }),
   update: (token: string, name: string, city?: string, contact?: string) => request<Member>('/me', { token, method: 'PATCH', body: { name, city, contact } }),

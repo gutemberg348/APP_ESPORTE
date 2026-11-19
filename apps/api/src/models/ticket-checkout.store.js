@@ -6,6 +6,8 @@ import { isActiveMember } from '../lib/serializers.js';
 import { ticketInclude, toTicket } from '../lib/ticket-serializers.js';
 import { captureFinancialPolicy } from '../lib/ticket-finance.js';
 
+import { requirePurchaseDocument } from './purchase-document.js';
+
 export function createTicketCheckoutStore(client, { now = () => new Date() } = {}) {
   async function checkout(tx, userId, { matchId, sectorId, quantity }) {
     const instant = now();
@@ -56,7 +58,8 @@ export function createTicketCheckoutStore(client, { now = () => new Date() } = {
         const settings = await readBusinessSettings(tx);
         const expiresAt = free ? null : new Date(Math.min(instant.getTime() + settings.ticketReservationMinutes * 60000, match.startsAt.getTime(), match.salesCloseAt?.getTime() ?? Infinity));
         const financialPolicy = await captureFinancialPolicy(tx);
-        const data = { userId, matchId, sectorId, quantity, priceCents: totalCents, status: free ? 'ISSUED' : 'PENDING', usedQuantity: 0, entryToken: null, entryVersion: 0, expiresAt, financialPolicy };
+        const purchaseDocumentId = await requirePurchaseDocument(tx, userId);
+        const data = { userId, purchaseDocumentId, matchId, sectorId, quantity, priceCents: totalCents, status: free ? 'ISSUED' : 'PENDING', usedQuantity: 0, entryToken: null, entryVersion: 0, expiresAt, financialPolicy };
         let ticket = existing ? await tx.ticket.update({ where: { id: existing.id }, data: { ...data, createdAt: instant }, include: ticketInclude }) : await tx.ticket.create({ data, include: ticketInclude });
         if (free) {
           await tx.ticketPayment.create({ data: { ticketId: ticket.id, method: 'FREE', amountCents: 0, reference: `FREE-${ticket.id}` } });

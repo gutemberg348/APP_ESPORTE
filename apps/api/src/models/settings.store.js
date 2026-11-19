@@ -6,6 +6,11 @@ const audit = (tx, actorId, action, entityId, details) => tx.auditLog.create({ d
 export function createSettingsStore(client) {
   return {
     settings: () => readBusinessSettings(client),
+    async channels() {
+      return await client.businessSettings.findUnique({
+        where: { id: 'main' }, select: { instagramUrl: true, youtubeUrl: true },
+      }) ?? { instagramUrl: null, youtubeUrl: null };
+    },
     saveSettings(actorId, { version, ...data }) {
       return serializable(client, async (tx) => {
         const before = await readBusinessSettings(tx);

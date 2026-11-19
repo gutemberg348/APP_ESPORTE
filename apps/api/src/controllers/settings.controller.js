@@ -1,6 +1,7 @@
 import { settingsService } from '../services/settings.service.js';
 import { businessSettingsSchema, rewardCreateSchema, rewardUpdateSchema } from '../validators/settings.js';
 export const settingsController = {
+  channels: async () => ({ data: await settingsService.channels() }),
   settings: async () => ({ data: await settingsService.settings() }),
   saveSettings: async ({ user, body }) => ({ data: await settingsService.saveSettings(user.id, businessSettingsSchema.parse(body)) }),
   rewards: async () => ({ data: await settingsService.rewards() }),
