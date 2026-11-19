@@ -8,7 +8,7 @@ import type { InputMask } from '@nacional/shared/forms';
 
 export interface AdminButtonProps {
   label: string; onPress: () => void; disabled?: boolean; loading?: boolean; primary?: boolean;
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'; size?: 'normal' | 'small'; icon?: LucideIcon; iconOnly?: boolean; fullWidth?: boolean;
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'; size?: 'normal' | 'small' | 'large'; icon?: LucideIcon; iconOnly?: boolean; fullWidth?: boolean;
 }
 export function AdminButton({ label, onPress, disabled = false, loading = false, primary = false, variant, icon: Icon, iconOnly = false, fullWidth = false, size = 'normal' }: AdminButtonProps) {
   const { colors } = useTheme();
@@ -16,9 +16,9 @@ export function AdminButton({ label, onPress, disabled = false, loading = false,
   const mode = variant || (primary ? 'primary' : 'secondary'), filled = mode === 'primary' || mode === 'danger';
   const ink = mode === 'primary' ? colors.onPrimary : mode === 'danger' ? '#ffffff' : colors.text;
   const inactive = disabled || loading;
-  return <Pressable hitSlop={size === 'small' ? 6 : undefined} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: inactive, busy: loading }} disabled={inactive} onPress={onPress} onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)} onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} style={({ pressed }) => ({ minHeight: size === 'small' ? 32 : 40, minWidth: size === 'small' ? 32 : 40, alignSelf: fullWidth ? 'stretch' : undefined, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, paddingHorizontal: iconOnly ? 9 : size === 'small' ? 10 : 14, paddingVertical: size === 'small' ? 4 : 9, borderRadius: 8, borderWidth: 1, borderColor: focus ? colors.primary : mode === 'ghost' ? 'transparent' : filled ? 'transparent' : colors.border, backgroundColor: mode === 'primary' ? colors.primaryStrong : mode === 'danger' ? '#b42338' : hover || pressed ? colors.soft : mode === 'ghost' ? 'transparent' : colors.surface, opacity: inactive ? 0.45 : pressed ? 0.8 : 1, ...(Platform.OS === 'web' ? { outlineStyle: 'none', boxShadow: focus ? `0 0 0 3px ${colors.primary}20` : 'none', transitionDuration: '140ms' } as object : {}) })}>
+  return <Pressable hitSlop={size === 'small' ? 6 : undefined} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: inactive, busy: loading }} disabled={inactive} onPress={onPress} onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)} onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} style={({ pressed }) => ({ minHeight: size === 'large' ? 50 : size === 'small' ? 32 : 40, minWidth: size === 'small' ? 32 : 40, alignSelf: fullWidth ? 'stretch' : undefined, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, paddingHorizontal: iconOnly ? 9 : size === 'small' ? 10 : 14, paddingVertical: size === 'small' ? 4 : 9, borderRadius: 8, borderWidth: 1, borderColor: focus ? colors.primary : mode === 'ghost' ? 'transparent' : filled ? 'transparent' : colors.border, backgroundColor: mode === 'primary' ? colors.primaryStrong : mode === 'danger' ? '#b42338' : hover || pressed ? colors.soft : mode === 'ghost' ? 'transparent' : colors.surface, opacity: inactive ? 0.45 : pressed ? 0.8 : 1, ...(Platform.OS === 'web' ? { outlineStyle: 'none', boxShadow: focus ? `0 0 0 3px ${colors.primary}20` : 'none', transitionDuration: '140ms' } as object : {}) })}>
     {loading ? <ActivityIndicator size="small" color={ink} /> : Icon ? <Icon size={16} color={filled ? ink : colors.muted} strokeWidth={1.8} /> : null}
-    {!iconOnly && <Text style={{ color: ink, fontSize: 13, lineHeight: 20, fontWeight: '600', flexShrink: 1, textAlign: 'center' }}>{label}</Text>}
+    {!iconOnly && <Text style={{ color: ink, fontSize: size === 'large' ? 15 : 13, lineHeight: 20, fontWeight: '600', flexShrink: 1, textAlign: 'center' }}>{label}</Text>}
   </Pressable>;
 }
 const AdminGridContext = React.createContext(false);

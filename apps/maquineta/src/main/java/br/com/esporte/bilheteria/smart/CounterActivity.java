@@ -4,6 +4,7 @@ import android.app.*;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.*;
+import android.view.inputmethod.EditorInfo;
 import android.widget.*;
 import java.text.NumberFormat;
 import java.util.*;
@@ -73,12 +74,31 @@ public final class CounterActivity extends Activity {
     @Override protected void onPause() { foreground = false; if (pixView != null) pixView.stop(); super.onPause(); }
     private void login() {
         printableKey = null;
-        page("Bilheteria Esporte");
-        EditText email = field("E-mail do vendedor", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
-        EditText password = field("Senha", 129);
-        EditText key = field(store.provisioned() ? "Nova chave da maquineta (opcional)" : "Chave da maquineta", 129);
-        button("Entrar na Moderninha", () -> {
+        if (pixView != null) { pixView.stop(); pixView = null; }
+        setContentView(R.layout.counter_login);
+        notice = findViewById(R.id.login_notice);
+        EditText email = findViewById(R.id.login_email);
+        EditText password = findViewById(R.id.login_password);
+        EditText key = findViewById(R.id.login_key);
+        View provisionFields = findViewById(R.id.login_provision);
+        Button changeKey = findViewById(R.id.change_terminal_key);
+        Button submit = findViewById(R.id.login_submit);
+        boolean configured = store.provisioned();
+        provisionFields.setVisibility(configured ? View.GONE : View.VISIBLE);
+        changeKey.setVisibility(configured ? View.VISIBLE : View.GONE);
+        password.setImeOptions(configured ? EditorInfo.IME_ACTION_GO : EditorInfo.IME_ACTION_NEXT);
+        changeKey.setOnClickListener(v -> {
+            provisionFields.setVisibility(View.VISIBLE);
+            changeKey.setVisibility(View.GONE);
+            password.setImeOptions(EditorInfo.IME_ACTION_NEXT);
+            key.requestFocus();
+        });
+        submit.setOnClickListener(v -> {
+            if (busy) return;
             String account = email.getText().toString().trim(), secret = password.getText().toString(), provision = key.getText().toString().trim();
+            if (account.isEmpty()) { email.setError("Informe seu e-mail."); email.requestFocus(); return; }
+            if (secret.isEmpty()) { password.setError("Informe sua senha."); password.requestFocus(); return; }
+            if (!configured && provision.isEmpty()) { key.setError("Informe a chave de habilitação."); key.requestFocus(); return; }
             work("Conectando…", () -> {
                 String token = provision.isEmpty() && store.provisioned() ? store.readKey() : provision;
                 if (token.isEmpty()) throw new Exception("Informe a chave de habilitação da bilheteria.");
@@ -90,6 +110,13 @@ public final class CounterActivity extends Activity {
                 ui(() -> showQueue(queue));
             });
         });
+        TextView.OnEditorActionListener enter = (field, action, event) -> {
+            if (action != EditorInfo.IME_ACTION_GO) return false;
+            submit.performClick();
+            return true;
+        };
+        password.setOnEditorActionListener(enter);
+        key.setOnEditorActionListener(enter);
     }
     private void home() {
         page("Pagamentos do vendedor");

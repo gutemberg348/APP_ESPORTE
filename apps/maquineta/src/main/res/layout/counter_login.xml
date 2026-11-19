@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:fillViewport="true" android:background="#FFFFFF">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:focusableInTouchMode="true">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:gravity="center_vertical" android:padding="16dp" android:background="#651624">
+            <ImageView android:layout_width="44dp" android:layout_height="44dp"
+                android:src="@mipmap/ic_launcher" android:importantForAccessibility="no" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginStart="12dp" android:text="Bilheteria Esporte"
+                android:textColor="#FFFFFF" android:textSize="19sp" android:textStyle="bold" />
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:padding="18dp">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="Acesso do vendedor" android:textSize="24sp" android:textStyle="bold"
+                android:textColor="#251B20" android:layout_marginBottom="16dp" />
+            <TextView style="@style/CounterLoginLabel" android:labelFor="@+id/login_email" android:text="E-mail da equipe" />
+            <EditText style="@style/CounterLoginField" android:id="@id/login_email"
+                android:hint="voce@clube.com.br" android:inputType="textEmailAddress" android:imeOptions="actionNext" />
+            <TextView style="@style/CounterLoginLabel" android:labelFor="@+id/login_password" android:text="Senha" />
+            <EditText style="@style/CounterLoginField" android:id="@id/login_password"
+                android:inputType="textPassword" />
+            <Button android:id="@+id/change_terminal_key" style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content" android:layout_height="wrap_content" android:minHeight="48dp"
+                android:text="Alterar chave da maquineta" android:textAllCaps="false" android:textColor="#841D30" />
+            <LinearLayout android:id="@+id/login_provision" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:orientation="vertical">
+                <TextView style="@style/CounterLoginLabel" android:labelFor="@+id/login_key" android:text="Chave da maquineta" />
+                <EditText style="@style/CounterLoginField" android:id="@id/login_key"
+                    android:inputType="textPassword" android:imeOptions="actionGo" />
+            </LinearLayout>
+            <TextView android:id="@+id/login_notice" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:accessibilityLiveRegion="polite" android:textSize="14sp" android:textColor="#651624" />
+            <Button android:id="@+id/login_submit" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:minHeight="50dp" android:text="Entrar na bilheteria" android:textAllCaps="false"
+                android:backgroundTint="#991D32" android:textColor="#FFFFFF" android:textStyle="bold" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>
