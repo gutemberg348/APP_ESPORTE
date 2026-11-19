@@ -448,7 +448,7 @@ test(
             expiresAt: new Date(Date.now() + 86400000),
           },
         });
-        const detail = await accounts.detail(u.id);
+        const detail = await accounts.detail(u.id, admin.role);
         assert.equal("passwordHash" in detail, false);
         const changed = await accounts.update(admin.id, {
           userId: u.id,
@@ -715,10 +715,10 @@ test(
       async () => {
         await assert.rejects(
           staff.update(admin.id, { userId: admin.id, role: "CASHIER" }),
-          { code: "SELF_ACCESS_CHANGE" },
+          { code: "ACCOUNT_HIERARCHY" },
         );
         await assert.rejects(
-          staff.update(cashier.id, { userId: admin.id, active: false }),
+          staff.update((await user("OWNER")).id, { userId: admin.id, active: false }),
           { code: "LAST_ADMIN" },
         );
         await db.session.create({
@@ -764,9 +764,26 @@ test(
           }),
           { code: "EMPLOYEE_CHANGED" },
         );
-        assert.ok((await staff.list()).some((u) => u.id === admin.id));
+        assert.ok(!(await staff.list({}, admin.role)).some((u) => u.id === admin.id));
       },
     );
+    await t.test("company provisions club access and club administrators manage only operational profiles", async () => {
+      const owner = await user("OWNER");
+      const registration = { name: "Gestor do clube", role: "ADMIN", email: `${randomUUID()}@test.local`, passwordHash: "test-hash" };
+      const denied = { code: "ACCOUNT_HIERARCHY" };
+      await assert.rejects(staff.create(admin.id, registration), denied);
+      const manager = await staff.create(owner.id, registration);
+      const seller = await staff.create(manager.id, { ...registration, role: "TICKET_SELLER", email: `${randomUUID()}@test.local` });
+      assert.equal(seller.role, "TICKET_SELLER");
+      assert.ok((await staff.list({}, owner.role)).some(u => u.id === manager.id));
+      assert.ok((await staff.list({}, manager.role)).every(u => u.role !== "ADMIN" && u.role !== "OWNER"));
+      await assert.rejects(staff.update(manager.id, { userId: seller.id, role: "ADMIN" }), denied);
+      await assert.rejects(staff.password(admin.id, manager.id, "should-not-save"), denied);
+      await assert.rejects(accounts.update(admin.id, { userId: manager.id, email: "other@test.local" }), denied);
+      await assert.rejects(accounts.detail(manager.id, admin.role), denied);
+      await assert.rejects(staff.create(seller.id, { ...registration, role: "GATE" }), denied);
+      assert.equal((await staff.update(owner.id, { userId: manager.id, active: false })).active, false);
+    });
     await t.test(
       "archiving preserves merchant history, hides benefits and restoration never reopens cashier access",
       async () => {

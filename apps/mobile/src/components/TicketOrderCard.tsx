@@ -5,7 +5,7 @@ import { Ticket as TicketIcon, Check, CheckCircle, Copy, MapPin, RefreshCw, XCir
 import type { Ticket } from '@nacional/shared/types';
 import { Panel, Button, TextAction } from './ui';
 import { Text } from './Typography';
-import { LiveTicketQr } from './LiveTicketQr';
+import { TicketGateAccess } from './TicketGateAccess';
 import { useSession } from '../providers/SessionProvider';
 import { useTheme } from '../theme/ThemeProvider';
 import { clubApi } from '../services/club';
@@ -24,9 +24,6 @@ export function TicketOrderCard({ ticket, now, instructions, expanded, onExpand,
   const [copyFailed, setCopyFailed] = useState(false);
   const lock = useRef(false);
   const status = canceled ? 'CANCELED' : ticketStatus(ticket, now);
-  const opensAt = ticket.match.gateOpenAt ? Date.parse(ticket.match.gateOpenAt) : Date.parse(ticket.match.startsAt) - 2 * 3600000;
-  const closesAt = ticket.match.gateCloseAt ? Date.parse(ticket.match.gateCloseAt) : Date.parse(ticket.match.startsAt) + 4 * 3600000;
-  const gateOpen = ticket.match.entryEnabled && now >= opensAt && now < closesAt;
   async function cancel() {
     if (lock.current || demoMode) return;
     lock.current = true; setBusy(true); setError('');
@@ -49,7 +46,7 @@ export function TicketOrderCard({ ticket, now, instructions, expanded, onExpand,
     </>}
     {status === 'ISSUED' && <>
       <Text style={{ color: colors.text, fontSize: 14 }}>{ticket.remainingQuantity ?? ticket.quantity - (ticket.usedQuantity || 0)} entrada(s) restante(s) · {ticket.usedQuantity || 0} utilizada(s)</Text>
-      {gateOpen && !demoMode ? <><Button label={expanded ? 'Ocultar QR e código' : 'Apresentar QR e código na portaria'} onPress={onExpand} />{expanded && <LiveTicketQr ticketId={ticket.id} onUsed={() => void onChanged()} />}</> : <Text style={{ color: colors.muted, fontSize: 14 }}>{now >= closesAt ? 'O período de entrada desta partida foi encerrado.' : !ticket.match.entryEnabled ? 'Aguarde a liberação da portaria pelo clube para apresentar o QR e o código.' : `QR e código disponíveis a partir de ${matchDate(new Date(opensAt).toISOString())}.`}</Text>}
+      <TicketGateAccess ticketId={ticket.id} match={ticket.match} now={now} expanded={expanded} onToggle={onExpand} onUsed={() => void onChanged()} />
     </>}
     {status === 'USED' && <View style={{ flexDirection: 'row', gap: 8 }}><CheckCircle size={20} color={colors.primary} /><Text style={{ color: colors.muted, flex: 1, fontSize: 14 }}>Todos os acessos deste pedido foram utilizados.</Text></View>}
     {(status === 'EXPIRED' || status === 'CANCELED') && <><Text style={{ color: colors.muted, fontSize: 14 }}>{status === 'EXPIRED' ? 'O prazo terminou sem emissão. Confira com o clube caso já tenha feito o pagamento.' : 'Os lugares desta reserva foram liberados.'}</Text><Button secondary label="Consultar jogos e disponibilidade" onPress={onShop} /></>}

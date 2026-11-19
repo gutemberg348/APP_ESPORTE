@@ -1,3 +1,4 @@
+import { isAdminRole } from './admin-roles.js';
 import { randomBytes } from 'node:crypto';
 import { AppError } from './errors.js';
 const alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -11,11 +12,11 @@ export function normalizeGateCode(code) {
   return value;
 }
 export function assertGateUser(user) {
-  if (!user?.active || !['ADMIN', 'GATE'].includes(user.role)) throw new AppError(403, 'GATE_REQUIRED', 'Acesso restrito à equipe de portaria.');
+  if (!user?.active || !(isAdminRole(user.role) || user.role === 'GATE')) throw new AppError(403, 'GATE_REQUIRED', 'Acesso restrito à equipe de portaria.');
 }
 export function assertGateScope(user, assignment) {
   assertGateUser(user);
-  if (user.role !== 'ADMIN' && (!assignment?.active || assignment.userId !== user.id)) throw new AppError(403, 'GATE_SCOPE_DENIED', 'Você não está escalado para esta partida e setor.');
+  if (!isAdminRole(user.role) && (!assignment?.active || assignment.userId !== user.id)) throw new AppError(403, 'GATE_SCOPE_DENIED', 'Você não está escalado para esta partida e setor.');
 }
 export function assertGateRoute(user, route) {
   if (route.ticketSeller && (!user?.active || !['TICKET_SELLER', 'ADMIN'].includes(user.role))) throw new AppError(403, 'TICKET_SELLER_REQUIRED', 'Acesso restrito à bilheteria.');

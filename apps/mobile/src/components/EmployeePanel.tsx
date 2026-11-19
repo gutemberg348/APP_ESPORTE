@@ -24,28 +24,7 @@ import { employeeApi } from "../services/gate";
 import { matchDate, messageOf } from "../utils/format";
 import { recoveryApi } from "../services/recovery";
 import { AdminAccountForm } from "./admin/AdminAccountForm";
-const roles = [
-  {
-    value: "ADMIN",
-    label: "Administrador",
-    description: "Gestão completa do clube",
-  },
-  {
-    value: "GATE",
-    label: "Portaria",
-    description: "Entrada somente nos setores autorizados",
-  },
-  {
-    value: "TICKET_SELLER",
-    label: "Bilheteria",
-    description: "Venda presencial e impressão de ingressos",
-  },
-  {
-    value: "CASHIER",
-    label: "Caixa de parceiro",
-    description: "Vendas somente nos parceiros autorizados",
-  },
-];
+import { staffRoleOptions } from "../utils/staff-roles";
 
 export function EmployeePanel({
   desktop = false,
@@ -53,7 +32,9 @@ export function EmployeePanel({
   matches: Match[];
   desktop?: boolean;
 }) {
-  const { token } = useSession();
+  const { token, member } = useSession();
+  const owner = member?.role === "OWNER";
+  const roles = staffRoleOptions(owner);
   const { colors } = useTheme();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [gateMatches, setGateMatches] = useState<GateV1Match[]>([]);
@@ -121,7 +102,7 @@ export function EmployeePanel({
     setForm(kind);
     setName(employee?.name || "");
     setEmail(employee?.email || "");
-    setRole(employee?.role || "GATE");
+    setRole(employee?.role || (owner ? "ADMIN" : "TICKET_SELLER"));
     setContact(employee?.contact || "");
   }
   async function perform(work: () => Promise<unknown>, message: string) {
@@ -164,7 +145,12 @@ export function EmployeePanel({
             })
           : employeeApi.password(token!, selected!.id, password),
       create
-        ? (role === "TICKET_SELLER" ? "Vendedor cadastrado. Use o login no app ou em /bilheteria." : "Funcionário cadastrado. Configure a escala da portaria ou os parceiros autorizados para o caixa.")
+        ? ({
+            ADMIN: "Administrador do time cadastrado. Entre em /admin para cadastrar a equipe.",
+            TICKET_SELLER: "Vendedor cadastrado. Use o login no app ou em /bilheteria.",
+            GATE: "Funcionário cadastrado. Defina os setores em Ações → Definir escala.",
+            CASHIER: "Caixa cadastrado. Autorize o acesso no cadastro do parceiro.",
+          }[role])
         : "Senha redefinida e sessões anteriores revogadas.",
     );
   }
@@ -231,7 +217,7 @@ export function EmployeePanel({
         </View>
         <AdminButton
           primary
-          label="Novo funcionário"
+          label={owner ? "Cadastrar acesso" : "Novo funcionário"}
           icon={Plus}
           disabled={busy}
           onPress={() => open("create")}
@@ -305,7 +291,7 @@ export function EmployeePanel({
                 {[...employee.assignmentsV1, ...employee.assignments]
                   .filter((item) => item.active)
                   .map((item) => item.matchLabel + " · " + item.sectorName)
-                  .join("\n") || "Sem setores liberados"}
+                  .join("\n") || (employee.role === "GATE" ? "Sem setores liberados" : "—")}
               </Text>,
               actions(employee),
             ],
@@ -342,8 +328,8 @@ export function EmployeePanel({
                 {employee.email}
               </Text>
               <Text style={{ color: colors.subtle, fontSize: 12 }}>
-                {[...employee.assignmentsV1, ...employee.assignments].filter((item) => item.active).length}{" "}
-                setor(es) na escala
+                {roles.find(item => item.value === employee.role)?.label}
+                {employee.role === "GATE" && ` · ${[...employee.assignmentsV1, ...employee.assignments].filter(item => item.active).length} setor(es) na escala`}
               </Text>
               {actions(employee)}
             </Panel>
@@ -372,7 +358,7 @@ export function EmployeePanel({
           visible
           title={
             form === "create"
-              ? "Novo funcionário"
+              ? owner ? "Cadastrar acesso" : "Novo funcionário"
               : form === "password"
                 ? "Redefinir senha"
                 : "Escala de portaria"
@@ -422,9 +408,7 @@ export function EmployeePanel({
                 editable={!busy}
               />
               <AdminNotice>
-                Alterar o perfil remove as permissões anteriores e encerra as
-                sessões. Portaria e caixa precisam de novas autorizações após a
-                mudança.
+                {role === "ADMIN" ? "Este acesso abre o painel do time em /admin e permite cadastrar a equipe do clube." : roles.find(item => item.value === role)?.description}
               </AdminNotice>
             </>
           )}
@@ -450,7 +434,7 @@ export function EmployeePanel({
               <AdminButton
                 primary
                 label={
-                  form === "create" ? "Criar funcionário" : "Salvar nova senha"
+                  form === "create" ? (role === "ADMIN" ? "Criar administrador do time" : "Criar funcionário") : "Salvar nova senha"
                 }
                 loading={busy}
                 onPress={() => savePassword(form === "create")}

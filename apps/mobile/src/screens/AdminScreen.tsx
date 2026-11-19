@@ -1,4 +1,6 @@
 import { MembershipCardCheck } from '../components/MembershipCardCheck';
+import { SecurityScreen } from './SecurityScreen';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { AdminSettingsPanel } from '../components/admin/AdminSettingsPanel';
 import React, { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
@@ -38,14 +40,16 @@ import { TemplatesVendaIngressoV1Panel } from '../components/admin/ingresso-v1/T
 import { PartidasIngressoV1Panel } from '../components/admin/ingresso-v1/PartidasIngressoV1Panel';
 import { IngressosEmitidosV1Panel } from '../components/admin/ingresso-v1/IngressosEmitidosV1Panel';
 import { PortariaIngressoV1Panel } from '../components/admin/ingresso-v1/PortariaIngressoV1Panel';
-export function AdminScreen({ onBack }: { onBack: () => void }) {
+export function AdminScreen({ onBack }: { onBack?: () => void }) {
   return <AdminThemeProvider><AdminWorkspace onBack={onBack} /></AdminThemeProvider>;
 }
-function AdminWorkspace({ onBack }: { onBack: () => void }) {
+function AdminWorkspace({ onBack }: { onBack?: () => void }) {
   const { token, member, signOut } = useSession();
   const { colors } = useTheme();
   const desktop = useDesktopAdmin();
-  const [tab, setTab] = useState('Visão geral');
+  const owner = member?.role === 'OWNER';
+  const [security, setSecurity] = useState(false);
+  const [tab, setTab] = useState(owner ? 'Saques' : 'Visão geral');
   const [legacyGateHistory, setLegacyGateHistory] = useState(false);
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -82,7 +86,7 @@ function AdminWorkspace({ onBack }: { onBack: () => void }) {
   const revision = useRef(0);
   const lock = useRef(false);
   async function refresh() {
-    if (!token || member?.role !== 'ADMIN') return;
+    if (!token || (!owner && member?.role !== 'ADMIN')) return;
     const current = ++revision.current;
     setLoading(true); setError('');
     try {
@@ -99,7 +103,8 @@ function AdminWorkspace({ onBack }: { onBack: () => void }) {
     lock.current = true; setBusy(true); setError(''); setNotice('');
     try { await work(); if (refreshAfter) await refresh(); } catch (err) { setError(messageOf(err)); } finally { setBusy(false); lock.current = false; }
   }
-  if (member?.role !== 'ADMIN') return <Page><Text style={{ color: colors.danger }}>Acesso administrativo necessário.</Text></Page>;
+  if (!member || (!owner && member.role !== 'ADMIN')) return <Page><Text style={{ color: colors.danger }}>Acesso administrativo necessário.</Text></Page>;
+  if (security) return <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}><SecurityScreen onBack={() => setSecurity(false)} /></SafeAreaView>;
   function select(section: string) {
     setTab(section);
     setError('');
@@ -110,15 +115,21 @@ function AdminWorkspace({ onBack }: { onBack: () => void }) {
     setPartidaV1CreateOpen(false);
     setIngressoV1CreateOpen(false);
   }
+  function openGate(match: Match) {
+    void perform(async () => {
+      await adminApi.updateMatch(token!, { id: match.id, openGateNow: true });
+      setNotice('Portaria aberta. O QR está disponível para os ingressos emitidos.');
+    });
+  }
   function openPayment(ticket: AdminTicket) { setPayment(ticket); setGatewayFee('0,00'); setReference(''); setVerified(false); setReceived((ticket.priceCents / 100).toFixed(2).replace('.', ',')); }
   function openMembership(user: Member) { setAssociate(user); setPlanId(plans.find((plan) => plan.name === user.membership?.plan.name)?.id || plans[0]?.id || ''); setMembershipStatus(user.membership?.status || 'ACTIVE'); setValidUntil(user.membership && Date.parse(user.membership.validUntil) > Date.now() ? formDate(user.membership.validUntil) : formDate(new Date(Date.now() + (plans[0]?.durationDays || 30) * 86400000).toISOString())); }
   const action = ['Visão geral', 'Jogos'].includes(tab) ? <AdminAction primary label="Cadastrar jogo" icon={Plus} disabled={busy} onPress={() => setMatchEdit(null)} /> : tab === 'Planos' ? <AdminAction primary label="Criar plano" icon={Plus} disabled={busy} onPress={() => setPlanEdit(null)} /> : tab === 'Estádios' ? <AdminAction primary label="Cadastrar estádio" icon={Plus} disabled={busy} onPress={() => setEstadioCreateOpen(true)} /> : tab === 'Templates de setores' ? <AdminAction primary label="Criar template" icon={Plus} disabled={busy} onPress={() => setTemplateCreateOpen(true)} /> : tab === 'Templates de venda' ? <AdminAction primary label="Criar template de venda" icon={Plus} disabled={busy} onPress={() => setTemplateVendaCreateOpen(true)} /> : tab === 'Partidas V1' ? <AdminAction primary label="Cadastrar partida" icon={Plus} disabled={busy} onPress={() => setPartidaV1CreateOpen(true)} /> : tab === 'Pedidos e ingressos V1' ? <AdminAction primary label="Emitir ingresso" icon={Plus} disabled={busy} onPress={() => setIngressoV1CreateOpen(true)} /> : undefined;
-  return <AdminLayout active={tab} onSelect={select} onBack={onBack} onSignOut={() => void perform(signOut, false)} refreshing={loading} onRefresh={() => void refresh()} busy={busy} action={action}>
+  return <AdminLayout active={tab} onSelect={select} onBack={onBack} onSecurity={() => setSecurity(true)} onSignOut={() => void perform(signOut, false)} refreshing={loading} onRefresh={() => void refresh()} busy={busy} action={action}>
     {!!error && <Panel style={{ borderColor: colors.danger, borderRadius: 12, padding: 16 }}><Text accessibilityRole="alert" style={{ color: colors.danger, fontSize: 13 }}>{error}</Text></Panel>}
     {!!notice && <Text accessibilityRole="alert" style={{ color: colors.primary, fontSize: 13 }}>{notice}</Text>}
     {!['Financeiro', 'Saques'].includes(tab) && <AdminPayoutAlert refreshKey={reportRefresh} onOpen={()=>select('Saques')}/>}
     {tab === 'Visão geral' && <><AdminStats overview={overview} /><AdminOverviewPanel matches={matches} tickets={tickets} audit={audit} loading={loading} onSelect={select} onCreate={() => setMatchEdit(null)} /></>}
-    {tab === 'Jogos' && <AdminMatchGrid matches={matches} busy={busy} loading={loading} onEdit={setMatchEdit} onSector={(match, sector) => setSectorEdit({ match, sector })} onCreateSector={(match) => setSectorEdit({ match, sector: null })} onToggle={(match, field) => void perform(() => adminApi.updateMatch(token!, { id: match.id, [field]: !match[field] }))} />}
+    {tab === 'Jogos' && <AdminMatchGrid matches={matches} busy={busy} loading={loading} onEdit={setMatchEdit} onSector={(match, sector) => setSectorEdit({ match, sector })} onCreateSector={(match) => setSectorEdit({ match, sector: null })} onToggle={(match, field) => void perform(() => adminApi.updateMatch(token!, { id: match.id, [field]: !match[field] }))} onOpenGate={openGate} />}
     {tab === 'Vendas' && <AdminSalesReport matches={matches} refreshKey={reportRefresh} busy={busy} onPayment={openPayment} onEdit={(ticket) => setSaleAction({ ticket, mode: 'edit' })} onDelete={(ticket) => setSaleAction({ ticket, mode: 'delete' })} onCancel={(ticket) => setSaleAction({ ticket, mode: 'cancel' })} />}
     {tab === 'Torcedores' && <AdminAccountsPanel onEdit={setAccountEdit} users={users} search={search} onSearchChange={setSearch} onSearch={() => void refresh()} loading={loading} busy={busy} currentUserId={member.id} onRecovery={(user) => void perform(async () => { await recoveryApi.forUser(token!, user.id); setNotice('Se a conta estiver ativa, o link será enviado para o email cadastrado.'); }, false)} onMembership={openMembership} onAccount={(user) => void perform(() => adminApi.account(token!, user.id, !user.active))} />}
     {tab === 'Planos' && <><AdminPlanGrid plans={plans} busy={busy} onEdit={setPlanEdit} /><MembershipCardCheck /></>}

@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { db } from '../config/database.js';
 import { serializable } from '../lib/business-rules.js';
 import { AppError } from '../lib/errors.js';
-import { inventoryWhere, occupiedQuantity, assertMatchSchedule } from '../lib/ticket-rules.js';
+import { assertManagedAccount, managedStaffRoles } from '../lib/admin-roles.js';
+import { inventoryWhere, occupiedQuantity, assertMatchSchedule, openGateNow } from '../lib/ticket-rules.js';
 import { ticketInclude, toAdminTicket } from '../lib/ticket-serializers.js';
 import { toMember } from '../lib/serializers.js';
 import { withAvailability, writeAudit } from './ticket.model.js';
@@ -27,10 +28,11 @@ export const adminModel = {
       return match;
     });
   },
-  updateMatch(actorId, { id, ...data }) {
+  updateMatch(actorId, { id, openGateNow: openNow, ...fields }) {
     return serializable(db, async (tx) => {
       const current = await tx.match.findUnique({ where: { id } });
       if (!current) throw new AppError(404, 'MATCH_NOT_FOUND', 'Jogo não encontrado.');
+      const data = openNow ? openGateNow(current) : fields;
       assertMatchSchedule({ ...current, ...data });
       if (data.published === true && current.startsAt <= new Date() && !data.startsAt) throw new AppError(422, 'PAST_MATCH', 'A publicação exige um jogo futuro.');
       if (data.startsAt && data.startsAt <= new Date()) throw new AppError(422, 'PAST_MATCH', 'Informe uma data futura para o jogo.');
@@ -67,8 +69,8 @@ export const adminModel = {
     const where = { ...(deleted === 'all' ? {} : { deletedAt: deleted === 'only' ? { not: null } : null }), ...(matchId ? { matchId } : {}), ...(status === 'EXPIRED' ? { status: 'PENDING', expiresAt: { lte: now } } : status === 'PENDING' ? { status, expiresAt: { gt: now } } : status ? { status } : {}) };
     return (await db.ticket.findMany({ where, include: { ...ticketInclude, user: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: 'desc' }, take: limit, skip: offset })).map((ticket) => toAdminTicket(ticket));
   },
-  async users({ limit, offset, search }) {
-    const where = search ? { OR: [{ name: { contains: search, mode: 'insensitive' } }, { email: { contains: search, mode: 'insensitive' } }] } : {};
+  async users({ limit, offset, search }, actorRole) {
+    const where = { role: { in: ['USER', ...managedStaffRoles(actorRole)] }, ...(search ? { OR: [{ name: { contains: search, mode: 'insensitive' } }, { email: { contains: search, mode: 'insensitive' } }] } : {}) };
     const users = await db.user.findMany({ where, include: { membership: { include: { plan: true } } }, orderBy: { createdAt: 'desc' }, take: limit, skip: offset });
     return users.map(toMember);
   },
@@ -82,7 +84,10 @@ export const adminModel = {
   },
   membership(actorId, { userId, planId, status, validUntil }) {
     return serializable(db, async (tx) => {
-      if (!await tx.user.findUnique({ where: { id: userId } }) || !await tx.plan.findUnique({ where: { id: planId } })) throw new AppError(404, 'MEMBER_OR_PLAN_NOT_FOUND', 'Conta ou plano não encontrado.');
+      const target = await tx.user.findUnique({ where: { id: userId }, select: { role: true } });
+      if (!target || !await tx.plan.findUnique({ where: { id: planId } })) throw new AppError(404, 'MEMBER_OR_PLAN_NOT_FOUND', 'Conta ou plano não encontrado.');
+      const actor = await tx.user.findUnique({ where: { id: actorId }, select: { role: true, active: true } });
+      assertManagedAccount(target, actor?.active ? actor.role : undefined);
       if (status === 'ACTIVE' && validUntil <= new Date()) throw new AppError(422, 'INVALID_MEMBERSHIP_DATE', 'Uma associação ativa exige validade futura.');
       const membership = await tx.membership.upsert({ where: { userId }, update: { planId, status, validUntil, lastOrderId: null }, create: { userId, planId, status, validUntil, memberId: `NC-${randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase()}` } });
       await writeAudit(tx, actorId, 'MEMBERSHIP_UPDATED', membership.id, { userId, planId, status, validUntil: validUntil.toISOString() });
@@ -94,6 +99,8 @@ export const adminModel = {
       if (actorId === userId && !active) throw new AppError(409, 'SELF_DISABLE_BLOCKED', 'Você não pode desativar a própria conta.');
       const user = await tx.user.findUnique({ where: { id: userId } });
       if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'Conta não encontrada.');
+      const actor = await tx.user.findUnique({ where: { id: actorId }, select: { role: true, active: true } });
+      assertManagedAccount(user, actor?.active ? actor.role : undefined);
       if (user.role === 'ADMIN' && !active && await tx.user.count({ where: { role: 'ADMIN', active: true } }) <= 1) throw new AppError(409, 'LAST_ADMIN_PROTECTED', 'O último administrador ativo não pode ser desativado.');
       await tx.user.update({ where: { id: userId }, data: { active } });
       if (!active) {

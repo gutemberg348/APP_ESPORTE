@@ -1,6 +1,7 @@
 import { serializable } from "../lib/business-rules.js";
 import { AppError } from "../lib/errors.js";
 import { toMember } from "../lib/serializers.js";
+import { assertManagedAccount } from "../lib/admin-roles.js";
 const membership = { membership: { include: { plan: true } } };
 export const toAdminAccount = (user) => ({
   ...toMember(user),
@@ -24,6 +25,10 @@ export async function updateAdminAccount(
     (employeeOnly && !["ADMIN", "GATE", "CASHIER", "TICKET_SELLER"].includes(old.role))
   )
     throw new AppError(404, "ACCOUNT_NOT_FOUND", "Conta não encontrada.");
+  const actor = await tx.user.findUnique({ where: { id: actorId }, select: { role: true, active: true } });
+  const actorRole = actor?.active ? actor.role : undefined;
+  assertManagedAccount(old, actorRole);
+  if (data.role) assertManagedAccount({ role: data.role }, actorRole);
   if (updatedAt && old.updatedAt.toISOString() !== updatedAt)
     throw new AppError(
       409,
@@ -107,13 +112,14 @@ export async function updateAdminAccount(
 }
 export function createAdminAccountStore(db) {
   return {
-    async detail(userId) {
+    async detail(userId, actorRole) {
       const user = await db.user.findUnique({
         where: { id: userId },
         include: membership,
       });
       if (!user)
         throw new AppError(404, "ACCOUNT_NOT_FOUND", "Conta não encontrada.");
+      assertManagedAccount(user, actorRole);
       return toAdminAccount(user);
     },
     update: (actorId, input) =>

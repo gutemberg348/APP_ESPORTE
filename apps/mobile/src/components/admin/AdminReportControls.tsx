@@ -20,14 +20,15 @@ export function useAdminReport<T>(load: (token: string, filters: Filters) => Pro
     if (!token) { setLoading(false); return; }
     let running = false;
     const fetchReport = async () => {
-      if (running || AppState.currentState !== 'active') return;
+      if (running || (AppState.currentState && AppState.currentState !== 'active')) return;
       running = true;
       try { const result = await load(token, filters); if (sequence.current === current) { setData(result); setError(''); } }
       catch (err) { if (sequence.current === current) setError(messageOf(err)); }
       finally { running = false; if (sequence.current === current) setLoading(false); }
     };
     void fetchReport(); const timer = setInterval(() => void fetchReport(), 15000);
-    return () => { sequence.current++; clearInterval(timer); };
+    const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') void fetchReport(); });
+    return () => { sequence.current++; clearInterval(timer); subscription.remove(); };
   }, [token, filters, refreshKey, load]);
   return { data, loading, error };
 }

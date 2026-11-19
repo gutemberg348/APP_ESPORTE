@@ -8,6 +8,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/client/index.js";
 import { createWithdrawalStore } from "../src/models/withdrawal.store.js";
 import { createFinanceStore } from "../src/models/finance.store.js";
+import { createAdminAccountStore } from "../src/models/admin-account.store.js";
 import {
   recordTicketFinancial,
   DEFAULT_FINANCIAL_POLICY,
@@ -99,6 +100,22 @@ test("withdrawal requests, receipts and content routes require administrator bef
       );
   }
 });
+test("club admins request withdrawals and only the company owner can process or bypass the request workflow", async () => {
+  for (const role of ["ADMIN", "OWNER"]) {
+    const app = createApp({ routes, authenticate: async () => ({ user: { id: randomUUID(), role, active: true } }), logger: { info() {}, error() {} } });
+    for (const [method, path] of [
+      ["POST", "withdrawals"], ["POST", "withdrawals/send"], ["POST", "withdrawals/cancel"],
+      ["POST", "withdrawals/attachments"], ["DELETE", "withdrawals/attachments"],
+      ["POST", "finance/payouts"], ["POST", "finance/payouts/void"], ["PUT", "finance/settings"], ["POST", "finance/legacy"],
+    ]) {
+      const canAct = path === "withdrawals" ? role === "ADMIN" : role === "OWNER";
+      const result = await inject(app, "/v1/admin/" + path, { method, headers: { authorization: "Bearer test", "content-type": "application/json" }, body: "{}" });
+      assert.equal(result.status, canAct ? 422 : 403, method + " " + path + " " + role);
+    }
+    const receipt = await inject(app, "/v1/admin/withdrawals/attachments/content", { method: "POST", headers: { authorization: "Bearer test", "content-type": "application/json" }, body: "{}" });
+    assert.equal(receipt.status, 422);
+  }
+});
 test(
   "withdrawals and protected proof attachments against disposable PostgreSQL",
   { timeout: 120000 },
@@ -135,6 +152,9 @@ test(
     const now = () => new Date(),
       store = createWithdrawalStore(db, { now }),
       finance = createFinanceStore(db, { now });
+    const owner = await db.user.create({ data: { name: "Empresa", email: "owner@withdrawals.test", passwordHash: "test", role: "OWNER" } });
+    const accounts = createAdminAccountStore(db);
+    await assert.rejects(accounts.update(randomUUID(), { userId: owner.id, active: false }), { code: "OWNER_ACCOUNT_PROTECTED" });
     const admin = await db.user.create({
       data: {
         name: "Admin saques",
@@ -239,12 +259,12 @@ test(
     await t.test(
       "attachments persist bytes privately, avoid duplicate upload, support removal with an audit trail and stay out of list payloads",
       async () => {
-        const file = await store.upload(admin.id, {
+        const file = await store.upload(owner.id, {
           withdrawalId: first.id,
           ...pdf,
         });
         assert.equal(
-          (await store.upload(admin.id, { withdrawalId: first.id, ...pdf })).id,
+          (await store.upload(owner.id, { withdrawalId: first.id, ...pdf })).id,
           file.id,
         );
         const list = await store.attachments({ withdrawalId: first.id });
@@ -257,7 +277,7 @@ test(
           (await store.list({ status: "PENDING" })).items[0]._count.attachments,
           1,
         );
-        await store.remove(admin.id, {
+        await store.remove(owner.id, {
           id: file.id,
           reason: "Arquivo incorreto",
         });
@@ -276,7 +296,7 @@ test(
           1,
         );
         assert.ok(
-          (await store.upload(admin.id, { withdrawalId: first.id, ...png })).id,
+          (await store.upload(owner.id, { withdrawalId: first.id, ...png })).id,
         );
       },
     );
@@ -285,9 +305,11 @@ test(
       async () => {
         const before = await store.summary(),
           input = await sendBody(first);
-        sent = await store.send(admin.id, input);
+        sent = await store.send(owner.id, input);
         assert.equal(sent.status, "SENT");
-        const replay = await store.send(admin.id, input);
+        assert.equal(sent.actorId, admin.id);
+        assert.equal((await db.clubPayout.findUniqueOrThrow({ where: { id: sent.payoutId } })).actorId, owner.id);
+        const replay = await store.send(owner.id, input);
         assert.equal(replay.payoutId, sent.payoutId);
         const after = await store.summary();
         assert.equal(after.pendingCents, 0);
@@ -301,7 +323,7 @@ test(
         );
         assert.equal(await db.clubPayout.count(), 1);
         await assert.rejects(
-          store.send(admin.id, {
+          store.send(owner.id, {
             ...input,
             requestKey: randomUUID(),
             reference: randomUUID(),
@@ -309,7 +331,7 @@ test(
           { code: "WITHDRAWAL_ALREADY_SENT" },
         );
         await assert.rejects(
-          store.cancel(admin.id, {
+          store.cancel(owner.id, {
             id: first.id,
             version: 0,
             reason: "Já foi enviado",
@@ -329,7 +351,7 @@ test(
         const pending = await store.create(admin.id, await requestBody(20000)),
           summary = await store.summary();
         await assert.rejects(
-          finance.payout(admin.id, {
+          finance.payout(owner.id, {
             amountCents: summary.availableCents,
             expectedBalanceCents: summary.availableCents,
             reference: randomUUID(),
@@ -341,7 +363,7 @@ test(
           }),
           { code: "PAYOUT_RESERVED" },
         );
-        const canceled = await store.cancel(admin.id, {
+        const canceled = await store.cancel(owner.id, {
           id: pending.id,
           version: pending.version,
           reason: "Pedido duplicado",
@@ -352,10 +374,10 @@ test(
           summary.availableToRequestCents + 20000,
         );
         await assert.rejects(
-          store.upload(admin.id, { withdrawalId: pending.id, ...pdf }),
+          store.upload(owner.id, { withdrawalId: pending.id, ...pdf }),
           { code: "WITHDRAWAL_CLOSED" },
         );
-        await assert.rejects(store.send(admin.id, await sendBody(canceled)), {
+        await assert.rejects(store.send(owner.id, await sendBody(canceled)), {
           code: "WITHDRAWAL_CHANGED",
         });
       },
@@ -375,13 +397,13 @@ test(
           1,
         );
         const pending = attempts.find((r) => r.status === "fulfilled").value;
-        await store.cancel(admin.id, {
+        await store.cancel(owner.id, {
           id: pending.id,
           version: pending.version,
           reason: "Encerrar teste",
         });
         const before = await store.summary();
-        await finance.voidPayout(admin.id, {
+        await finance.voidPayout(owner.id, {
           id: sent.payoutId,
           reason: "Registro incorreto conferido",
         });
@@ -395,7 +417,7 @@ test(
           before.availableCents + first.amountCents,
         );
         const file = await store
-          .upload(admin.id, { payoutId: sent.payoutId, ...pdf })
+          .upload(owner.id, { payoutId: sent.payoutId, ...pdf })
           .catch((error) => error);
         assert.equal(file.code, "PAYOUT_VOIDED");
       },
@@ -405,7 +427,7 @@ test(
       async () => {
         const request = await store.create(admin.id, await requestBody(100));
         for (let index = 0; index < 5; index++)
-          await store.upload(admin.id, {
+          await store.upload(owner.id, {
             withdrawalId: request.id,
             ...pdf,
             base64: Buffer.from(
@@ -415,10 +437,10 @@ test(
             ).toString("base64"),
           });
         await assert.rejects(
-          store.upload(admin.id, { withdrawalId: request.id, ...png }),
+          store.upload(owner.id, { withdrawalId: request.id, ...png }),
           { code: "RECEIPT_LIMIT" },
         );
-        await store.cancel(admin.id, {
+        await store.cancel(owner.id, {
           id: request.id,
           version: request.version,
           reason: "Liberar limite para teste",
@@ -439,7 +461,7 @@ test(
           ),
         );
         assert.equal((await store.summary()).availableToRequestCents, 0);
-        await assert.rejects(store.send(admin.id, await sendBody(pending)), {
+        await assert.rejects(store.send(owner.id, await sendBody(pending)), {
           code: "PAYOUT_OVER_BALANCE",
         });
         assert.equal(
@@ -447,14 +469,14 @@ test(
             .status,
           "PENDING",
         );
-        await store.cancel(admin.id, {
+        await store.cancel(owner.id, {
           id: pending.id,
           version: pending.version,
           reason: "Saldo alterado por devolução",
         });
         await credit(10000);
         const balance = (await store.summary()).availableCents;
-        const legacy = await finance.payout(admin.id, {
+        const legacy = await finance.payout(owner.id, {
           amountCents: balance,
           expectedBalanceCents: balance,
           reference: randomUUID(),
@@ -464,7 +486,7 @@ test(
           transferVerified: true,
           requestKey: randomUUID(),
         });
-        const proof = await store.upload(admin.id, {
+        const proof = await store.upload(owner.id, {
           payoutId: legacy.id,
           ...png,
         });
@@ -496,7 +518,7 @@ test("the protected upload parser accepts an actual 5 MB receipt while normal ro
       },
     ],
     authenticate: async () => ({
-      user: { id: randomUUID(), role: "ADMIN", active: true },
+      user: { id: randomUUID(), role: "OWNER", active: true },
     }),
     logger: { info() {}, error() {} },
   });

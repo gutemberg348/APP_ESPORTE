@@ -21,7 +21,7 @@ export function LiveTicketQr({ ticketId, onUsed }: { ticketId: string; onUsed: (
   const used = useRef(onUsed); used.current = onUsed;
   useEffect(() => {
     if (demoMode || !token) return;
-    let alive = true, inFlight = false, foreground = AppState.currentState === 'active', retryAt = 0;
+    let alive = true, inFlight = false, foreground = !AppState.currentState || AppState.currentState === 'active', retryAt = 0;
     let current: TicketQr | null = null, deadline = 0, receivedAt = 0;
     async function renew(force = false) {
       if (!alive || !foreground || inFlight || (!force && performance.now() < retryAt)) return;

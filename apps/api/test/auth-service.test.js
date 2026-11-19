@@ -76,6 +76,15 @@ test('unknown user, incorrect password and deactivated account share the same lo
   [...people.values()][0].active = false;
   await assert.rejects(service.login(input), { code: 'INVALID_CREDENTIALS' });
 });
+
+test('company owner logs into the administrative portal and keeps the role when refreshing', async () => {
+  const { service, input, people } = await fixture();
+  await service.register(input);
+  [...people.values()][0].role = 'OWNER';
+  const result = await service.login({ ...input, portal: 'ADMIN' });
+  assert.equal(result.member.role, 'OWNER');
+  assert.equal((await service.refresh(result.refreshToken)).member.role, 'OWNER');
+});
 test('ticket sellers can sign into the counter and the app, with a separate gate and admin login', async () => {
   const { service, input, people } = await fixture();
   await service.register(input);

@@ -29,6 +29,7 @@ enum ReferralKind {
 enum UserRole {
   USER
   ADMIN
+  OWNER
   GATE
   CASHIER
   TICKET_SELLER

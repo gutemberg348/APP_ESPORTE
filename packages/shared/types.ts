@@ -10,7 +10,7 @@ export interface Member {
   id: string;
   name: string;
   email: string;
-  role: 'USER' | 'ADMIN' | 'GATE' | 'CASHIER' | 'TICKET_SELLER';
+  role: 'USER' | 'ADMIN' | 'OWNER' | 'GATE' | 'CASHIER' | 'TICKET_SELLER';
   active: boolean;
   avatar: string | null;
   points: number;
@@ -26,7 +26,7 @@ export interface Member {
   } | null;
 }
 export interface Sector { id: string; name: string; priceCents: number; capacity?: number; available?: number; salesEnabled?: boolean }
-export interface AdminAccount extends Member { updatedAt: string }
+export interface AdminAccount extends Member { role: Exclude<Member['role'], 'OWNER'>; updatedAt: string }
 export interface Match {
   id: string;
   serverTime?: string;
@@ -73,13 +73,13 @@ export interface TicketQuote {
   serverTime: string; expiresAt: string; paymentInstructions: string;
 }
 export interface GateCredential { token?: string; code?: string }
-export interface Employee { id: string; name: string; email: string; contact: string; updatedAt: string; role: Exclude<Member['role'], 'USER'>; active: boolean; assignmentsV1: { allocationId: string; sectorName: string; matchId: string; matchLabel: string; active: boolean }[]; assignments: { sectorId: string; sectorName: string; matchId: string; matchLabel: string; active: boolean }[] }
+export interface Employee { id: string; name: string; email: string; contact: string; updatedAt: string; role: Exclude<Member['role'], 'USER' | 'OWNER'>; active: boolean; assignmentsV1: { allocationId: string; sectorName: string; matchId: string; matchLabel: string; active: boolean }[]; assignments: { sectorId: string; sectorName: string; matchId: string; matchLabel: string; active: boolean }[] }
 export interface TicketReview extends Ticket { holder: string; qrExpiresAt: string; serverTime: string; decision: 'REVIEW'; message: string }
 export interface AdmissionResult { ticket: Ticket & { holder: string }; duplicate: boolean; decision: 'ALLOW' | 'ALREADY_RECORDED'; admission: { id: string; quantity: number; createdAt: string } }
 export interface PointEntry { id: string; amount: number; reason: string; createdAt: string }
 export interface Reward { id: string; title: string; description: string; cost: number; stock: number; icon: string }
 export interface Redemption { id: string; rewardId: string; cost: number; createdAt: string; reward: Reward }
-export interface Engagement { checkInPoints: number; checkInEnabled: boolean; checkedIn: boolean; day: string; ledger: PointEntry[]; rewards: Reward[]; redemptions: Redemption[]; ranking: { name: string; points: number; you: boolean }[] }
+export interface Engagement { checkInPoints: number; checkInEnabled: boolean; checkedIn: boolean; day: string; earnedPoints?: number; ledger: PointEntry[]; rewards: Reward[]; redemptions: Redemption[]; ranking: { name: string; points: number; you: boolean }[] }
 export interface Prediction { matchId: string; homeScore: number; awayScore: number }
 export interface Dashboard { member: Member; nextMatch: Match | null; matches: Match[]; partners: Partner[]; tickets: Ticket[]; engagement: Engagement; predictions: Prediction[] }
 export interface AdminOverview { users: number; matches: number; issuedTickets: number; pendingReservations: number }

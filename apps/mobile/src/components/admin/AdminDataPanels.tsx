@@ -8,24 +8,33 @@ import { Text } from '../Typography';
 import { AdminAction, AdminBadge, AdminTable, useDesktopAdmin } from './AdminLayout';
 import { useTheme } from '../../theme/ThemeProvider';
 import { money, matchDate } from '../../utils/format';
+import { ticketGateState } from '../../utils/ticket-state';
 
 export function AdminEmpty({ title, description, icon: Icon = CalendarDays }: { title: string; description: string; icon?: typeof CalendarDays }) {
   const { colors } = useTheme();
   return <Panel style={{ alignItems: 'center', paddingVertical: 48, borderRadius: 10, gap: 10 }}><View style={{ padding: 15, borderRadius: 10, backgroundColor: colors.primarySoft, marginBottom: 5 }}><Icon size={26} color={colors.primary} /></View><Text heading style={{ color: colors.text, fontSize: 19, lineHeight: 27, fontWeight: '700', textAlign: 'center' }}>{title}</Text><Text style={{ color: colors.muted, fontSize: 13, textAlign: 'center', maxWidth: 420 }}>{description}</Text></Panel>;
 }
 
-export function AdminMatchGrid({ matches, busy, loading, onEdit, onSector, onCreateSector, onToggle }: { matches: Match[]; busy: boolean; loading: boolean; onEdit: (match: Match) => void; onSector: (match: Match, sector: Sector) => void; onCreateSector: (match: Match) => void; onToggle: (match: Match, field: 'published' | 'salesEnabled' | 'entryEnabled') => void }) {
+export function AdminMatchGrid({ matches, busy, loading, onEdit, onSector, onCreateSector, onToggle, onOpenGate }: { matches: Match[]; busy: boolean; loading: boolean; onEdit: (match: Match) => void; onSector: (match: Match, sector: Sector) => void; onCreateSector: (match: Match) => void; onToggle: (match: Match, field: 'published' | 'salesEnabled' | 'entryEnabled') => void; onOpenGate: (match: Match) => void }) {
   const { colors } = useTheme();
   const desktop = useDesktopAdmin();
   if (!matches.length && !loading) return <AdminEmpty title="Sua agenda começa aqui" description="Cadastre a primeira partida, defina os setores e publique os ingressos para a torcida." />;
-  return <View style={{ flexDirection: desktop ? 'row' : 'column', flexWrap: 'wrap', gap: 18 }}>{matches.map((match) => <Panel key={match.id} style={{ flexBasis: desktop ? 350 : undefined, flexGrow: desktop ? 1 : undefined, width: desktop ? undefined : '100%', minWidth: 0, padding: 22, borderRadius: 10, gap: 17 }}>
+  return <View style={{ flexDirection: desktop ? 'row' : 'column', flexWrap: 'wrap', gap: 18 }}>{matches.map((match) => {
+    const gate = ticketGateState(match, Date.parse(match.serverTime || '') || Date.now());
+    return <Panel key={match.id} style={{ flexBasis: desktop ? 350 : undefined, flexGrow: desktop ? 1 : undefined, width: desktop ? undefined : '100%', minWidth: 0, padding: 22, borderRadius: 10, gap: 17 }}>
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><Text numberOfLines={1} style={{ color: colors.subtle, fontSize: 10, letterSpacing: 0.5, flex: 1 }}>{match.competition.toUpperCase()}</Text><AdminBadge label={match.published ? 'Publicado' : 'Rascunho'} tone={match.published ? 'success' : 'warning'} /></View>
     <Text heading style={{ color: colors.text, fontWeight: '600', fontSize: 18, lineHeight: 28 }}>{match.homeTeam} × {match.awayTeam}</Text>
     <View style={{ gap: 6 }}><View style={{ flexDirection: 'row', gap: 7 }}><CalendarDays size={15} color={colors.primary} /><Text style={{ color: colors.muted, fontSize: 12 }}>{matchDate(match.startsAt)}</Text></View><View style={{ flexDirection: 'row', gap: 7 }}><MapPin size={15} color={colors.subtle} /><Text style={{ color: colors.muted, fontSize: 12, flex: 1 }}>{match.stadium}</Text></View></View>
     <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 11, overflow: 'hidden' }}><View style={{ padding: 11, backgroundColor: colors.soft, flexDirection: 'row', justifyContent: 'space-between' }}><Text style={{ color: colors.subtle, fontSize: 10, fontWeight: '700' }}>SETORES E DISPONIBILIDADE</Text><Text style={{ color: colors.subtle, fontSize: 10 }}>VALOR</Text></View>{match.sectors.map((sector) => <Pressable key={sector.id} disabled={busy} onPress={() => onSector(match, sector)} accessibilityRole="button" accessibilityLabel={`Editar setor ${sector.name}`} style={{ padding: 12, gap: 4, borderTopWidth: 1, borderColor: colors.border }}><View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}><Text style={{ color: colors.text, fontSize: 12, fontWeight: '600', flex: 1 }}>{sector.name}</Text><Text style={{ color: colors.text, fontSize: 12 }}>{money(sector.priceCents)}</Text><Pencil size={12} color={colors.subtle} /></View><Text style={{ color: colors.subtle, fontSize: 10 }}>{sector.available ?? 0} / {sector.capacity ?? '—'} disponíveis · {sector.salesEnabled ? 'Venda habilitada' : 'Venda pausada'}</Text></Pressable>)}{!match.sectors.length && <Text style={{ color: colors.muted, padding: 14, fontSize: 12 }}>Adicione os setores para disponibilizar ingressos.</Text>}</View>
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}><AdminAction label="Editar partida" icon={Pencil} disabled={busy} onPress={() => onEdit(match)} /><AdminAction label="Adicionar setor" icon={Plus} disabled={busy} onPress={() => onCreateSector(match)} /></View>
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingTop: 14, borderTopWidth: 1, borderColor: colors.border }}><AdminAction primary={!match.published} label={match.published ? 'Retirar publicação' : 'Publicar no app'} disabled={busy} onPress={() => onToggle(match, 'published')} /><AdminAction label={match.salesEnabled ? 'Pausar vendas' : 'Reabrir vendas'} disabled={busy} onPress={() => onToggle(match, 'salesEnabled')} /><AdminAction label={match.entryEnabled ? 'Fechar portaria' : 'Habilitar portaria'} disabled={busy} onPress={() => onToggle(match, 'entryEnabled')} /></View>
-  </Panel>)}</View>;
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingTop: 14, borderTopWidth: 1, borderColor: colors.border }}>
+      <AdminAction primary={!match.published} label={match.published ? 'Retirar publicação' : 'Publicar no app'} disabled={busy} onPress={() => onToggle(match, 'published')} />
+      <AdminAction label={match.salesEnabled ? 'Pausar vendas' : 'Reabrir vendas'} disabled={busy} onPress={() => onToggle(match, 'salesEnabled')} />
+      {match.published && ['DISABLED', 'SCHEDULED'].includes(gate.state) && <AdminAction label="Abrir portaria agora" disabled={busy} onPress={() => onOpenGate(match)} />}
+      {match.entryEnabled && <AdminAction label={gate.state === 'SCHEDULED' ? 'Desativar agendamento' : 'Fechar portaria'} disabled={busy} onPress={() => onToggle(match, 'entryEnabled')} />}
+    </View>
+  </Panel>;
+  })}</View>;
 }
 
 export function AdminAccountsPanel({ users, search, onSearchChange, onSearch, loading, busy, currentUserId, onMembership, onAccount, onRecovery, onEdit }: { users: Member[]; search: string; onSearchChange: (value: string) => void; onSearch: () => void; loading: boolean; busy: boolean; currentUserId: string; onMembership: (user: Member) => void; onAccount: (user: Member) => void; onRecovery?: (user: Member) => void; onEdit: (user: Member) => void }) {

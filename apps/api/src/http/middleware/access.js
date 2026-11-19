@@ -3,6 +3,7 @@ import { bearerToken } from '../authorization.js';
 import { assertAdmin } from '../../lib/ticket-rules.js';
 import { assertGateUser, assertGateRoute } from '../../lib/gate-rules.js';
 import { AppError } from '../../lib/errors.js';
+import { assertAdminRole } from '../../lib/admin-roles.js';
 
 export function createAccessMiddleware(authenticate) {
   const limit = createRateLimiter();
@@ -36,6 +37,7 @@ export function createAccessMiddleware(authenticate) {
       const auth = route.private ? await authenticate(bearerToken(req.headers.authorization)) : {};
       assertGateRoute(auth.user, route);
       if (route.admin) assertAdmin(auth.user);
+      if (route.adminRole) assertAdminRole(auth.user, route.adminRole);
       if (route.ticketLimit) {
         const limiter = ticketLimits[route.ticketLimit];
         if (!limiter || !auth.user?.id) throw new Error('Limite de ingresso exige rota privada e escopo válido.');

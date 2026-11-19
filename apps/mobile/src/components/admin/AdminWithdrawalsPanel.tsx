@@ -35,13 +35,14 @@ const labels = {
   VOIDED: "Envio anulado",
 } as const;
 export function AdminWithdrawalsPanel({ refreshKey }: { refreshKey: number }) {
-  const { token } = useSession(),
+  const { token, member } = useSession(),
     { colors } = useTheme(),
     desktop = useDesktopAdmin(),
     { busy, error, run } = useShopAction();
+  const owner = member?.role === "OWNER";
   const [tab, setTab] = useState("Pedidos"),
     [revision, setRevision] = useState(0),
-    [status, setStatus] = useState("PENDING"),
+    [status, setStatus] = useState(owner ? "PENDING" : ""),
     [search, setSearch] = useState(""),
     [query, setQuery] = useState(""),
     [offset, setOffset] = useState(0),
@@ -67,7 +68,7 @@ export function AdminWithdrawalsPanel({ refreshKey }: { refreshKey: number }) {
       refreshKey + revision,
     );
   useEffect(() => {
-    if (!token) return;
+    if (!token || owner) return;
     let live = true;
     void run(async () => {
       const config = await financeApi.settings(token);
@@ -76,7 +77,7 @@ export function AdminWithdrawalsPanel({ refreshKey }: { refreshKey: number }) {
     return () => {
       live = false;
     };
-  }, [token, refreshKey]);
+  }, [token, refreshKey, owner]);
   const reload = async () => {
     setRevision((v) => v + 1);
   };
@@ -85,7 +86,7 @@ export function AdminWithdrawalsPanel({ refreshKey }: { refreshKey: number }) {
       disabled={busy}
       items={[
         { label: "Comprovantes e detalhes", onPress: () => setFiles(row) },
-        ...(row.status === "PENDING"
+        ...(owner && row.status === "PENDING"
           ? [
               {
                 label: "Registrar envio realizado",
@@ -115,8 +116,8 @@ export function AdminWithdrawalsPanel({ refreshKey }: { refreshKey: number }) {
             onPress={() => setTab(name)}
           />
         ))}
-        <AdminButton
-          label="Novo pedido de saque"
+        {!owner && <AdminButton
+          label="Solicitar saque"
           icon={Plus}
           disabled={
             !settings ||
@@ -124,7 +125,7 @@ export function AdminWithdrawalsPanel({ refreshKey }: { refreshKey: number }) {
             summary.loading
           }
           onPress={() => setCreate(true)}
-        />
+        />}
       </View>
       {!!notice && <AdminNotice tone="success">{notice}</AdminNotice>}
       {!!(summary.error || error || requests.error) && (
@@ -156,16 +157,15 @@ export function AdminWithdrawalsPanel({ refreshKey }: { refreshKey: number }) {
         ]}
       />
       <AdminNotice>
-        O envio continua manual: faça a transferência no banco e registre a
-        confirmação aqui. Criar um pedido compromete o valor para novos pedidos,
-        sem contabilizar como dinheiro enviado.
+        {owner
+          ? "Confira o pedido do clube. Faça a transferência no banco e registre o envio com o comprovante."
+          : "O valor solicitado fica reservado. A empresa realiza o repasse e publica o comprovante aqui."}
       </AdminNotice>
       {summary.data &&
         summary.data.pendingCents > summary.data.availableCents && (
           <AdminNotice tone="warning">
             O saldo liberado caiu após os pedidos, por ajustes ou devoluções.
-            Confira e cancele pedidos sem cobertura antes de confirmar novos
-            envios.
+            {owner ? " Confira a cobertura antes de registrar o envio." : " Aguarde a conferência da empresa."}
           </AdminNotice>
         )}
       {tab === "Envios realizados" ? (
@@ -325,7 +325,7 @@ export function AdminWithdrawalsPanel({ refreshKey }: { refreshKey: number }) {
           </View>
         </>
       )}
-      {create && settings && summary.data && (
+      {!owner && create && settings && summary.data && (
         <WithdrawalCreateForm
           summary={summary.data}
           settings={settings}
@@ -342,7 +342,7 @@ export function AdminWithdrawalsPanel({ refreshKey }: { refreshKey: number }) {
           }}
         />
       )}
-      {send && summary.data && (
+      {owner && send && summary.data && (
         <WithdrawalSendForm
           withdrawal={send}
           summary={summary.data}
@@ -381,11 +381,11 @@ export function AdminWithdrawalsPanel({ refreshKey }: { refreshKey: number }) {
           )}
           <PayoutAttachments
             parent={{ withdrawalId: files.id }}
-            readOnly={["CANCELED", "VOIDED"].includes(files.status)}
+            readOnly={!owner || ["CANCELED", "VOIDED"].includes(files.status)}
           />
         </Sheet>
       )}
-      {cancel && (
+      {owner && cancel && (
         <Sheet
           visible
           title="Cancelar pedido de saque"

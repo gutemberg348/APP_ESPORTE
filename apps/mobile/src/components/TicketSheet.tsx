@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Pressable } from 'react-native';
-import { CheckCircle, ShieldCheck, MapPin } from 'lucide-react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, AppState, View, Pressable } from 'react-native';
+import { CheckCircle, ShieldCheck, MapPin, SlidersHorizontal, TriangleAlert } from 'lucide-react-native';
 import type { Match, Ticket, TicketQuote } from '@nacional/shared/types';
 import { Sheet } from './Sheet';
-import { Button, Panel } from './ui';
+import { Button, Panel, TextAction } from './ui';
 import { Text } from './Typography';
 import { useClub } from '../providers/ClubProvider';
 import { useSession } from '../providers/SessionProvider';
@@ -14,6 +14,9 @@ import { useServerClock } from '../hooks/useServerClock';
 import { matchDate, money, messageOf } from '../utils/format';
 import { activeTicket, availablePlaces, matchSaleState, ticketStatus, ticketStatusLabels } from '../utils/ticket-state';
 import { PixCheckout } from './PixCheckout';
+import { TicketGateAccess } from './TicketGateAccess';
+
+type QuoteUpdate = 'initial' | 'updating' | 'updated' | 'changed' | 'failed';
 
 export function TicketSheet({ visible, onClose, selectedMatch, onMyTickets }: { visible: boolean; onClose: () => void; selectedMatch?: Match; onMyTickets?: () => void }) {
   const { data, requestTicket, refresh } = useClub();
@@ -23,7 +26,8 @@ export function TicketSheet({ visible, onClose, selectedMatch, onMyTickets }: { 
   const [selected, setSelected] = useState(match?.sectors.find((sector) => sector.salesEnabled !== false && (availablePlaces(sector) ?? 0) > 0)?.id || '');
   const [quantity, setQuantity] = useState(1);
   const [quote, setQuote] = useState<TicketQuote | null>(null);
-  const [deadline, setDeadline] = useState(0);
+  const [{ deadline, duration }, setQuoteTiming] = useState({ deadline: 0, duration: 0 });
+  const [quoteUpdate, setQuoteUpdate] = useState<QuoteUpdate>('initial');
   const [busy, setBusy] = useState(false);
   const [uncertain, setUncertain] = useState(false);
   const [error, setError] = useState('');
@@ -41,19 +45,44 @@ export function TicketSheet({ visible, onClose, selectedMatch, onMyTickets }: { 
   const sector = match?.sectors.find((item) => item.id === selected);
   const available = sector ? availablePlaces(sector) : null;
   const state = match ? matchSaleState(match, now) : null;
-  const quoteLive = Boolean(quote && monotonic < deadline);
+  const remaining = Math.max(0, deadline - monotonic);
+  const quoteLive = Boolean(quote && remaining > 0 && quoteUpdate !== 'updating' && quoteUpdate !== 'failed');
   const estimateDiscount = member?.membership?.status === 'ACTIVE' && Date.parse(member.membership.validUntil) > now ? member.membership.plan.discountPercent : 0;
   const estimate = sector ? Math.round(sector.priceCents * (100 - estimateDiscount) / 100) * quantity : 0;
-  async function review() {
-    if (lock.current || !match || !selected) return;
-    if (demoMode) { setError('A compra está disponível no modo conectado à API. Os dados demonstrativos não emitem ingressos.'); return; }
+  const matchId = match?.id;
+  const review = useCallback(async (automatic = false) => {
+    if (lock.current || !matchId || !selected || !token || demoMode) return;
     lock.current = true; setBusy(true); setError('');
+    if (automatic) setQuoteUpdate('updating');
     try {
-      const value = await clubApi.quoteTicket(token!, match.id, selected, quantity);
-      setQuote(value); setDeadline(performance.now() + Math.max(0, Date.parse(value.expiresAt) - Date.parse(value.serverTime) - 1500));
-    } catch (err) { setError(messageOf(err)); await refresh(); }
+      const started = performance.now();
+      const value = await clubApi.quoteTicket(token, matchId, selected, quantity);
+      const duration = Date.parse(value.expiresAt) - Date.parse(value.serverTime) - 1500;
+      const deadline = started + duration;
+      if (!Number.isFinite(deadline) || deadline - performance.now() < 1000) {
+        throw new Error('O prazo de confirmação encerrou. Confira a disponibilidade.');
+      }
+      const priceChanged = quote && value.totalCents !== quote.totalCents;
+      setQuote(value);
+      setQuoteTiming({ deadline, duration });
+      setQuoteUpdate(priceChanged ? 'changed' : automatic ? 'updated' : 'initial');
+    } catch (err) {
+      if (automatic) setQuoteUpdate('failed');
+      setError(messageOf(err));
+      await refresh({ silent: true });
+    }
     finally { lock.current = false; setBusy(false); }
-  }
+  }, [demoMode, matchId, quantity, quote, refresh, selected, token]);
+
+  useEffect(() => {
+    if (!visible || !quote || order || busy || uncertain || quoteUpdate === 'failed') return;
+    const updateIfExpired = () => {
+      if (performance.now() >= deadline && (!AppState.currentState || AppState.currentState === 'active')) void review(true);
+    };
+    const timer = setTimeout(updateIfExpired, Math.max(0, Math.ceil(deadline - performance.now())));
+    const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') updateIfExpired(); });
+    return () => { clearTimeout(timer); subscription.remove(); };
+  }, [visible, quote, order, busy, uncertain, quoteUpdate, deadline, review]);
   async function recover() {
     const tickets = await clubApi.tickets(token!);
     const found = match ? activeTicket(tickets, match.id, Date.parse(tickets[0]?.serverTime || '') || now) : undefined;
@@ -68,10 +97,14 @@ export function TicketSheet({ visible, onClose, selectedMatch, onMyTickets }: { 
     finally { lock.current = false; setBusy(false); }
   }
   async function submit() {
-    if (lock.current || !quote || performance.now() >= deadline || uncertain) return;
+    if (lock.current || !quote || !quoteLive || performance.now() >= deadline || uncertain) return;
     lock.current = true; setBusy(true); setError('');
     try { setSuccess(await requestTicket(quote.sector.id, quote.quantity, quote.match.id, quote.totalCents)); }
     catch (err) {
+      if (err instanceof ApiError && err.code === 'TICKET_PRICE_CHANGED') {
+        setQuoteTiming((current) => ({ ...current, deadline: 0 }));
+        return;
+      }
       const definitive = err instanceof ApiError && err.status >= 400 && err.status < 500;
       const needsLookup = !definitive || (err instanceof ApiError && err.code === 'TICKET_EXISTS');
       if (needsLookup) {
@@ -93,7 +126,7 @@ export function TicketSheet({ visible, onClose, selectedMatch, onMyTickets }: { 
         <Text accessibilityRole="alert" style={{ color: ticketStatus(order, now) === 'ISSUED' ? colors.primary : colors.gold, fontWeight: '700' }}>{ticketStatusLabels[ticketStatus(order, now)]}</Text>
         <Text style={{ color: colors.text }}>{order.quantity} ingresso(s) · {order.sector.name} · {money(order.priceCents)}</Text>
         <Text selectable style={{ color: colors.muted, fontSize: 12 }}>Número do pedido: {order.id}</Text>
-        {ticketStatus(order, now) === 'ISSUED' && <Text style={{ color: colors.muted }}>Seu ingresso está na conta. Apresente o QR ou o código atualizado quando a portaria do jogo estiver aberta.</Text>}
+        {ticketStatus(order, now) === 'ISSUED' && <TicketGateAccess ticketId={order.id} match={order.match} now={now} onUsed={() => void refresh({ silent: true })} />}
         {ticketStatus(order, now) === 'PENDING' && <PixCheckout ticketId={order.id} reservation={{ expiresAt: order.expiresAt, serverTime: order.serverTime, instructions: quote?.paymentInstructions || instructions }} onChanged={refresh} />}
         <Button secondary={ticketStatus(order, now) === 'PENDING'} label="Ver meus ingressos" onPress={myTickets} />
       </> : uncertain ? <Panel style={{ gap: 12, borderColor: colors.gold }}>
@@ -108,10 +141,9 @@ export function TicketSheet({ visible, onClose, selectedMatch, onMyTickets }: { 
           <View style={{ borderTopWidth: 1, borderColor: colors.border, paddingTop: 12, flexDirection: 'row', justifyContent: 'space-between' }}><Text style={{ color: colors.text, fontWeight: '700' }}>Total</Text><Text heading style={{ color: colors.primary, fontSize: 24, lineHeight: 32, fontWeight: '800' }}>{money(quote.totalCents)}</Text></View>
         </Panel>
         <Text style={{ color: colors.muted, fontSize: 14 }}>{quote.totalCents === 0 ? 'Ingresso gratuito. A confirmação emite o ingresso na sua conta.' : quote.paymentInstructions}</Text>
-        <Text style={{ color: colors.gold, fontSize: 14 }}>{quoteLive ? `Valores conferidos · confirme em ${Math.max(0, Math.floor((deadline - monotonic) / 1000))}s. Os lugares só ficam reservados na confirmação.` : 'Esta revisão venceu. Atualize os valores antes de confirmar.'}</Text>
-        <Button label={quote.totalCents === 0 ? 'Confirmar emissão gratuita' : `Confirmar reserva · ${money(quote.totalCents)}`} loading={busy} disabled={!quoteLive} onPress={() => void submit()} />
-        {!quoteLive && <Button secondary label="Atualizar valores e disponibilidade" disabled={busy} onPress={() => void review()} />}
-        <Button secondary label="Alterar setor ou quantidade" disabled={busy} onPress={() => { setQuote(null); setError(''); }} />
+        <QuoteNotice remaining={remaining} duration={duration} live={quoteLive} update={quoteUpdate} />
+        <Button label={quote.totalCents === 0 ? 'Confirmar emissão gratuita' : `Confirmar reserva · ${money(quote.totalCents)}`} loading={busy && quoteUpdate !== 'updating'} disabled={!quoteLive} onPress={() => void submit()} />
+        <TextAction icon={SlidersHorizontal} label="Alterar setor ou quantidade" disabled={busy} onPress={() => { setQuote(null); setError(''); }} />
       </> : <>
         <Text style={{ color: state?.canBuy ? colors.primary : colors.gold, fontWeight: '700' }}>{state?.label}</Text>
         {state?.code === 'SCHEDULED' && match.salesOpenAt && <Text style={{ color: colors.muted, fontSize: 14 }}>Abertura: {matchDate(match.salesOpenAt)}</Text>}
@@ -136,4 +168,31 @@ export function TicketSheet({ visible, onClose, selectedMatch, onMyTickets }: { 
       {!order && <View style={{ flexDirection: 'row', gap: 8 }}><ShieldCheck size={18} color={colors.primary} /><Text style={{ color: colors.muted, flex: 1, fontSize: 12 }}>Preço, desconto e vagas são conferidos pelo clube. Reservar não confirma um pagamento.</Text></View>}
     </> : <Text style={{ color: colors.muted }}>Nenhum jogo disponível para compra.</Text>}
   </Sheet>;
+}
+
+function QuoteNotice({ remaining, duration, live, update }: { remaining: number; duration: number; live: boolean; update: QuoteUpdate }) {
+  const { colors } = useTheme();
+  const seconds = live ? Math.ceil(remaining / 1000) : 0;
+  const time = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+  const progress = live ? Math.min(1, remaining / duration) : 0;
+  const title = live ? 'Tempo para confirmar' : update === 'failed' ? 'Revisão indisponível' : 'Prazo encerrado';
+  const detail = live
+    ? update === 'changed' ? 'O valor mudou. Confira o novo total.' : update === 'updated' ? 'Valores e vagas atualizados.' : 'As vagas são reservadas na confirmação.'
+    : update === 'failed' ? 'Altere o setor ou a quantidade para revisar de novo.' : 'Atualizando valores e vagas…';
+
+  return <View style={{ gap: 10, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: `${colors.gold}55`, backgroundColor: `${colors.gold}14` }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+      <View style={{ width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: `${colors.gold}20` }}>
+        <TriangleAlert size={20} color={colors.gold} />
+      </View>
+      <View style={{ flex: 1, minWidth: 124 }} accessibilityLiveRegion="polite">
+        <Text style={{ color: colors.gold, fontSize: 14, lineHeight: 20, fontWeight: '700' }}>{title}</Text>
+        <Text style={{ color: colors.text, fontSize: 12, lineHeight: 18 }}>{detail}</Text>
+      </View>
+      {update === 'updating' ? <ActivityIndicator color={colors.gold} /> : <Text heading accessibilityLabel={`${seconds} segundos restantes`} style={{ color: colors.gold, fontSize: 23, lineHeight: 30, fontWeight: '800', fontVariant: ['tabular-nums'] }}>{time}</Text>}
+    </View>
+    <View importantForAccessibility="no" style={{ height: 4, borderRadius: 2, backgroundColor: `${colors.gold}30`, overflow: 'hidden' }}>
+      <View style={{ height: '100%', width: `${progress * 100}%`, backgroundColor: colors.gold, borderRadius: 2 }} />
+    </View>
+  </View>;
 }

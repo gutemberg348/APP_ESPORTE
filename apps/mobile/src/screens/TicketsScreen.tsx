@@ -31,7 +31,7 @@ export function TicketsScreen({ onBack, initialSection = 'catalog' }: { onBack: 
   useEffect(() => { setSection(initialSection); }, [initialSection]);
   useEffect(() => {
     void refresh({ silent: true });
-    const poll = setInterval(() => { if (AppState.currentState === 'active') void refresh({ silent: true }); }, 15000);
+    const poll = setInterval(() => { if (!AppState.currentState || AppState.currentState === 'active') void refresh({ silent: true }); }, 15000);
     const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') void refresh({ silent: true }); });
     return () => { clearInterval(poll); subscription.remove(); };
   }, [refresh]);

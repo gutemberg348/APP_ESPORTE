@@ -6,6 +6,10 @@ import { serializable } from '../lib/business-rules.js';
 export function createEngagementModel(db) { return {
   settings: () => readBusinessSettings(db),
   points: (userId, take = 50, skip = 0) => db.pointEntry.findMany({ where: { userId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take, skip }),
+  earnedPoints: async (userId) => {
+    const { _sum } = await db.pointEntry.aggregate({ where: { userId, amount: { gt: 0 } }, _sum: { amount: true } });
+    return _sum.amount ?? 0;
+  },
   checkedIn: (userId, day) => db.pointEntry.findUnique({ where: { userId_sourceKey: { userId, sourceKey: `checkin:${day}` } } }),
   rewards: () => db.reward.findMany({ where: { active: true }, orderBy: { cost: 'asc' }, take: 100 }),
   redemptions: (userId) => db.redemption.findMany({ where: { userId }, include: { reward: true }, orderBy: { createdAt: 'desc' }, take: 50 }),

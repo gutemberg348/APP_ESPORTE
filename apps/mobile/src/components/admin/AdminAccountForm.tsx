@@ -15,12 +15,7 @@ import { adminApi } from "../../services/admin";
 import { employeeApi } from "../../services/gate";
 import { useSession } from "../../providers/SessionProvider";
 import { messageOf } from "../../utils/format";
-const roles = [
-  { value: "ADMIN", label: "Administrador" },
-  { value: "TICKET_SELLER", label: "Bilheteria" },
-  { value: "GATE", label: "Portaria" },
-  { value: "CASHIER", label: "Caixa de parceiro" },
-];
+import { staffRoleOptions } from "../../utils/staff-roles";
 
 export function AdminAccountForm({
   userId,
@@ -195,7 +190,7 @@ export function AdminAccountForm({
                 label="Perfil do funcionário"
                 value={role}
                 onChange={(v) => setRole(v as Employee["role"])}
-                options={roles}
+                options={staffRoleOptions(member?.role === 'OWNER')}
                 disabled={busy || ownAccount}
                 hint="Alterar o perfil encerra sessões e remove escalas e caixas anteriormente autorizados."
               />

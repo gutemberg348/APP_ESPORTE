@@ -3,6 +3,7 @@ import { env } from "../config/env.js";
 import { AppError } from "../lib/errors.js";
 import { hashPassword, newSessionToken } from "../lib/crypto.js";
 import { assertAdmin } from "../lib/ticket-rules.js";
+import { assertManagedAccount } from "../lib/admin-roles.js";
 import { createMailCipher, createSmtpMailer } from "../lib/mail.js";
 import { createPasswordRecoveryStore } from "../models/password-recovery.store.js";
 import { setTimeout as delay } from "node:timers/promises";
@@ -46,6 +47,7 @@ export const passwordRecoveryService = {
     const user = await db.user.findUnique({ where: { id: userId } });
     if (!user)
       throw new AppError(404, "USER_NOT_FOUND", "Conta não encontrada.");
+    assertManagedAccount(user, admin.role);
     await store.issue(
       user.email,
       newSessionToken(),

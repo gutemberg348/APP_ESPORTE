@@ -1,6 +1,7 @@
 import { AppError } from './errors.js';
+import { isAdminRole } from './admin-roles.js';
 export function assertAdmin(user) {
-  if (user?.role !== 'ADMIN' || user.active === false) throw new AppError(403, 'ADMIN_REQUIRED', 'Esta operação exige um administrador.');
+  if (!isAdminRole(user?.role) || user.active === false) throw new AppError(403, 'ADMIN_REQUIRED', 'Esta operação exige um administrador.');
 }
 export function assertSalesOpen(match, sector, now = new Date()) {
   if (!match?.published || !match.salesEnabled || !sector?.salesEnabled || (match.salesOpenAt && match.salesOpenAt > now) || (match.salesCloseAt && match.salesCloseAt <= now)) {
@@ -20,6 +21,11 @@ export function assertAdmission(ticket, quantity) {
 }
 export function gateWindow(match) {
   return { opensAt: match.gateOpenAt || new Date(match.startsAt.getTime() - 2 * 3600000), closesAt: match.gateCloseAt || new Date(match.startsAt.getTime() + 4 * 3600000) };
+}
+export function openGateNow(match, now = new Date()) {
+  if (!match.published) throw new AppError(409, 'MATCH_NOT_PUBLISHED', 'Publique a partida para abrir a portaria.');
+  if (now >= gateWindow(match).closesAt) throw new AppError(409, 'GATE_CLOSED', 'Defina um novo horário de fechamento antes de abrir a portaria.');
+  return { entryEnabled: true, gateOpenAt: now };
 }
 export function assertGateOpen(match, now = new Date()) {
   const window = gateWindow(match);

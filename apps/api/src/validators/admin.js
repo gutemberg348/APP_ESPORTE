@@ -10,7 +10,10 @@ const matchFields = {
   entryEnabled: z.boolean(), gateOpenAt: date.nullable().optional(), gateCloseAt: date.nullable().optional(),
 };
 export const matchCreateSchema = z.object({ ...matchFields, entryEnabled: z.boolean().default(false), isHome: z.boolean().default(true), published: z.literal(false).default(false), salesEnabled: z.boolean().default(true) }).strict();
-export const matchUpdateSchema = z.object({ id: z.uuid(), ...Object.fromEntries(Object.entries(matchFields).map(([key, value]) => [key, value.optional()])) }).strict();
+export const matchUpdateSchema = z.union([
+  z.object({ id: z.uuid(), openGateNow: z.literal(true) }).strict(),
+  z.object({ id: z.uuid(), ...Object.fromEntries(Object.entries(matchFields).map(([key, value]) => [key, value.optional()])) }).strict(),
+]);
 export const sectorCreateSchema = z.object({ matchId: z.uuid(), name: label, priceCents: money, capacity: z.number().int().min(0).max(1000000), salesEnabled: z.boolean().default(true) }).strict();
 export const sectorUpdateSchema = z.object({ id: z.uuid(), name: label.optional(), priceCents: money.optional(), capacity: z.number().int().min(0).max(1000000).optional(), salesEnabled: z.boolean().optional() }).strict();
 export const planCreateSchema = z.object({ name: label, priceCents: money, active: z.boolean().default(true), description: z.string().trim().max(1000).default(''), durationDays: z.number().int().min(1).max(3660).default(30), discountPercent: z.number().int().min(0).max(100) }).strict();

@@ -4,9 +4,18 @@ import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 const source = await readFile(new URL('../src/utils/ticket-state.ts', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } });
-const { availablePlaces, matchSaleState, ticketStatus, activeTicket, reservationCountdown } = await import(`data:text/javascript;base64,${Buffer.from(compiled.outputText).toString('base64')}`);
+const { availablePlaces, matchSaleState, ticketStatus, activeTicket, reservationCountdown, ticketGateState } = await import(`data:text/javascript;base64,${Buffer.from(compiled.outputText).toString('base64')}`);
 const now = Date.parse('2026-10-30T18:00:00Z');
 const match = () => ({ id: 'game', published: true, salesEnabled: true, startsAt: new Date(now + 3600000).toISOString(), sectors: [{ id: 'sol', priceCents: 4000, available: 2, salesEnabled: true }] });
+
+test('entry QR is available before match day when the server publishes an earlier opening', () => {
+  const game = { ...match(), startsAt: new Date(now + 86400000).toISOString(), entryEnabled: true };
+  assert.equal(ticketGateState(game, now).state, 'SCHEDULED');
+  const opened = { ...game, gateOpenAt: new Date(now).toISOString() };
+  assert.equal(ticketGateState(opened, now).state, 'OPEN');
+  assert.equal(ticketGateState({ ...opened, entryEnabled: false }, now).state, 'DISABLED');
+  assert.equal(ticketGateState(opened, now + 28 * 3600000).state, 'CLOSED');
+});
 
 test('catalog never invents inventory from capacity and starting prices exclude paused or sold-out sectors', () => {
   assert.equal(availablePlaces({ capacity: 500 }), null);

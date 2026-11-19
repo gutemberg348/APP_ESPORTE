@@ -1,3 +1,4 @@
+import { isAdminRole } from '../lib/admin-roles.js';
 import { ticketCodeSchema } from '../validators/admin.js';
 import { assertGateUser } from '../lib/gate-rules.js';
 
@@ -43,7 +44,7 @@ export function createAppGate({ staff, entry, reports }) {
     },
     async history(user, input) {
       assertGateUser(user);
-      const query = { ...input, matchId: input.partidaId, sectorId: input.alocacaoId, actorId: user.role === 'ADMIN' ? input.actorId : user.id };
+      const query = { ...input, matchId: input.partidaId, sectorId: input.alocacaoId, actorId: isAdminRole(user.role) ? input.actorId : user.id };
       const denied = input.kind === 'DENIED';
       const page = denied ? await reports.denials(query) : await reports.admissions(query);
       return { total: page.pagination.total, limit: query.limit, offset: query.offset, items: page.items.map(row => ({

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, ScrollView, Pressable, Modal, useWindowDimensions, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { LayoutDashboard, CalendarDays, Ticket, Users, BadgeCheck, UserRoundCog, ScanLine, History, ArrowUpRight, LogOut, RefreshCw, Sun, Moon, ChevronRight, Building2, Menu, X, PanelLeftClose, PanelLeftOpen, ShoppingBag, Settings2 } from 'lucide-react-native';
+import { LayoutDashboard, CalendarDays, Ticket, Users, BadgeCheck, UserRoundCog, ScanLine, History, ArrowUpRight, LogOut, RefreshCw, Sun, Moon, ChevronRight, Building2, Menu, X, PanelLeftClose, PanelLeftOpen, ShoppingBag, Settings2, ShieldCheck } from 'lucide-react-native';
 import { Text } from '../Typography';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useSession } from '../../providers/SessionProvider';
@@ -34,18 +34,23 @@ export const adminSections = [
   { name: 'Auditoria', icon: History, group: 'Controle', description: 'Consulte as ações realizadas pela administração.' },
 ];
 export function useDesktopAdmin() { return useWindowDimensions().width >= 1024; }
-type LayoutProps = React.PropsWithChildren<{ active: string; onSelect: (section: string) => void; onBack: () => void; onSignOut: () => void; refreshing: boolean; onRefresh: () => void; busy: boolean; action?: React.ReactNode }>;
-export function AdminLayout({ children, active, onSelect, onBack, onSignOut, refreshing, onRefresh, busy, action }: LayoutProps) {
+type LayoutProps = React.PropsWithChildren<{ active: string; onSelect: (section: string) => void; onBack?: () => void; onSecurity: () => void; onSignOut: () => void; refreshing: boolean; onRefresh: () => void; busy: boolean; action?: React.ReactNode }>;
+export function AdminLayout({ children, active, onSelect, onBack, onSecurity, onSignOut, refreshing, onRefresh, busy, action }: LayoutProps) {
   const desktop = useDesktopAdmin(), { width } = useWindowDimensions(), { colors, isDark, toggle } = useTheme(), { member } = useSession(), insets = useSafeAreaInsets();
   const [drawer, setDrawer] = useState(false), [collapsed, setCollapsed] = useState(false);
   const current = adminSections.find((section) => section.name === active) || adminSections[0]!;
   const initials = member?.name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('');
+  const owner = member?.role === 'OWNER';
   useEffect(() => { if (desktop) setDrawer(false); }, [desktop]);
   const select = (name: string) => { onSelect(name); setDrawer(false); };
   const sidebar = (compact: boolean) => <View style={{ flex: 1, backgroundColor: colors.header, paddingHorizontal: compact ? 12 : 16, paddingTop: desktop ? 26 : Math.max(insets.top, 22), paddingBottom: Math.max(insets.bottom, 16), gap: 24 }}>
-    <View style={{ flexDirection: 'row', gap: 11, alignItems: 'center', paddingHorizontal: compact ? 0 : 6 }}><View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: colors.primaryStrong, alignItems: 'center', justifyContent: 'center' }}><Building2 size={18} color={colors.onPrimary} strokeWidth={1.7} /></View>{!compact && <View style={{ flex: 1, gap: 1 }}><Text style={{ color: colors.text, fontSize: 13, fontWeight: '600' }}>{club.shortName}</Text><Text style={{ color: colors.subtle, fontSize: 11 }}>Administração</Text></View>}{!desktop && <AdminButton label="Fechar menu" icon={X} iconOnly variant="ghost" onPress={() => setDrawer(false)} />}</View>
+    <View style={{ flexDirection: 'row', gap: 11, alignItems: 'center', paddingHorizontal: compact ? 0 : 6 }}><View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: colors.primaryStrong, alignItems: 'center', justifyContent: 'center' }}><Building2 size={18} color={colors.onPrimary} strokeWidth={1.7} /></View>{!compact && <View style={{ flex: 1, gap: 1 }}><Text style={{ color: colors.text, fontSize: 13, fontWeight: '600' }}>{owner ? 'Administração geral' : club.shortName}</Text><Text style={{ color: colors.subtle, fontSize: 11 }}>{owner ? `Empresa · ${club.shortName}` : 'Administração do clube'}</Text></View>}{!desktop && <AdminButton label="Fechar menu" icon={X} iconOnly variant="ghost" onPress={() => setDrawer(false)} />}</View>
     <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ gap: 3 }}>{adminSections.map((section, index) => <React.Fragment key={section.name}>{!compact && section.group !== adminSections[index - 1]?.group && <Text style={{ color: colors.subtle, fontSize: 10, fontWeight: '500', paddingHorizontal: 12, marginTop: index ? 22 : 1, marginBottom: 8 }}>{section.group}</Text>}<NavItem label={section.name} icon={section.icon} active={active === section.name} compact={compact} onPress={() => select(section.name)} /></React.Fragment>)}</ScrollView>
-    <View style={{ borderTopWidth: 1, borderColor: colors.border, paddingTop: 14, gap: 14 }}><NavItem label="Área do torcedor" icon={ArrowUpRight} compact={compact} onPress={() => { setDrawer(false); onBack(); }} /><View style={{ flexDirection: compact ? 'column' : 'row', alignItems: 'center', gap: 9 }}><View style={{ width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.soft }}><Text style={{ color: colors.muted, fontSize: 10, fontWeight: '600' }}>{initials}</Text></View>{!compact && <View style={{ flex: 1, minWidth: 0 }}><Text numberOfLines={1} style={{ color: colors.text, fontSize: 11, fontWeight: '500' }}>{member?.name}</Text><Text style={{ color: colors.subtle, fontSize: 10 }}>Administrador</Text></View>}<AdminButton label="Sair da conta" icon={LogOut} iconOnly variant="ghost" disabled={busy} onPress={onSignOut} /></View></View>
+    <View style={{ borderTopWidth: 1, borderColor: colors.border, paddingTop: 14, gap: 10 }}>
+      {onBack && <NavItem label="Área do torcedor" icon={ArrowUpRight} compact={compact} onPress={() => { setDrawer(false); onBack(); }} />}
+      <NavItem label="Segurança da conta" icon={ShieldCheck} compact={compact} onPress={() => { setDrawer(false); onSecurity(); }} />
+      <View style={{ flexDirection: compact ? 'column' : 'row', alignItems: 'center', gap: 9 }}><View style={{ width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.soft }}><Text style={{ color: colors.muted, fontSize: 10, fontWeight: '600' }}>{initials}</Text></View>{!compact && <View style={{ flex: 1, minWidth: 0 }}><Text numberOfLines={1} style={{ color: colors.text, fontSize: 11, fontWeight: '500' }}>{member?.name}</Text><Text style={{ color: colors.subtle, fontSize: 10 }}>{owner ? 'Empresa' : 'Clube'}</Text></View>}<AdminButton label="Sair da conta" icon={LogOut} iconOnly variant="ghost" disabled={busy} onPress={onSignOut} /></View>
+    </View>
   </View>;
   return <View style={{ flex: 1, minHeight: 0, flexDirection: 'row', backgroundColor: colors.background, paddingTop: insets.top }}><StatusBar style={isDark ? 'light' : 'dark'} />
     {desktop && <View style={{ width: collapsed ? 68 : 226, borderRightWidth: 1, borderColor: colors.border }}>{sidebar(collapsed)}</View>}

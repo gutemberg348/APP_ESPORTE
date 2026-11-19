@@ -15,7 +15,7 @@ export function PointsMissions({ busy, onCheckIn, onRewards }: { busy: boolean; 
   const remaining = next ? Math.max(0, next.cost - points) : 0;
   return <Panel style={{ gap: 14 }}>
     <Text heading style={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>Sua missão de hoje</Text>
-    <Text style={{ color: colors.muted, fontSize: 14 }}>Faça o check-in, acumule pontos e troque pelos prêmios publicados pelo clube. Pontos não são dinheiro nem desconto automático na loja.</Text>
+    <Text style={{ color: colors.muted, fontSize: 14 }}>Faça o check-in para ganhar pontos, desbloquear emblemas e resgatar prêmios do clube.</Text>
     <View style={{ padding: 14, borderRadius: 14, backgroundColor: colors.primarySoft, gap: 6 }}>
       <Text style={{ color: colors.text, fontWeight: '700' }}>{done ? 'Check-in concluído' : 'Marque presença na torcida'}</Text>
       <Text style={{ color: colors.muted, fontSize: 13 }}>{done ? 'Os pontos de hoje já foram registrados. Volte amanhã.' : engagement?.checkInEnabled ? `+${engagement.checkInPoints} pontos · uma vez por dia` : 'O clube pausou o check-in por enquanto.'}</Text>

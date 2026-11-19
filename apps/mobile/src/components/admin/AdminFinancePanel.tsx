@@ -7,6 +7,7 @@ import type {
 } from "@nacional/shared/finance";
 import { centsInput } from "@nacional/shared/forms";
 import { financeApi } from "../../services/finance";
+import { withdrawalsApi } from "../../services/withdrawals";
 import { useSession } from "../../providers/SessionProvider";
 import { useTheme } from "../../theme/ThemeProvider";
 import { money } from "../../utils/format";
@@ -38,6 +39,7 @@ const days = [
   "Sábado",
 ];
 const loadSummary = (token: string) => financeApi.summary(token);
+const loadWithdrawals = (token: string) => withdrawalsApi.summary(token);
 const alertFilters = { limit: "1", offset: "0" };
 export function AdminPayoutAlert({
   refreshKey,
@@ -46,18 +48,19 @@ export function AdminPayoutAlert({
   refreshKey: number;
   onOpen: () => void;
 }) {
-  const { data } = useAdminReport(loadSummary, alertFilters, refreshKey);
-  if (!data?.availableCents) return null;
+  const { member } = useSession();
+  const owner = member?.role === "OWNER";
+  const { data } = useAdminReport(loadWithdrawals, alertFilters, refreshKey);
+  if (!data || !(owner ? data.pendingCount : data.availableToRequestCents)) return null;
   return (
-    <AdminNotice tone={data.schedule.due ? "warning" : "neutral"}>
+    <AdminNotice tone={owner ? "warning" : "neutral"}>
       <View style={{ gap: 9 }}>
         <Text>
-          {data.schedule.due
-            ? "Há repasse semanal pendente."
-            : "Há saldo do time aguardando repasse."}{" "}
-          Valor liberado: {money(data.availableCents)}.
+          {owner
+            ? `${data.pendingCount} ${data.pendingCount === 1 ? "pedido de saque pendente" : "pedidos de saque pendentes"} · ${money(data.pendingCents)}`
+            : `${money(data.availableToRequestCents)} disponíveis para solicitar saque.`}
         </Text>
-        <AdminButton label="Conferir saques e envios" onPress={onOpen} />
+        <AdminButton label={owner ? "Ver pedidos de saque" : "Abrir saques"} onPress={onOpen} />
       </View>
     </AdminNotice>
   );
@@ -79,7 +82,7 @@ export function AdminFinancePanel({
   refreshKey: number;
   onOpenWithdrawals: () => void;
 }) {
-  const { token } = useSession(),
+  const { token, member } = useSession(),
     { colors } = useTheme(),
     [revision, setRevision] = useState(0),
     [tab, setTab] = useState("Resumo"),
@@ -98,6 +101,7 @@ export function AdminFinancePanel({
     setConfig(await financeApi.settings(token!));
   };
   const totals = summary.data;
+  const owner = member?.role === "OWNER";
   return (
     <View style={{ gap: 22 }}>
       <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
@@ -114,12 +118,19 @@ export function AdminFinancePanel({
         <AdminNotice tone="error">{summary.error || error}</AdminNotice>
       )}
       {tab === "Configurações" ? (
-        config ? (
+        config && owner ? (
           <FinanceSettingsForm
             key={config.version}
             settings={config}
             onSaved={reload}
           />
+        ) : config ? (
+          <ReportMetrics items={[
+            { label: "Comissão da empresa", value: `${percent(config.companyBps)}%`, hint: config.commissionBase === "GROSS" ? "Sobre o bruto" : "Sobre o líquido" },
+            { label: "Participação do clube", value: `${percent(10000 - config.companyBps)}%` },
+            { label: "Tarifa prevista por cobrança", value: `${percent(config.gatewayBps)}% + ${money(config.gatewayFixedCents)}` },
+            { label: "Dia de repasse", value: days[config.payoutWeekday] ?? "—", hint: config.clubRecipient || undefined },
+          ]} />
         ) : (
           <Text style={{ color: colors.muted }}>
             Consultando configurações…
@@ -184,11 +195,11 @@ export function AdminFinancePanel({
                 {money(totals.legacyGrossCents)}, ainda sem regra financeira
                 registrada. Não foram incluídos no saldo do time ou da empresa.
               </Text>
-              <AdminButton
+              {owner && <AdminButton
                 label="Conferir e adotar regra atual nos antigos"
                 disabled={busy}
                 onPress={() => setAdopt(true)}
-              />
+              />}
             </Panel>
           )}
           {tab === "Resumo" ? (
@@ -211,7 +222,7 @@ export function AdminFinancePanel({
           )}
         </>
       )}
-      {adopt && (
+      {owner && adopt && (
         <Sheet
           visible
           title="Conferir recebimentos antigos"
@@ -403,7 +414,7 @@ export function PayoutHistory({
   refreshKey: number;
   onSaved: () => Promise<unknown>;
 }) {
-  const { token } = useSession(),
+  const { token, member } = useSession(),
     { colors } = useTheme(),
     desktop = useDesktopAdmin(),
     [proof, setProof] = useState<ClubPayout | null>(null),
@@ -420,10 +431,11 @@ export function PayoutHistory({
     [voided, setVoided] = useState<ClubPayout | null>(null),
     [reason, setReason] = useState(""),
     { busy, error: actionError, run } = useShopAction();
+  const owner = member?.role === "OWNER";
   const payoutActions = (row: ClubPayout) => (
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
       <AdminButton label="Comprovantes" onPress={() => setProof(row)} />
-      {!row.voidedAt && (
+      {owner && !row.voidedAt && (
         <AdminButton
           label="Corrigir registro"
           variant="ghost"
@@ -535,7 +547,7 @@ export function PayoutHistory({
                 ? { withdrawalId: proof.withdrawal.id }
                 : { payoutId: proof.id }
             }
-            readOnly={Boolean(proof.voidedAt)}
+            readOnly={!owner || Boolean(proof.voidedAt)}
           />
         </Sheet>
       )}
@@ -545,7 +557,7 @@ export function PayoutHistory({
         loading={loading}
         onChange={setOffset}
       />
-      {voided && (
+      {owner && voided && (
         <Sheet
           visible
           title="Anular registro incorreto"

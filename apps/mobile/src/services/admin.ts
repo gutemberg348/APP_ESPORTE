@@ -15,7 +15,7 @@ export const adminApi = {
   gateOperators: (token: string) => request<GateOperator[]>('/admin/gate-operators', { token }),
   matches: (token: string) => request<Match[]>('/admin/matches?limit=100', { token }),
   createMatch: (token: string, body: MatchInput) => request<Match>('/admin/matches', { token, method: 'POST', body }),
-  updateMatch: (token: string, body: Partial<MatchInput> & { id: string }) => request<Match>('/admin/matches', { token, method: 'PATCH', body }),
+  updateMatch: (token: string, body: { id: string } & (Partial<MatchInput> | { openGateNow: true })) => request<Match>('/admin/matches', { token, method: 'PATCH', body }),
   createSector: (token: string, body: { matchId: string; name: string; capacity: number; priceCents: number; salesEnabled: boolean }) => request<Sector>('/admin/sectors', { token, method: 'POST', body }),
   updateSector: (token: string, body: { id: string; name: string; capacity: number; priceCents: number; salesEnabled: boolean }) => request<Sector>('/admin/sectors', { token, method: 'PATCH', body }),
   tickets: (token: string, filters: Record<string, string> = {}) => request<AdminTicket[]>(`/admin/tickets?limit=100&${encodedQuery(filters)}`, { token }),

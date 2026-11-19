@@ -70,7 +70,7 @@ export function ClubProvider({ children }: React.PropsWithChildren) {
       if (!demoMode) { await clubApi.checkIn(token!); await refresh(); return; }
       if (data.engagement.checkedIn && data.engagement.day === today()) throw new Error('Você já fez o check-in de hoje.');
       const updated = { ...data.member, points: data.member.points + data.engagement.checkInPoints };
-      setData({ ...data, member: updated, engagement: { ...data.engagement, checkedIn: true, day: today(), ledger: [{ id: `demo-${Date.now()}`, amount: data.engagement.checkInPoints, reason: 'Check-in diário', createdAt: new Date().toISOString() }, ...data.engagement.ledger] } });
+      setData({ ...data, member: updated, engagement: { ...data.engagement, checkedIn: true, day: today(), earnedPoints: (data.engagement.earnedPoints ?? data.member.points) + data.engagement.checkInPoints, ledger: [{ id: `demo-${Date.now()}`, amount: data.engagement.checkInPoints, reason: 'Check-in diário', createdAt: new Date().toISOString() }, ...data.engagement.ledger] } });
       updateMember(updated);
     });
   }
@@ -86,6 +86,7 @@ export function ClubProvider({ children }: React.PropsWithChildren) {
       const createdAt = new Date().toISOString();
       setData({ ...data, member: updated, engagement: { ...data.engagement,
         rewards: data.engagement.rewards.map((item) => item.id === rewardId ? { ...item, stock: item.stock - 1 } : item),
+        earnedPoints: data.engagement.earnedPoints ?? data.member.points,
         redemptions: [{ id: `DEMO-${Date.now()}`, rewardId, cost: reward.cost, createdAt, reward }, ...data.engagement.redemptions],
         ledger: [{ id: `demo-${Date.now()}`, amount: -reward.cost, reason: `Resgate · ${reward.title}`, createdAt }, ...data.engagement.ledger],
       } }); updateMember(updated);

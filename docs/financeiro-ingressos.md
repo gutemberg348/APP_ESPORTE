@@ -1,4 +1,4 @@
-Atualização: pedidos de repasse, envios e comprovantes foram separados em **Saques**. Use **Novo pedido de saque** e depois **Registrar envio realizado**. Veja [o fluxo atual](saques.md). As configurações e a conferência dos recebimentos continuam no Financeiro.
+Em **Saques**, o Esporte solicita o repasse e a empresa confirma o envio. O **Financeiro** reúne as regras e a conferência dos recebimentos. [Fluxo de saques e acesso da empresa](saques.md)
 
 # Ingressos: comissão, taxa e repasse manual
 

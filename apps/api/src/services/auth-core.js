@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { hashPassword, verifyPassword, hashToken, newSessionToken } from '../lib/crypto.js';
 import { AppError } from '../lib/errors.js';
 import { toMember } from '../lib/serializers.js';
+import { isAdminRole } from '../lib/admin-roles.js';
 
 export async function createAuthService({ users, sessions, accessTokens, socialSessions, ttlDays = 7, now = () => new Date() }) {
   const dummyHash = await hashPassword('timing-only-password-not-an-account');
@@ -36,7 +37,7 @@ export async function createAuthService({ users, sessions, accessTokens, socialS
       if (!user || !valid || !user.active) throw invalidLogin();
       if (portal === 'SELLER' && !['TICKET_SELLER', 'ADMIN'].includes(user.role)) throw invalidLogin();
       if (portal === 'GATE' && !['GATE', 'ADMIN'].includes(user.role)) throw invalidLogin();
-      if (portal === 'ADMIN' && user.role !== 'ADMIN') throw invalidLogin();
+      if (portal === 'ADMIN' && !isAdminRole(user.role)) throw invalidLogin();
       const fresh = newSession();
       const result = await sessions.start(user.id, user.passwordHash, fresh.session, user.role);
       if (!result) throw invalidLogin();

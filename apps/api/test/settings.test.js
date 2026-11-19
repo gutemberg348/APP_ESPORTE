@@ -71,6 +71,7 @@ test('persisted business configuration controls reservations, points and reward 
   await store.saveReward(admin.id, { id: reward.id, version: latestReward.version, title: 'Visita revisada', description: '', cost: 70, stock: 2, icon: 'flag', active: false });
   assert.equal((await db.redemption.findUnique({ where: { id: redemption.id } })).cost, 50);
   assert.equal((await db.user.findUnique({ where: { id: user.id } })).points, 23);
+  assert.equal(await engagement.earnedPoints(user.id), 73);
   const paused = await store.saveSettings(admin.id, { ...editable(changed), checkInEnabled: false, checkInPoints: 100 });
   await assert.rejects(engagement.checkIn(other.id, '2026-11-10'), { code: 'CHECK_IN_DISABLED' });
   assert.equal((await db.pointEntry.findUnique({ where: { id: entry.entry.id } })).amount, 73);

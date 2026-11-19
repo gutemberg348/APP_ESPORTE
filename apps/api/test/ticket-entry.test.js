@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { decodeJwt, SignJWT } from 'jose';
 import { createTicketQr } from '../src/lib/ticket-qr.js';
-import { gateWindow, assertGateOpen, assertTicketPaid, assertEntryContext } from '../src/lib/ticket-rules.js';
+import { gateWindow, openGateNow, assertGateOpen, assertTicketPaid, assertEntryContext } from '../src/lib/ticket-rules.js';
 import { createTicketEntryStore } from '../src/models/ticket-entry.store.js';
 import { createTicketCodeStore } from '../src/models/ticket-code.store.js';
 import { AppError } from '../src/lib/errors.js';
-import { ticketCodeSchema, admissionSchema } from '../src/validators/admin.js';
+import { ticketCodeSchema, admissionSchema, matchUpdateSchema } from '../src/validators/admin.js';
 const baseTime = new Date('2026-10-30T18:00:00Z');
 test('camera and typed code consume the same scan and invalidate each other after entry', async () => {
   for (const first of ['camera', 'code']) {
@@ -111,6 +111,19 @@ test('gate has explicit enablement and enforces opening/closing boundaries', () 
   assert.throws(() => assertGateOpen(value.match, new Date(gate.opensAt - 1)), { code: 'GATE_NOT_OPEN' });
   assert.doesNotThrow(() => assertGateOpen(value.match, gate.opensAt));
   assert.throws(() => assertGateOpen(value.match, gate.closesAt), { code: 'GATE_CLOSED' });
+});
+test('administrators can open ahead of the scheduled window while preserving the closing time', () => {
+  const match = { ...ticket().match, published: true, entryEnabled: true,
+    startsAt: new Date(baseTime.getTime() + 86400000), gateOpenAt: new Date(baseTime.getTime() + 3600000) };
+  assert.throws(() => assertGateOpen(match, baseTime), { code: 'GATE_NOT_OPEN' });
+  const opened = { ...match, ...openGateNow(match, baseTime) };
+  assert.equal(assertGateOpen(opened, baseTime).opensAt, baseTime);
+  assert.deepEqual(gateWindow(opened).closesAt, gateWindow(match).closesAt);
+  assert.throws(() => openGateNow({ ...match, published: false }, baseTime), { code: 'MATCH_NOT_PUBLISHED' });
+  assert.throws(() => openGateNow({ ...match, gateCloseAt: baseTime }, baseTime), { code: 'GATE_CLOSED' });
+  const id = randomUUID();
+  assert.deepEqual(matchUpdateSchema.parse({ id, openGateNow: true }), { id, openGateNow: true });
+  assert.equal(matchUpdateSchema.safeParse({ id, openGateNow: true, gateCloseAt: null }).success, false);
 });
 test('paid status alone is insufficient: receipt, exact amount and active holder are required', () => {
   const value = ticket();

@@ -2,6 +2,7 @@ import { db } from "../config/database.js";
 import { serializable } from "../lib/business-rules.js";
 import { AppError } from "../lib/errors.js";
 import { updateAdminAccount } from "./admin-account.store.js";
+import { assertManagedAccount, isAdminRole, managedStaffRoles } from "../lib/admin-roles.js";
 const include = {
   gateAssignmentsV1: { include: { alocacao: { include: { partida: true, setor: true } } } },
   gateAssignments: {
@@ -67,9 +68,9 @@ export async function replaceAppGateAssignments(tx, userId, sectorIds) {
 
 export function createStaffModel(db) {
   return {
-    async list({ limit = 50, offset = 0, search } = {}) {
+    async list({ limit = 50, offset = 0, search } = {}, actorRole) {
       const where = {
-        role: { in: ["GATE", "ADMIN", "CASHIER", "TICKET_SELLER"] },
+        role: { in: managedStaffRoles(actorRole) },
         ...(search
           ? {
               OR: [
@@ -91,12 +92,15 @@ export function createStaffModel(db) {
     },
     create(actorId, data) {
       return serializable(db, async (tx) => {
+        const actor = await tx.user.findUnique({ where: { id: actorId }, select: { role: true, active: true } });
+        assertManagedAccount({ role: data.role || "GATE" }, actor?.active ? actor.role : undefined);
         const user = await tx.user.create({
           data: { role: "GATE", ...data, active: true },
           include,
         });
         await audit(tx, actorId, "EMPLOYEE_CREATED", user.id, {
           email: user.email,
+          role: user.role,
         });
         return safe(user);
       });
@@ -143,7 +147,7 @@ export function createStaffModel(db) {
     gateMatches(user) {
       return db.match.findMany({
         where:
-          user.role === "ADMIN"
+          isAdminRole(user.role)
             ? {}
             : {
                 sectors: {
@@ -157,7 +161,7 @@ export function createStaffModel(db) {
         include: {
           sectors: {
             where:
-              user.role === "ADMIN"
+              isAdminRole(user.role)
                 ? {}
                 : {
                     gateAssignments: {

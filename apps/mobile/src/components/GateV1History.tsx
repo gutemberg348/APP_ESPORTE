@@ -17,7 +17,7 @@ export function GateV1History({ refreshKey = 0, partidaId, alocacaoId, source }:
   const [matches, setMatches] = useState<GateV1Match[]>([]), [operators, setOperators] = useState<GateOperator[]>([]);
   const [draft, setDraft] = useState<Filters>({}), [filters, setFilters] = useState<Filters>({}), [kind, setKind] = useState('ALLOW'), [reload, setReload] = useState(0);
   useEffect(() => { let active = true; if (!token) return;
-    void Promise.all([gateV1Api.matches(token, source === 'app'), member?.role === 'ADMIN' ? adminApi.gateOperators(token) : Promise.resolve([])]).then(([m, o]) => { if (active) { setMatches(m); setOperators(o); } }).catch((err) => { if (active) setError(messageOf(err)); });
+    void Promise.all([gateV1Api.matches(token, source === 'app'), ['ADMIN', 'OWNER'].includes(member?.role || '') ? adminApi.gateOperators(token) : Promise.resolve([])]).then(([m, o]) => { if (active) { setMatches(m); setOperators(o); } }).catch((err) => { if (active) setError(messageOf(err)); });
     return () => { active = false; };
   }, [token, member?.role, refreshKey, source]);
   useEffect(() => { setOffset(0); }, [partidaId, alocacaoId, source, kind, filters]);
@@ -33,7 +33,7 @@ export function GateV1History({ refreshKey = 0, partidaId, alocacaoId, source }:
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
         {!partidaId && <ReportSelect label="Partida" value={draft.partidaId || ''} options={[{ value: '', label: 'Todas as partidas' }, ...matches.map((row) => ({ value: row.id, label: `${row.timeMandante} × ${row.timeVisitante}` }))]} onChange={(id) => setDraft({ ...draft, partidaId: id, alocacaoId: '' })} />}
         {!alocacaoId && <ReportSelect label="Setor" value={draft.alocacaoId || ''} options={[{ value: '', label: 'Todos os setores' }, ...(match?.alocacoesSetor || []).map((row) => ({ value: row.id, label: row.setor.nome }))]} onChange={(id) => setDraft({ ...draft, alocacaoId: id })} />}
-        {member?.role === 'ADMIN' && <ReportSelect label="Funcionário" value={draft.actorId || ''} options={[{ value: '', label: 'Todos os funcionários' }, ...operators.map((row) => ({ value: row.id, label: row.name }))]} onChange={(id) => setDraft({ ...draft, actorId: id })} />}
+        {['ADMIN', 'OWNER'].includes(member?.role || '') && <ReportSelect label="Funcionário" value={draft.actorId || ''} options={[{ value: '', label: 'Todos os funcionários' }, ...operators.map((row) => ({ value: row.id, label: row.name }))]} onChange={(id) => setDraft({ ...draft, actorId: id })} />}
         <ReportInput label="Protocolo completo" value={draft.protocol || ''} onChange={(protocol) => setDraft({ ...draft, protocol })} />
         {kind === 'ALLOW' && <ReportInput label="Nome do titular" value={draft.search || ''} onChange={(search) => setDraft({ ...draft, search })} />}
         <PeriodFilters draft={draft} setDraft={setDraft} />

@@ -10,7 +10,7 @@ import { hashPassword } from '../lib/crypto.js';
 const accounts = createAdminAccountStore(db);
 const sales = createAdminTicketStore(db);
 const reports = createAdminReportsStore(db);
-const guard = (work) => (user, input) => { assertAdmin(user); return work(user.id, input); };
+const guard = (work) => (user, input) => { assertAdmin(user); return work(user.id, input, user.role); };
 export const adminService = {
   overview: guard(() => adminModel.overview()),
   salesReport: guard((_, query) => reports.sales(query)),
@@ -25,8 +25,8 @@ export const adminService = {
   quoteSale: guard((_, input) => sales.quote(input)),
   updateSale: guard((actorId, input) => sales.update(actorId, input)),
   deleteSale: guard((actorId, input) => sales.remove(actorId, input)),
-  users: guard((_, query) => adminModel.users(query)),
-  userDetail: guard((_, { userId }) => accounts.detail(userId)),
+  users: guard((_, query, role) => adminModel.users(query, role)),
+  userDetail: guard((_, { userId }, role) => accounts.detail(userId, role)),
   updateUser: guard(async (actorId, { password, ...input }) => accounts.update(actorId, { ...input, ...(password !== undefined ? { passwordHash: await hashPassword(password) } : {}) })),
   plans: guard(() => adminModel.plans()), plan: guard(adminModel.plan),
   membership: guard(adminModel.membership), account: guard(adminModel.account),

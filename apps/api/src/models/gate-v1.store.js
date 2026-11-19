@@ -1,3 +1,4 @@
+import { isAdminRole } from '../lib/admin-roles.js';
 import { replaceAppGateAssignments } from './staff.model.js';
 import { createHash } from 'node:crypto';
 import { AppError } from '../lib/errors.js';
@@ -18,7 +19,7 @@ export function createGateV1Store(db, { tenantSlug, secret, now = () => new Date
     if (!tenant?.active) throw error('TENANT_INACTIVE', 'Clube indisponível.', 403);
     const allocation = await tx.alocacaoSetorPartidaIngressoV1.findFirst({ where: { id: input.alocacaoId, partidaId: input.partidaId, partida: { estadio: { tenantId: tenant.id } } } });
     if (!allocation) throw error('GATE_SCOPE_DENIED', 'Partida ou setor não autorizado.', 403);
-    if (user.role !== 'ADMIN' && !await tx.gateAssignmentV1.findFirst({ where: { userId: user.id, alocacaoId: allocation.id, active: true } })) throw error('GATE_SCOPE_DENIED', 'Você não está escalado para esta partida e setor.', 403);
+    if (!isAdminRole(user.role) && !await tx.gateAssignmentV1.findFirst({ where: { userId: user.id, alocacaoId: allocation.id, active: true } })) throw error('GATE_SCOPE_DENIED', 'Você não está escalado para esta partida e setor.', 403);
   }
   function assertOpen(t) {
     const match = t.partida, instant = now();
@@ -52,8 +53,8 @@ export function createGateV1Store(db, { tenantSlug, secret, now = () => new Date
   return {
     async matches(actorId) {
       const user = await actor(db, actorId);
-      return db.partidaIngressoV1.findMany({ where: { estadio: { tenant: { slug: tenantSlug, active: true } }, ...(user.role === 'ADMIN' ? {} : { alocacoesSetor: { some: { gateAssignments: { some: { userId: actorId, active: true } } } } }) },
-        select: { id: true, timeMandante: true, timeVisitante: true, dataPartida: true, status: true, portariaAtiva: true, portariaAbreEm: true, portariaFechaEm: true, estadio: { select: { nome: true, nomePopular: true } }, alocacoesSetor: { where: user.role === 'ADMIN' ? {} : { gateAssignments: { some: { userId: actorId, active: true } } }, select: { id: true, setorId: true, setor: { select: { nome: true, portaoEntrada: true } } } } }, orderBy: { dataPartida: 'desc' }, take: 200 });
+      return db.partidaIngressoV1.findMany({ where: { estadio: { tenant: { slug: tenantSlug, active: true } }, ...(isAdminRole(user.role) ? {} : { alocacoesSetor: { some: { gateAssignments: { some: { userId: actorId, active: true } } } } }) },
+        select: { id: true, timeMandante: true, timeVisitante: true, dataPartida: true, status: true, portariaAtiva: true, portariaAbreEm: true, portariaFechaEm: true, estadio: { select: { nome: true, nomePopular: true } }, alocacoesSetor: { where: isAdminRole(user.role) ? {} : { gateAssignments: { some: { userId: actorId, active: true } } }, select: { id: true, setorId: true, setor: { select: { nome: true, portaoEntrada: true } } } } }, orderBy: { dataPartida: 'desc' }, take: 200 });
     },
     async inspect(actorId, input) {
       try { return await serializable(db, async (tx) => {
@@ -91,17 +92,17 @@ export function createGateV1Store(db, { tenantSlug, secret, now = () => new Date
       const { limit = 30, offset = 0, from, to, partidaId, alocacaoId, actorId: operator, protocol, search, kind = 'ALLOW' } = input;
       if (kind === 'DENIED') {
         const matches = await db.partidaIngressoV1.findMany({ where: { ...(partidaId ? { id: partidaId } : {}), estadio: { tenant: { slug: tenantSlug } } }, select: { id: true, timeMandante: true, timeVisitante: true } });
-        const where = { action: 'INGRESSO_V1_VALIDACAO_RECUSADA', entityId: { in: matches.map((row) => row.id) }, ...(protocol ? { id: protocol } : {}), ...(user.role === 'ADMIN' ? operator ? { actorId: operator } : {} : { actorId }), ...(alocacaoId ? { details: { path: ['alocacaoId'], equals: alocacaoId } } : {}), ...((from || to) ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}) };
+        const where = { action: 'INGRESSO_V1_VALIDACAO_RECUSADA', entityId: { in: matches.map((row) => row.id) }, ...(protocol ? { id: protocol } : {}), ...(isAdminRole(user.role) ? operator ? { actorId: operator } : {} : { actorId }), ...(alocacaoId ? { details: { path: ['alocacaoId'], equals: alocacaoId } } : {}), ...((from || to) ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}) };
         const [rows, total] = await db.$transaction([db.auditLog.findMany({ where, include: { actor: { select: { id: true, name: true } } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: limit, skip: offset }), db.auditLog.count({ where })]);
         return { items: rows.map((row) => ({ id: row.id, createdAt: row.createdAt, actor: row.actor, gate: row.details.gate, reason: row.details.code, stage: row.details.stage, partida: matches.find((match) => match.id === row.entityId) })), total, limit, offset };
       }
-      const where = { ...(protocol ? { id: protocol } : {}), ...(user.role === 'ADMIN' ? operator ? { actorId: operator } : {} : { actorId }), ingresso: { partida: { estadio: { tenant: { slug: tenantSlug } } }, ...(partidaId ? { partidaId } : {}), ...(alocacaoId ? { alocacaoId } : {}), ...(search ? { nomeTitular: { contains: search, mode: 'insensitive' } } : {}) }, ...((from || to) ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}) };
+      const where = { ...(protocol ? { id: protocol } : {}), ...(isAdminRole(user.role) ? operator ? { actorId: operator } : {} : { actorId }), ingresso: { partida: { estadio: { tenant: { slug: tenantSlug } } }, ...(partidaId ? { partidaId } : {}), ...(alocacaoId ? { alocacaoId } : {}), ...(search ? { nomeTitular: { contains: search, mode: 'insensitive' } } : {}) }, ...((from || to) ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}) };
       const [rows, total] = await db.$transaction([db.admissionV1.findMany({ where, include: { ingresso: { include }, actor: { select: { id: true, name: true } } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: limit, skip: offset }), db.admissionV1.count({ where })]);
       return { items: rows.map(({ ingresso, ...row }) => ({ ...row, ticket: view(ingresso) })), total, limit, offset };
     },
     assignments(actorId, { userId, allocationIds, appSectorIds }) {
       return serializable(db, async (tx) => {
-        const admin = await actor(tx, actorId); if (admin.role !== 'ADMIN') throw error('ADMIN_REQUIRED', 'Acesso administrativo necessário.', 403);
+        const admin = await actor(tx, actorId); if (!isAdminRole(admin.role)) throw error('ADMIN_REQUIRED', 'Acesso administrativo necessário.', 403);
         const user = await tx.user.findFirst({ where: { id: userId, role: 'GATE', active: true } });
         if (!user) throw error('GATE_ROLE_REQUIRED', 'Selecione um funcionário ativo de portaria.', 422);
         if (await tx.alocacaoSetorPartidaIngressoV1.count({ where: { id: { in: allocationIds }, partida: { estadio: { tenant: { slug: tenantSlug } } } } }) !== allocationIds.length) throw error('INVALID_ASSIGNMENT', 'Um dos setores não pertence a este clube.', 422);
