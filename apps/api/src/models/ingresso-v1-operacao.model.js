@@ -1,3 +1,5 @@
+import { assertMatchSchedule } from '../lib/ticket-rules.js';
+import { appOccupancy, standardLot } from './match-inventory.js';
 import { releaseExpiredCounterOrders } from './counter-reservation.js';
 import { serializable } from '../lib/business-rules.js';
 import { signTicketV1Token } from '../lib/ingresso-v1-token.js';
@@ -145,6 +147,7 @@ const templateVendaInclude = {
 };
 
 const partidaInclude = {
+  appMatch: { select: { id: true } },
   estadio: {
     select: {
       id: true,
@@ -175,7 +178,7 @@ const partidaInclude = {
           },
         },
       },
-      lotes: { orderBy: { precoCentavos: 'desc' } },
+      lotes: { orderBy: [{ criadoEm: 'asc' }, { id: 'asc' }] },
     },
     orderBy: { setor: { nome: 'asc' } },
   },
@@ -259,17 +262,18 @@ export async function issueTicketInTransaction(tx, actorId, input, order) {
     throw new AppError(404, 'ALOCACAO_NAO_ENCONTRADA', 'Setor da partida não encontrado.');
   }
 
+  const appUsed = (await appOccupancy(tx, [alocacaoId])).get(alocacaoId) || 0;
   const saldoSetor =
-    alocacao.capacidadeLiberada - alocacao.quantidadeVendida - alocacao.quantidadeReservada;
+    alocacao.capacidadeLiberada - alocacao.quantidadeVendida - alocacao.quantidadeReservada - appUsed;
   if (saldoSetor < 1) {
     throw new AppError(409, 'SETOR_ESGOTADO', 'A capacidade liberada deste setor está esgotada.');
   }
 
-  const lote = alocacao.lotes.find((l) => l.id === loteId) || (!loteId && alocacao.lotes[0]);
+  const lote = loteId ? alocacao.lotes.find(l => l.id === loteId) : standardLot(alocacao.lotes) ?? alocacao.lotes.find(l => l.ativo);
   if (!lote) {
     throw new AppError(404, 'LOTE_NAO_ENCONTRADO', 'Lote de ingresso não encontrado para este setor.');
   }
-  if (lote.quantidadeVendida + lote.quantidadeReservada >= lote.quantidadeMaxima) {
+  if (!lote.ativo || lote.quantidadeVendida + lote.quantidadeReservada + (standardLot(alocacao.lotes)?.id === lote.id ? appUsed : 0) >= lote.quantidadeMaxima) {
     throw new AppError(409, 'LOTE_ESGOTADO', 'A cota deste lote está esgotada.');
   }
 
@@ -562,7 +566,7 @@ export const ingressoV1OperacaoModel = {
   // =========================================================================
   async listMatches({ estadioId, status } = {}) {
     const tenantId = await getTenantId();
-    return db.partidaIngressoV1.findMany({
+    const games = await db.partidaIngressoV1.findMany({
       where: {
         estadio: { tenantId },
         ...(estadioId ? { estadioId } : {}),
@@ -571,6 +575,8 @@ export const ingressoV1OperacaoModel = {
       include: partidaInclude,
       orderBy: [{ dataPartida: 'desc' }],
     });
+    const usage = await appOccupancy(db, games.flatMap(game => game.alocacoesSetor.map(a => a.id)));
+    return games.map(game => ({ ...game, alocacoesSetor: game.alocacoesSetor.map(a => ({ ...a, ocupadosApp: usage.get(a.id) || 0 })) }));
   },
 
   async createMatch(
@@ -590,6 +596,7 @@ export const ingressoV1OperacaoModel = {
     }
   ) {
     assertGateWindow(dataPartida, portariaAbreEm, portariaFechaEm);
+    assertMatchSchedule({ startsAt: new Date(dataPartida), salesOpenAt: inicioVendas && new Date(inicioVendas), salesCloseAt: fimVendas && new Date(fimVendas) });
     const tenantId = await getTenantId();
     const estadio = await db.estadioIngressoV1.findFirst({
       where: { id: estadioId, tenantId },
@@ -660,41 +667,49 @@ export const ingressoV1OperacaoModel = {
       });
     }
 
-    const created = await db.partidaIngressoV1.create({
-      data: {
-        estadioId,
-        templateVendaId: templateVendaId || null,
-        timeMandante: timeMandante.trim(),
-        timeVisitante: timeVisitante.trim(),
-        dataPartida: new Date(dataPartida),
-        inicioVendas: inicioVendas ? new Date(inicioVendas) : null,
-        fimVendas: fimVendas ? new Date(fimVendas) : null,
-        status,
-        vendasAtivas,
-        portariaAtiva, portariaAbreEm: portariaAbreEm ? new Date(portariaAbreEm) : null, portariaFechaEm: portariaFechaEm ? new Date(portariaFechaEm) : null,
-        alocacoesSetor: {
-          create: alocacoesInput.map((a) => ({
-            setorId: a.setorId,
-            capacidadeLiberada: a.capacidadeLiberada,
-            lotes: {
-              create: (a.lotes || []).map((l) => ({
-                nome: l.nome.trim(),
-                tipoCategoria: l.tipoCategoria,
-                precoCentavos: l.precoCentavos,
-                quantidadeMaxima: l.quantidadeMaxima || a.capacidadeLiberada,
-                ativo: l.ativo ?? true,
-              })),
-            },
-          })),
+    for (const allocation of alocacoesInput) {
+      const sector = estadio.setores.find(item => item.id === allocation.setorId);
+      if (!sector || allocation.capacidadeLiberada > sector.capacidadeFisica) throw new AppError(422, 'INVALID_ALLOCATION', 'Confira o setor e sua capacidade neste estádio.');
+    }
+    return serializable(db, async tx => {
+      if (await tx.partidaIngressoV1.findFirst({ where: { estadioId, dataPartida: new Date(dataPartida), status: { not: 'CANCELADA' } }, select: { id: true } })) throw new AppError(409, 'MATCH_TIME_CONFLICT', 'Já existe uma partida neste estádio e horário.');
+      const created = await tx.partidaIngressoV1.create({
+        data: {
+          estadioId,
+          templateVendaId: templateVendaId || null,
+          timeMandante: timeMandante.trim(),
+          timeVisitante: timeVisitante.trim(),
+          dataPartida: new Date(dataPartida),
+          inicioVendas: inicioVendas ? new Date(inicioVendas) : null,
+          fimVendas: fimVendas ? new Date(fimVendas) : null,
+          status,
+          vendasAtivas,
+          portariaAtiva, portariaAbreEm: portariaAbreEm ? new Date(portariaAbreEm) : null, portariaFechaEm: portariaFechaEm ? new Date(portariaFechaEm) : null,
+          alocacoesSetor: {
+            create: alocacoesInput.map((a) => ({
+              setorId: a.setorId,
+              capacidadeLiberada: a.capacidadeLiberada,
+              lotes: {
+                create: (a.lotes || []).map((l) => ({
+                  nome: l.nome.trim(),
+                  tipoCategoria: l.tipoCategoria,
+                  precoCentavos: l.precoCentavos,
+                  quantidadeMaxima: l.quantidadeMaxima || a.capacidadeLiberada,
+                  ativo: l.ativo ?? true,
+                })),
+              },
+            })),
+          },
         },
-      },
-      include: partidaInclude,
-    });
+        include: partidaInclude,
+      });
 
-    await audit(actorId, 'INGRESSO_V1_PARTIDA_CRIADA', created.id, {
-      jogo: `${created.timeMandante} x ${created.timeVisitante}`,
+      await tx.$executeRaw`SELECT sync_app_match(${created.id}::uuid)`;
+      await audit(actorId, 'INGRESSO_V1_PARTIDA_CRIADA', created.id, {
+        jogo: `${created.timeMandante} x ${created.timeVisitante}`,
+      }, tx);
+      return tx.partidaIngressoV1.findUniqueOrThrow({ where: { id: created.id }, include: partidaInclude });
     });
-    return created;
   },
 
   async updateMatch(
@@ -713,21 +728,33 @@ export const ingressoV1OperacaoModel = {
     }
   ) {
     const tenantId = await getTenantId();
-    const current = await db.partidaIngressoV1.findFirst({
-      where: { id, estadio: { tenantId } },
-      include: { alocacoesSetor: true },
-    });
-    if (!current) {
-      throw new AppError(404, 'PARTIDA_NAO_ENCONTRADA', 'Partida não encontrada.');
-    }
+    return serializable(db, async (tx) => {
+      const current = await tx.partidaIngressoV1.findFirst({
+        where: { id, estadio: { tenantId } },
+        include: { alocacoesSetor: true },
+      });
+      if (!current) {
+        throw new AppError(404, 'PARTIDA_NAO_ENCONTRADA', 'Partida não encontrada.');
+      }
 
-    assertGateWindow(dataPartida ?? current.dataPartida, portariaAbreEm === undefined ? current.portariaAbreEm : portariaAbreEm, portariaFechaEm === undefined ? current.portariaFechaEm : portariaFechaEm);
+      assertGateWindow(dataPartida ?? current.dataPartida, portariaAbreEm === undefined ? current.portariaAbreEm : portariaAbreEm, portariaFechaEm === undefined ? current.portariaFechaEm : portariaFechaEm);
 
-    const updated = await db.$transaction(async (tx) => {
+      const scheduleStart = inicioVendas === undefined ? current.inicioVendas : inicioVendas;
+      const scheduleEnd = fimVendas === undefined ? current.fimVendas : fimVendas;
+      assertMatchSchedule({ startsAt: new Date(dataPartida ?? current.dataPartida), salesOpenAt: scheduleStart && new Date(scheduleStart), salesCloseAt: scheduleEnd && new Date(scheduleEnd) });
+      if ((dataPartida || current.status === 'CANCELADA') && (status ?? current.status) !== 'CANCELADA' &&
+          await tx.partidaIngressoV1.findFirst({ where: { id: { not: id }, estadioId: current.estadioId, dataPartida: new Date(dataPartida ?? current.dataPartida), status: { not: 'CANCELADA' } } })) {
+        throw new AppError(409, 'MATCH_TIME_CONFLICT', 'Já existe uma partida neste estádio e horário.');
+      }
+      const app = await tx.match.findUnique({ where: { partidaV1Id: id } });
+      if (dataPartida && new Date(dataPartida).getTime() !== current.dataPartida.getTime() && (await tx.ingressoV1.count({ where: { partidaId: id } }) || (app && await tx.ticket.count({ where: { matchId: app.id } })))) throw new AppError(409, 'MATCH_HAS_TICKETS', 'Trate as reservas e os ingressos antes de mudar a data.');
       if (Array.isArray(alocacoesSetor)) {
         for (const a of alocacoesSetor) {
           const existingAloc = current.alocacoesSetor.find((x) => x.setorId === a.setorId);
           if (existingAloc) {
+            const allocation = await tx.alocacaoSetorPartidaIngressoV1.findUniqueOrThrow({ where: { id: existingAloc.id }, include: { lotes: true, setor: true } });
+            const used = (await appOccupancy(tx, [allocation.id])).get(allocation.id) || 0;
+            if (a.capacidadeLiberada > allocation.setor.capacidadeFisica || a.capacidadeLiberada < used + allocation.quantidadeVendida + allocation.quantidadeReservada) throw new AppError(409, 'INVALID_CAPACITY', 'Confira a capacidade física e os lugares já vendidos ou reservados.');
             await tx.alocacaoSetorPartidaIngressoV1.update({
               where: { id: existingAloc.id },
               data: { capacidadeLiberada: a.capacidadeLiberada },
@@ -735,6 +762,9 @@ export const ingressoV1OperacaoModel = {
             if (Array.isArray(a.lotes)) {
               for (const l of a.lotes) {
                 if (l.id) {
+                  const lot = allocation.lotes.find(item => item.id === l.id);
+                  if (!lot) throw new AppError(422, 'INVALID_LOT', 'O lote não pertence a este setor.');
+                  if ((l.quantidadeMaxima || a.capacidadeLiberada) < lot.quantidadeVendida + lot.quantidadeReservada + (lot.id === standardLot(allocation.lotes)?.id ? used : 0)) throw new AppError(409, 'INVALID_LOT_CAPACITY', 'A cota precisa comportar as vendas e reservas dos dois canais.');
                   await tx.loteIngressoPartidaV1.update({
                     where: { id: l.id },
                     data: {
@@ -760,6 +790,7 @@ export const ingressoV1OperacaoModel = {
               }
             }
           } else {
+            if (!await tx.setorEstadioIngressoV1.findFirst({ where: { id: a.setorId, estadioId: current.estadioId, ativo: true, capacidadeFisica: { gte: a.capacidadeLiberada } } })) throw new AppError(422, 'INVALID_ALLOCATION', 'Confira o setor e sua capacidade neste estádio.');
             await tx.alocacaoSetorPartidaIngressoV1.create({
               data: {
                 partidaId: id,
@@ -780,7 +811,7 @@ export const ingressoV1OperacaoModel = {
         }
       }
 
-      return tx.partidaIngressoV1.update({
+      await tx.partidaIngressoV1.update({
         where: { id },
         data: {
           ...(timeMandante !== undefined ? { timeMandante: timeMandante.trim() } : {}),
@@ -796,35 +827,33 @@ export const ingressoV1OperacaoModel = {
         },
         include: partidaInclude,
       });
+      await tx.$executeRaw`SELECT sync_app_match(${id}::uuid)`;
+      const updated = await tx.partidaIngressoV1.findUniqueOrThrow({ where: { id }, include: partidaInclude });
+      await audit(actorId, 'INGRESSO_V1_PARTIDA_ATUALIZADA', id, { jogo: `${updated.timeMandante} x ${updated.timeVisitante}` }, tx);
+      return updated;
     });
-
-    await audit(actorId, 'INGRESSO_V1_PARTIDA_ATUALIZADA', id, {
-      jogo: `${updated.timeMandante} x ${updated.timeVisitante}`,
-    });
-    return updated;
   },
 
   async deleteMatch(actorId, id) {
     const tenantId = await getTenantId();
-    const current = await db.partidaIngressoV1.findFirst({
-      where: { id, estadio: { tenantId } },
-      include: { _count: { select: { ingressos: true } } },
+    return serializable(db, async tx => {
+      const current = await tx.partidaIngressoV1.findFirst({
+        where: { id, estadio: { tenantId } },
+        include: { _count: { select: { ingressos: true, pedidos: true } } },
+      });
+      if (!current) throw new AppError(404, 'PARTIDA_NAO_ENCONTRADA', 'Partida não encontrada.');
+      if (current._count.ingressos || current._count.pedidos) {
+        throw new AppError(409, 'PARTIDA_COM_INGRESSOS', 'A partida possui pedidos ou ingressos. Encerre as vendas para preservar o histórico.');
+      }
+      const app = await tx.match.findUnique({ where: { partidaV1Id: id }, include: { _count: { select: { tickets: true, predictions: true } } } });
+      if (app && (app._count.tickets || app._count.predictions)) throw new AppError(409, 'PARTIDA_COM_HISTORICO', 'A partida possui histórico no aplicativo. Encerre as vendas para preservá-lo.');
+      if (app) await tx.match.delete({ where: { id: app.id } });
+      const deleted = await tx.partidaIngressoV1.delete({ where: { id } });
+      await audit(actorId, 'INGRESSO_V1_PARTIDA_EXCLUIDA', id, {
+        jogo: `${current.timeMandante} x ${current.timeVisitante}`,
+      }, tx);
+      return deleted;
     });
-    if (!current) {
-      throw new AppError(404, 'PARTIDA_NAO_ENCONTRADA', 'Partida não encontrada.');
-    }
-    if (current._count.ingressos > 0) {
-      throw new AppError(
-        409,
-        'PARTIDA_COM_INGRESSOS',
-        'Não é possível excluir uma partida que já possui ingressos emitidos.'
-      );
-    }
-    const deleted = await db.partidaIngressoV1.delete({ where: { id } });
-    await audit(actorId, 'INGRESSO_V1_PARTIDA_EXCLUIDA', id, {
-      jogo: `${current.timeMandante} x ${current.timeVisitante}`,
-    });
-    return deleted;
   },
 
   // =========================================================================

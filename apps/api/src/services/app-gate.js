@@ -25,9 +25,9 @@ export function createAppGate({ staff, entry, reports }) {
     async matches(user) {
       const matches = await staff.gateMatches(user);
       return matches.map(match => ({
-        ...matchView(match), source: 'app', portariaAtiva: match.entryEnabled, portariaAbreEm: match.gateOpenAt,
+        ...matchView(match), source: 'app', partidaV1Id: match.partidaV1Id, portariaAtiva: match.entryEnabled, portariaAbreEm: match.gateOpenAt,
         portariaFechaEm: match.gateCloseAt, status: match.published ? 'PUBLICADA' : 'RASCUNHO',
-        alocacoesSetor: match.sectors.map(sector => ({ id: sector.id, setorId: sector.id, setor: { nome: sector.name, portaoEntrada: null } })),
+        alocacoesSetor: match.sectors.map(sector => ({ id: sector.id, setorId: sector.id, alocacaoV1Id: sector.alocacaoV1Id, setor: { nome: sector.name, portaoEntrada: null } })),
       }));
     },
     async inspect(user, input) {

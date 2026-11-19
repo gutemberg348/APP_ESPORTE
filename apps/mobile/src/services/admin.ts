@@ -38,5 +38,5 @@ export const adminApi = {
   inspect: (token: string, entryToken: string, matchId: string, sectorId: string) => request<TicketReview>('/admin/tickets/inspect', { token, method: 'POST', body: { token: entryToken, matchId, sectorId } }),
   admit: (token: string, entryToken: string, matchId: string, sectorId: string, quantity: number, requestKey: string) => request<AdmissionResult>('/admin/tickets/admit', { token, method: 'POST', body: { token: entryToken, matchId, sectorId, quantity, requestKey } }),
   admissionReceipt: (token: string, ticketId: string, matchId: string, sectorId: string, requestKey: string) => request<AdmissionResult>(`/admin/tickets/admission-receipt?${encodedQuery({ ticketId, matchId, sectorId, requestKey })}`, { token }),
-  audit: (token: string) => request<AuditEvent[]>('/admin/audit?limit=100', { token }),
+  audit: (token: string, filters: Record<string, string>) => request<AuditEvent[]>(`/admin/audit?${encodedQuery(filters)}`, { token }),
 };

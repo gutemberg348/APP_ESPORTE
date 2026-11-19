@@ -29,6 +29,7 @@ export interface Member {
 export interface Sector { id: string; name: string; priceCents: number; capacity?: number; available?: number; salesEnabled?: boolean }
 export interface AdminAccount extends Member { role: Exclude<Member['role'], 'OWNER'>; updatedAt: string }
 export interface Match {
+  partidaV1Id?: string | null;
   id: string;
   serverTime?: string;
   homeTeam: string;
@@ -74,7 +75,7 @@ export interface TicketQuote {
   serverTime: string; expiresAt: string; paymentInstructions: string;
 }
 export interface GateCredential { token?: string; code?: string }
-export interface Employee { id: string; name: string; email: string; contact: string; updatedAt: string; role: Exclude<Member['role'], 'USER' | 'OWNER'>; active: boolean; assignmentsV1: { allocationId: string; sectorName: string; matchId: string; matchLabel: string; active: boolean }[]; assignments: { sectorId: string; sectorName: string; matchId: string; matchLabel: string; active: boolean }[] }
+export interface Employee { id: string; name: string; email: string; contact: string; updatedAt: string; role: Exclude<Member['role'], 'USER' | 'OWNER'>; active: boolean; assignmentsV1: { allocationId: string; sectorName: string; matchId: string; matchLabel: string; active: boolean }[]; assignments: { sectorId: string; allocationId?: string | null; sectorName: string; matchId: string; matchLabel: string; active: boolean }[] }
 export interface TicketReview extends Ticket { holder: string; qrExpiresAt: string; serverTime: string; decision: 'REVIEW'; message: string }
 export interface AdmissionResult { ticket: Ticket & { holder: string }; duplicate: boolean; decision: 'ALLOW' | 'ALREADY_RECORDED'; admission: { id: string; quantity: number; createdAt: string } }
 export interface PointEntry { id: string; amount: number; reason: string; createdAt: string }

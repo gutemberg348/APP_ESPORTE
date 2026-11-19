@@ -1,9 +1,10 @@
 export interface GateV1Match {
+  partidaV1Id?: string | null;
   source?: 'app';
   id: string; timeMandante: string; timeVisitante: string; dataPartida: string; status: string;
   portariaAtiva: boolean; portariaAbreEm: string | null; portariaFechaEm: string | null;
   estadio: { nome: string; nomePopular: string | null };
-  alocacoesSetor: { id: string; setorId: string; setor: { nome: string; portaoEntrada: string | null } }[];
+  alocacoesSetor: { id: string; setorId: string; alocacaoV1Id?: string | null; appScope?: { partidaId: string; alocacaoId: string }; appOnly?: boolean; setor: { nome: string; portaoEntrada: string | null } }[];
 }
 export interface GateV1Ticket {
   id: string; nomeTitular: string | null; cpfFinal?: string | null; remainingQuantity?: number; status: string; blocoEscolhido?: number | null; fileiraEscolhida?: string | null; assentoEscolhido?: number | null;

@@ -20,16 +20,19 @@ import { useTheme } from '../../../theme/ThemeProvider';
 import {
   ingressoV1Api,
   type EstadioIngressoV1,
+  type LoteIngressoPartidaV1,
   type PartidaIngressoV1,
   type StatusPartidaIngressoV1,
   type TemplateVendaIngressoV1,
 } from '../../../services/ingresso-v1';
 import { matchDate, messageOf, money } from '../../../utils/format';
+import { parseAmount } from '../../../utils/payments';
 import { formDate, parseClubDate } from '../../../utils/admin';
 
 type Props = {
   appMatches: Match[];
   onEditApp: (match: Match) => void;
+  onSaved: () => void;
   refreshKey: number;
   token: string;
   busy: boolean;
@@ -48,16 +51,19 @@ type AlocacaoDraft = {
   numerado: boolean;
   capacidadeMaximaSetor: number;
   capacidadeLiberada: string;
-  loteInteiraId?: string;
-  precoInteiraReais: string;
-  loteMeiaId?: string;
-  precoMeiaReais: string;
-  incluirMeia: boolean;
+  lotes: LoteDraft[];
 };
+
+type LoteDraft = Pick<LoteIngressoPartidaV1, 'id' | 'nome' | 'tipoCategoria' | 'ativo'> & { preco: string; cota: string };
+
+function draftLot(lot: LoteIngressoPartidaV1): LoteDraft {
+  return { id: lot.id, nome: lot.nome, tipoCategoria: lot.tipoCategoria, ativo: lot.ativo,
+    preco: (lot.precoCentavos / 100).toFixed(2).replace('.', ','), cota: String(lot.quantidadeMaxima) };
+}
 
 const STATUS_OPTIONS: { value: StatusPartidaIngressoV1; label: string }[] = [
   { value: 'RASCUNHO', label: 'Rascunho' },
-  { value: 'PUBLICADA', label: 'Publicada (Venda aberta)' },
+  { value: 'PUBLICADA', label: 'Publicada' },
   { value: 'ESGOTADA', label: 'Esgotada' },
   { value: 'ENCERRADA', label: 'Encerrada' },
   { value: 'CANCELADA', label: 'Cancelada' },
@@ -71,7 +77,7 @@ export function PartidasIngressoV1Panel({
   onError,
   createOpen = false,
   onConsumeCreate,
-  onOpenIngressos, appMatches, onEditApp, refreshKey,
+  onOpenIngressos, appMatches, onEditApp, refreshKey, onSaved,
 }: Props) {
   const { colors } = useTheme();
   const [rows, setRows] = useState<PartidaIngressoV1[]>([]);
@@ -86,6 +92,7 @@ export function PartidasIngressoV1Panel({
   const [timeVisitante, setTimeVisitante] = useState('');
   const [dataPartida, setDataPartida] = useState('');
   const [status, setStatus] = useState<StatusPartidaIngressoV1>('PUBLICADA');
+  const [inicioVendas, setInicioVendas] = useState(''), [fimVendas, setFimVendas] = useState('');
   const [vendasAtivas, setVendasAtivas] = useState(true);
   const [portariaAtiva, setPortariaAtiva] = useState(false), [portariaAbreEm, setPortariaAbreEm] = useState(''), [portariaFechaEm, setPortariaFechaEm] = useState('');
   const [alocacoesDraft, setAlocacoesDraft] = useState<AlocacaoDraft[]>([]);
@@ -132,48 +139,25 @@ export function PartidasIngressoV1Panel({
       : null;
 
     if (existingPartida) {
-      return existingPartida.alocacoesSetor.map((a) => {
-        const loteInteira = a.lotes.find((l) => l.tipoCategoria === 'INTEIRA') || a.lotes[0];
-        const loteMeia = a.lotes.find((l) => l.tipoCategoria === 'MEIA');
-        const precoInt = loteInteira ? loteInteira.precoCentavos : 6000;
-        const precoMeia = loteMeia ? loteMeia.precoCentavos : Math.round(precoInt / 2);
-        return {
-          setorId: a.setorId,
-          nomeSetor: a.setor.nome,
-          corSetorHex: a.setor.corSetorHex || '#002244',
-          numerado: a.setor.numerado,
-          capacidadeMaximaSetor: a.setor.capacidadeVendaPadrao || a.setor.capacidadeFisica,
-          capacidadeLiberada: String(a.capacidadeLiberada),
-          loteInteiraId: loteInteira?.id,
-          precoInteiraReais: (precoInt / 100).toFixed(2).replace('.', ','),
-          loteMeiaId: loteMeia?.id,
-          precoMeiaReais: (precoMeia / 100).toFixed(2).replace('.', ','),
-          incluirMeia: Boolean(loteMeia ? loteMeia.ativo : true),
-        };
-      });
+      return existingPartida.alocacoesSetor.map(a => ({
+        setorId: a.setorId, nomeSetor: a.setor.nome, corSetorHex: a.setor.corSetorHex || '#002244',
+        numerado: a.setor.numerado, capacidadeMaximaSetor: a.setor.capacidadeFisica,
+        capacidadeLiberada: String(a.capacidadeLiberada), lotes: a.lotes.map(draftLot),
+      }));
     }
-
-    return (est?.setores || []).map((s) => {
-      const regraTpl = tpl?.regrasSetor.find((r) => r.setorId === s.id);
-      const capMax = s.capacidadeVendaPadrao || s.capacidadeFisica;
-      const capLib = regraTpl ? regraTpl.capacidadeLiberadaPadrao : capMax;
-      const precoInt = regraTpl ? regraTpl.precoBaseCentavos : 6000;
-      const catMeia = regraTpl?.categorias.find((c) => c.tipoCategoria === 'MEIA');
-      const precoMeia = catMeia
-        ? Math.round((precoInt * (100 - catMeia.percentualDesconto)) / 100)
-        : Math.round(precoInt / 2);
-
-      return {
-        setorId: s.id,
-        nomeSetor: s.nome,
-        corSetorHex: s.corSetorHex || '#002244',
-        numerado: s.numerado,
-        capacidadeMaximaSetor: capMax,
-        capacidadeLiberada: String(capLib),
-        precoInteiraReais: (precoInt / 100).toFixed(2).replace('.', ','),
-        precoMeiaReais: (precoMeia / 100).toFixed(2).replace('.', ','),
-        incluirMeia: catMeia ? catMeia.ativo : true,
-      };
+    return (est?.setores || []).filter(s => s.ativo).flatMap(s => {
+      const rule = tpl?.regrasSetor.find(r => r.ativo && r.setorId === s.id);
+      if (tpl && !rule) return [];
+      const cap = rule?.capacidadeLiberadaPadrao ?? s.capacidadeVendaPadrao ?? s.capacidadeFisica;
+      const price = rule?.precoBaseCentavos ?? 6000;
+      const categories = rule?.categorias.filter(c => c.ativo);
+      const lots: LoteIngressoPartidaV1[] = categories?.length ? categories.map(c => ({
+        nome: c.nome, tipoCategoria: c.tipoCategoria, ativo: true, quantidadeMaxima: c.limiteCota ?? cap,
+        precoCentavos: Math.round(price * (100 - c.percentualDesconto) / 100),
+      })) : [{ nome: 'Inteira', tipoCategoria: 'INTEIRA', ativo: true, precoCentavos: price, quantidadeMaxima: cap }];
+      if (!rule) lots.push({ nome: 'Meia-Entrada', tipoCategoria: 'MEIA', ativo: true, precoCentavos: Math.round(price / 2), quantidadeMaxima: Math.max(1, Math.floor(cap * 0.4)) });
+      return [{ setorId: s.id, nomeSetor: s.nome, corSetorHex: s.corSetorHex || '#002244', numerado: s.numerado,
+        capacidadeMaximaSetor: s.capacidadeFisica, capacidadeLiberada: String(cap), lotes: lots.map(draftLot) }];
     });
   }
 
@@ -183,7 +167,7 @@ export function PartidasIngressoV1Panel({
     setTemplateVendaId('');
     setTimeMandante('');
     setTimeVisitante('');
-    setDataPartida('');
+    setDataPartida(''); setInicioVendas(''); setFimVendas('');
     setStatus('PUBLICADA');
     setVendasAtivas(true);
     setPortariaAtiva(false); setPortariaAbreEm(''); setPortariaFechaEm('');
@@ -199,6 +183,7 @@ export function PartidasIngressoV1Panel({
     setTimeMandante(row.timeMandante);
     setTimeVisitante(row.timeVisitante);
     setDataPartida(formDate(row.dataPartida));
+    setInicioVendas(row.inicioVendas ? formDate(row.inicioVendas) : ''); setFimVendas(row.fimVendas ? formDate(row.fimVendas) : '');
     setStatus(row.status);
     setVendasAtivas(row.vendasAtivas);
     setPortariaAtiva(row.portariaAtiva); setPortariaAbreEm(row.portariaAbreEm ? formDate(row.portariaAbreEm) : ''); setPortariaFechaEm(row.portariaFechaEm ? formDate(row.portariaFechaEm) : '');
@@ -224,10 +209,8 @@ export function PartidasIngressoV1Panel({
     );
   }
 
-  function parseReaisToCentavos(val: string): number {
-    const normalized = val.replace(/\./g, '').replace(',', '.').replace(/[^\d.]/g, '');
-    const num = Number(normalized);
-    return Number.isFinite(num) && num >= 0 ? Math.round(num * 100) : 0;
+  function updateLot(allocation: AlocacaoDraft, index: number, patch: Partial<LoteDraft>) {
+    updateAlocacao(allocation.setorId, { lotes: allocation.lotes.map((lot, i) => i === index ? { ...lot, ...patch } : lot) });
   }
 
   async function save() {
@@ -250,49 +233,28 @@ export function PartidasIngressoV1Panel({
       return;
     }
 
-    const alocacoesSetor = alocacoesDraft.map((a) => {
-      const cap = Math.max(1, Number(a.capacidadeLiberada.replace(/\D/g, '') || a.capacidadeMaximaSetor));
-      const precoInteira = parseReaisToCentavos(a.precoInteiraReais);
-      const precoMeia = parseReaisToCentavos(a.precoMeiaReais);
-      return {
-        setorId: a.setorId,
-        capacidadeLiberada: cap,
-        lotes: [
-          {
-            ...(a.loteInteiraId ? { id: a.loteInteiraId } : {}),
-            nome: 'Inteira',
-            tipoCategoria: 'INTEIRA' as const,
-            precoCentavos: precoInteira,
-            quantidadeMaxima: cap,
-            ativo: true,
-          },
-          ...(a.incluirMeia
-            ? [
-                {
-                  ...(a.loteMeiaId ? { id: a.loteMeiaId } : {}),
-                  nome: 'Meia-Entrada',
-                  tipoCategoria: 'MEIA' as const,
-                  precoCentavos: precoMeia,
-                  quantidadeMaxima: Math.max(1, Math.floor(cap * 0.4)),
-                  ativo: true,
-                },
-              ]
-            : []),
-        ],
-      };
-    });
-
     onBusy(true);
     setFormError('');
     try {
+      if (!alocacoesDraft.length) throw new Error('Selecione pelo menos um setor ativo.');
+      const salesWindow = { inicioVendas: inicioVendas ? parseClubDate(inicioVendas) : null, fimVendas: fimVendas ? parseClubDate(fimVendas) : null };
+      const alocacoesSetor = alocacoesDraft.map(a => {
+        const cap = Number(a.capacidadeLiberada);
+        if (!Number.isInteger(cap) || cap < 1 || cap > a.capacidadeMaximaSetor) throw new Error(`Confira a capacidade de ${a.nomeSetor}.`);
+        return { setorId: a.setorId, capacidadeLiberada: cap, lotes: a.lotes.map(l => {
+          const cota = Number(l.cota);
+          if (!Number.isInteger(cota) || cota < 1) throw new Error(`Confira a cota de ${l.nome}.`);
+          return { id: l.id, nome: l.nome, tipoCategoria: l.tipoCategoria, ativo: l.ativo, precoCentavos: parseAmount(l.preco, true), quantidadeMaxima: cota };
+        }) };
+      });
       if (editing) {
         await ingressoV1Api.atualizarPartida(token, {
           id: editing.id,
           timeMandante: timeMandante.trim(),
           timeVisitante: timeVisitante.trim(),
-          dataPartida: isoDate,
+          ...(dataPartida !== formDate(editing.dataPartida) ? { dataPartida: isoDate } : {}),
           status,
-          vendasAtivas,
+          vendasAtivas, ...salesWindow,
           portariaAtiva, portariaAbreEm: open, portariaFechaEm: close,
           ...(JSON.stringify(alocacoesDraft) !== JSON.stringify(buildAlocacoesFromStadium(editing.estadioId, editing.templateVendaId || '', editing)) ? { alocacoesSetor } : {}),
         });
@@ -304,13 +266,14 @@ export function PartidasIngressoV1Panel({
           timeVisitante: timeVisitante.trim(),
           dataPartida: isoDate,
           status,
-          vendasAtivas,
+          vendasAtivas, ...salesWindow,
           portariaAtiva, portariaAbreEm: open, portariaFechaEm: close,
-          alocacoesSetor,
+          ...(templateVendaId && JSON.stringify(alocacoesDraft) === JSON.stringify(buildAlocacoesFromStadium(estadioId, templateVendaId)) ? {} : { alocacoesSetor }),
         });
       }
       setModalOpen(false);
       await load();
+      onSaved();
       onNotice(editing ? 'Partida atualizada.' : 'Partida criada e setores alocados.');
     } catch (error) {
       setFormError(messageOf(error));
@@ -325,6 +288,7 @@ export function PartidasIngressoV1Panel({
       await ingressoV1Api.excluirPartida(token, row.id);
       setConfirmDelete(null);
       await load();
+      onSaved();
       onNotice('Partida excluída.');
     } catch (error) {
       onError(messageOf(error));
@@ -333,18 +297,18 @@ export function PartidasIngressoV1Panel({
     }
   }
 
-  const templatesDoEstadio = templatesVenda.filter((t) => t.estadioId === estadioId);
+  const templatesDoEstadio = templatesVenda.filter(t => t.estadioId === estadioId && (t.ativo || t.id === editing?.templateVendaId));
 
-  const appRows = appMatches.map(match => ({
+  const appRows = appMatches.filter(match => !match.partidaV1Id).map(match => ({
     id: match.id, startsAt: match.startsAt,
     cells: [
       <View style={{ gap: 3 }}>
         <Text style={{ color: colors.text, fontWeight: '700' }}>{match.homeTeam} × {match.awayTeam}</Text>
         <Text style={{ color: colors.muted, fontSize: 12 }}>{match.stadium} · {matchDate(match.startsAt)}</Text>
-        <AdminBadge label="App do torcedor" />
+        <AdminBadge label="Cadastro anterior · App" />
       </View>,
       <Text style={{ color: colors.text, fontSize: 12 }}>{match.sectors.map(sector => sector.name).join(', ') || 'Sem setores'}</Text>,
-      <AdminBadge label={match.published ? 'Publicado' : 'Rascunho'} />,
+      <AdminBadge label={match.published ? 'Publicada' : 'Rascunho'} />,
       <AdminButton label="Editar" icon={Pencil} size="small" disabled={busy} onPress={() => onEditApp(match)} />,
     ],
   }));
@@ -362,7 +326,7 @@ export function PartidasIngressoV1Panel({
         ]}
         rows={[...appRows, ...rows.map((row) => {
           const totalLiberada = row.alocacoesSetor.reduce((s, a) => s + a.capacidadeLiberada, 0);
-          const totalVendida = row.alocacoesSetor.reduce((s, a) => s + a.quantidadeVendida, 0);
+          const ocupados = row.alocacoesSetor.reduce((s, a) => s + a.quantidadeVendida + a.quantidadeReservada + (a.ocupadosApp || 0), 0);
 
           return {
             id: row.id, startsAt: row.dataPartida,
@@ -378,19 +342,13 @@ export function PartidasIngressoV1Panel({
                 </Text>
                 <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 11 }}>
                   {row.estadio.nomePopular || row.estadio.nome} ·{' '}
-                  {new Date(row.dataPartida).toLocaleString('pt-BR', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  {matchDate(row.dataPartida)}
                 </Text>
-                <AdminBadge label="Bilheteria" />
+                <AdminBadge label={row.appMatch ? 'App e bilheteria' : 'Bilheteria'} />
               </Pressable>,
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
                 {row.alocacoesSetor.map((a) => {
-                  const lotePrincipal = a.lotes[0];
+                  const lotePrincipal = a.lotes.find(lote => lote.ativo && lote.tipoCategoria === 'INTEIRA') || a.lotes.find(lote => lote.ativo);
                   return (
                     <AdminBadge
                       key={a.id}
@@ -402,10 +360,10 @@ export function PartidasIngressoV1Panel({
               </View>,
               <View style={{ gap: 2 }}>
                 <Text style={{ color: colors.text, fontSize: 12, fontWeight: '700' }}>
-                  {totalVendida} / {totalLiberada.toLocaleString('pt-BR')}
+                  {ocupados} / {totalLiberada.toLocaleString('pt-BR')}
                 </Text>
                 <AdminBadge
-                  label={row.status}
+                  label={STATUS_OPTIONS.find(option => option.value === row.status)?.label ?? row.status}
                   tone={row.status === 'PUBLICADA' ? 'success' : 'neutral'}
                 />
               </View>,
@@ -505,13 +463,17 @@ export function PartidasIngressoV1Panel({
             </AdminFormGrid>
 
             <AdminToggle
-              label="Vendas ativas"
+              label="Habilitar vendas quando publicada"
               value={vendasAtivas}
               onChange={setVendasAtivas}
               disabled={busy}
             />
           </AdminSection>
 
+          <AdminSection title="Período das vendas"><AdminFormGrid>
+            <AdminDateTimeField optional label="Abertura" value={inicioVendas} onChange={setInicioVendas} disabled={busy} />
+            <AdminDateTimeField optional label="Encerramento" value={fimVendas} onChange={setFimVendas} disabled={busy} />
+          </AdminFormGrid></AdminSection>
           <AdminSection title="Horário da portaria" description="Sem horários personalizados, permite entrada de 2 horas antes até 4 horas depois do início do jogo. A partida deve estar publicada ou esgotada.">
             <AdminToggle label="Habilitar portaria desta partida" value={portariaAtiva} onChange={setPortariaAtiva} disabled={busy} />
             <AdminFormGrid>
@@ -579,36 +541,14 @@ export function PartidasIngressoV1Panel({
                           editable={!busy}
                         />
                       </View>
-                      <View style={{ width: 130 }}>
-                        <AdminField
-                          label="Inteira (R$)"
-                          value={a.precoInteiraReais}
-                          onChange={(v) =>
-                            updateAlocacao(a.setorId, { precoInteiraReais: v })
-                          }
-                          placeholder="60,00"
-                          editable={!busy}
-                        />
-                      </View>
-                      <View style={{ width: 130 }}>
-                        <AdminField
-                          label="Meia (R$)"
-                          value={a.precoMeiaReais}
-                          onChange={(v) =>
-                            updateAlocacao(a.setorId, { precoMeiaReais: v })
-                          }
-                          placeholder="30,00"
-                          editable={!busy && a.incluirMeia}
-                        />
-                      </View>
-                      <AdminToggle
-                        checkbox
-                        label="Habilitar Meia"
-                        value={a.incluirMeia}
-                        onChange={(v) => updateAlocacao(a.setorId, { incluirMeia: v })}
-                        disabled={busy}
-                      />
                     </View>
+                    {a.lotes.map((lot, index) => <View key={lot.id || index} style={{ gap: 8, borderTopWidth: 1, borderColor: colors.border, paddingTop: 10 }}>
+                      <AdminToggle checkbox label={lot.nome} value={lot.ativo} disabled={busy} onChange={ativo => updateLot(a, index, { ativo })} />
+                      <AdminFormGrid>
+                        <AdminField label="Preço (R$)" value={lot.preco} keyboardType="decimal-pad" editable={!busy} onChange={preco => updateLot(a, index, { preco })} />
+                        <AdminField label="Cota do lote" value={lot.cota} keyboardType="number-pad" editable={!busy} onChange={cota => updateLot(a, index, { cota })} />
+                      </AdminFormGrid>
+                    </View>)}
                   </View>
                 ))}
               </View>

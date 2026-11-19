@@ -211,6 +211,8 @@ model Membership {
 }
 
 model Match {
+  partidaV1Id  String? @unique @db.Uuid
+  partidaV1    PartidaIngressoV1? @relation(fields: [partidaV1Id], references: [id], onDelete: Restrict)
   id           String       @id @default(uuid()) @db.Uuid
   slug         String       @unique
   homeTeam     String
@@ -234,6 +236,8 @@ model Match {
 }
 
 model Sector {
+  alocacaoV1Id String? @unique @db.Uuid
+  alocacaoV1   AlocacaoSetorPartidaIngressoV1? @relation(fields: [alocacaoV1Id], references: [id], onDelete: Restrict)
   id              String           @id @default(uuid()) @db.Uuid
   matchId         String           @db.Uuid
   name            String
@@ -1298,6 +1302,7 @@ model CategoriaIngressoTemplateV1 {
 }
 
 model PartidaIngressoV1 {
+  appMatch Match?
   id              String                  @id @default(uuid()) @db.Uuid
   estadioId       String                  @db.Uuid
   templateVendaId String?                 @db.Uuid
@@ -1327,6 +1332,7 @@ model PartidaIngressoV1 {
 }
 
 model AlocacaoSetorPartidaIngressoV1 {
+  appSector Sector?
   id                  String @id @default(uuid()) @db.Uuid
   partidaId           String @db.Uuid
   setorId             String @db.Uuid

@@ -1,3 +1,4 @@
+import { clubCatalog } from './match-inventory.js';
 import { db } from '../config/database.js';
 import { env } from '../config/env.js';
 import { AppError } from '../lib/errors.js';
@@ -7,7 +8,7 @@ import { createTicketCheckoutStore } from './ticket-checkout.store.js';
 import { ticketInclude, toTicket } from '../lib/ticket-serializers.js';
 import { recordTicketFinancial } from '../lib/ticket-finance.js';
 
-const checkout = createTicketCheckoutStore(db);
+const checkout = createTicketCheckoutStore(db, { tenantSlug: env.TENANT_SLUG });
 export const writeAudit = (tx, actorId, action, entityId, details) => tx.auditLog.create({ data: { actorId, action, entityId, details } });
 export async function withAvailability(client, matches) {
   const ids = matches.flatMap((match) => match.sectors.map((sector) => sector.id));
@@ -18,7 +19,7 @@ export async function withAvailability(client, matches) {
 }
 export const ticketModel = {
   async matches() {
-    const matches = await db.match.findMany({ where: { published: true, startsAt: { gt: new Date() } }, orderBy: { startsAt: 'asc' }, include: { sectors: { orderBy: { priceCents: 'asc' } } }, take: 50 });
+    const matches = await db.match.findMany({ where: { ...clubCatalog(env.TENANT_SLUG), published: true, startsAt: { gt: new Date() } }, orderBy: { startsAt: 'asc' }, include: { sectors: { orderBy: { priceCents: 'asc' } } }, take: 50 });
     return withAvailability(db, matches);
   },
   async tickets(userId) {

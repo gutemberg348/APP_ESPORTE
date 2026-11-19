@@ -1,10 +1,12 @@
+import { clubCatalog } from './match-inventory.js';
+import { env } from '../config/env.js';
 import { db } from '../config/database.js';
 import { ticketModel } from './ticket.model.js';
 import { partnerModel } from './partner.model.js';
 export const clubModel = {
   nextMatch: async () => (await ticketModel.matches())[0] || null,
   matches: ticketModel.matches,
-  match: (id) => db.match.findUnique({ where: { id }, include: { sectors: true } }),
+  match: (id) => db.match.findUnique({ where: { id, ...clubCatalog(env.TENANT_SLUG) }, include: { sectors: true } }),
   partners: (query) => partnerModel.publicList(query),
   tickets: ticketModel.tickets,
   reserveTicket: ticketModel.reserve,

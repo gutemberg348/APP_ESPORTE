@@ -127,13 +127,13 @@ docker compose ps
 
 A ordem é banco saudável → API saudável → frontend. A API aplica `prisma migrate deploy` antes de iniciar o servidor. Não usa `migrate dev`, reset ou seed demonstrativo. Os workers Pix/email ficam dentro do backend e não exigem um quarto container.
 
-Para cadastrar a conta administrativa inicial, confira `ADMIN_EMAIL`, `ADMIN_NAME` e `ADMIN_PASSWORD` no `.env` da raiz e execute explicitamente:
+Para provisionar a conta master da empresa (`OWNER`) em `/acesso/`, confira `ADMIN_EMAIL`, `ADMIN_NAME` e `ADMIN_PASSWORD` no `.env` da raiz e execute explicitamente:
 
 ```bash
 docker compose exec api node prisma/bootstrap.js
 ```
 
-O bootstrap preserva uma conta administrativa existente e não cria jogos/produtos de teste. Uma nova instalação precisa desse passo; iniciar a API sozinho não cria o administrador.
+O bootstrap cria o master ou converte o ADMIN ativo do e-mail configurado. Para preservar o acesso que o clube usa, escolha um e-mail exclusivo da empresa. O comando preserva a senha de um OWNER existente. Cadastre a equipe no painel.
 
 ## DNS e Nginx da VPS
 

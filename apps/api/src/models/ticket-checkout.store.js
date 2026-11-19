@@ -1,3 +1,4 @@
+import { clubCatalog } from './match-inventory.js';
 import { readBusinessSettings } from '../lib/business-settings.js';
 import { AppError } from '../lib/errors.js';
 import { serializable, assertAvailability, ticketPrice } from '../lib/business-rules.js';
@@ -8,11 +9,11 @@ import { captureFinancialPolicy } from '../lib/ticket-finance.js';
 
 import { requirePurchaseDocument } from './purchase-document.js';
 
-export function createTicketCheckoutStore(client, { now = () => new Date() } = {}) {
+export function createTicketCheckoutStore(client, { now = () => new Date(), tenantSlug = 'nacional-patos' } = {}) {
   async function checkout(tx, userId, { matchId, sectorId, quantity }) {
     const instant = now();
     const [match, user, existing] = await Promise.all([
-      tx.match.findUnique({ where: { id: matchId }, include: { sectors: true } }),
+      tx.match.findUnique({ where: { id: matchId, ...clubCatalog(tenantSlug) }, include: { sectors: true } }),
       tx.user.findUnique({ where: { id: userId }, include: { membership: { include: { plan: true } } } }),
       tx.ticket.findFirst({ where: { userId, matchId, deletedAt: null }, include: { payment: true, paymentIntents: { select: { state: true } } } }),
     ]);

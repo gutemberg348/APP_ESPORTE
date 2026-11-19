@@ -1,11 +1,11 @@
 import React from 'react';
 import { View } from 'react-native';
 import { CalendarDays, ArrowUpRight, Plus } from 'lucide-react-native';
-import type { AdminOverview as Overview, AdminTicket, Match, AuditEvent } from '@nacional/shared/types';
+import type { AdminOverview as Overview, AdminTicket, Match } from '@nacional/shared/types';
 import { Text } from '../Typography';
 import { Panel } from '../ui';
 import { ReportMetrics } from './AdminReportControls';
-import { AdminAction, AdminBadge, AdminTable, useDesktopAdmin } from './AdminLayout';
+import { AdminAction, AdminBadge, useDesktopAdmin } from './AdminLayout';
 import { useTheme } from '../../theme/ThemeProvider';
 import { money, matchDate } from '../../utils/format';
 
@@ -18,13 +18,13 @@ export function AdminStats({ overview }: { overview: Overview | null }) {
   ]} />;
 }
 
-export function AdminOverviewPanel({ matches, overview, tickets, audit, loading, onAudit, onOpenMatches, onOpenSales, onCreate }: { matches: Match[]; overview: Overview | null; onAudit: () => void; tickets: AdminTicket[]; audit: AuditEvent[]; loading: boolean; onOpenMatches: () => void; onOpenSales: () => void; onCreate: () => void }) {
+export function AdminOverviewPanel({ matches, overview, tickets, loading, onOpenMatches, onOpenSales, onCreate }: { matches: Match[]; overview: Overview | null; tickets: AdminTicket[]; loading: boolean; onOpenMatches: () => void; onOpenSales: () => void; onCreate: () => void }) {
   const { colors } = useTheme();
   const desktop = useDesktopAdmin();
   const agenda = [
-    ...matches.map(m => ({ ...m, channel: 'App', state: m.published ? 'Publicado' : 'Rascunho' })),
+    ...matches.filter(m => !m.partidaV1Id).map(m => ({ ...m, channel: 'App', state: m.published ? 'Publicado' : 'Rascunho' })),
     ...(overview?.upcomingCounterMatches ?? []).map(m => ({ id: m.id, startsAt: m.dataPartida, homeTeam: m.timeMandante, awayTeam: m.timeVisitante,
-      published: m.status !== 'RASCUNHO', state: m.status === 'ESGOTADA' ? 'Esgotado' : m.status === 'PUBLICADA' ? 'Publicado' : 'Rascunho', channel: 'Bilheteria' })),
+      published: m.status !== 'RASCUNHO', state: m.status === 'ESGOTADA' ? 'Esgotado' : m.status === 'PUBLICADA' ? 'Publicado' : 'Rascunho', channel: 'Calendário' })),
   ];
   const upcoming = agenda.filter((match) => Date.parse(match.startsAt) > Date.now()).sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt)).slice(0, 5);
   const pending = tickets.filter((ticket) => ticket.status === 'PENDING' && (!ticket.expiresAt || Date.parse(ticket.expiresAt) > Date.now())).slice(0, 4);
@@ -40,7 +40,5 @@ export function AdminOverviewPanel({ matches, overview, tickets, audit, loading,
         <View style={{ alignSelf: 'flex-start' }}><AdminAction label="Ver compras do app" onPress={onOpenSales} icon={ArrowUpRight} /></View>
       </Panel>
     </View>
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}><Text heading style={{ color: colors.text, fontSize: 15, fontWeight: '600', flexShrink: 1 }}>Últimas atividades</Text><AdminAction label="Ver auditoria" onPress={onAudit} icon={ArrowUpRight} /></View>
-    <AdminTable minWidth={desktop ? 620 : 500} loading={loading} columns={[{ label: 'Operação', flex: 1.6 }, { label: 'Responsável' }, { label: 'Data e hora', width: 160 }]} rows={audit.slice(0, 5).map((event) => ({ id: event.id, cells: [<Text style={{ color: colors.text, fontSize: 12, fontWeight: '600' }}>{event.action.replaceAll('_', ' ')}</Text>, <Text style={{ color: colors.muted, fontSize: 12 }}>{event.actor.name}</Text>, <Text style={{ color: colors.muted, fontSize: 11 }}>{new Date(event.createdAt).toLocaleString('pt-BR', { timeZone: 'America/Fortaleza' })}</Text>] }))} empty="As ações administrativas aparecerão aqui." />
   </View>;
 }

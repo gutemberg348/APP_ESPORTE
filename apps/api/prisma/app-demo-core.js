@@ -19,15 +19,12 @@ export function demoMatches(now = new Date()) {
 export async function seedAppDemo(db, { images, enableShop = false, tenantSlug = 'nacional-patos', now = new Date() }) {
   return db.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(78216403)`;
-    const actor = await tx.user.findFirst({ where: { role: 'ADMIN', active: true }, orderBy: { createdAt: 'asc' }, select: { id: true } });
+    const actor = await tx.user.findFirst({ where: { role: { in: ['ADMIN', 'OWNER'] }, active: true }, orderBy: { createdAt: 'asc' }, select: { id: true } });
     if (!actor) throw new Error('Cadastre um administrador ativo antes de executar o seed.');
-    let matchesCreated = 0, productsCreated = 0;
+    let productsCreated = 0;
     const schedule = demoMatches(now);
     const v1 = await seedDemoV1(tx, { tenantSlug, schedule });
-    for (const data of schedule) {
-      if (await tx.match.findUnique({ where: { slug: data.slug } })) continue;
-      await tx.match.create({ data }); matchesCreated++;
-    }
+    const matchesCreated = v1.matchesCreated;
     const shirts = ['Alvirrubra', 'Treino vermelha', 'Torcedor infantil', 'Torcedora', 'Treino juvenil'];
     for (const [index, name] of shirts.entries()) {
       const id = idFor(`esporte-app-demo-shirt-${index}`);

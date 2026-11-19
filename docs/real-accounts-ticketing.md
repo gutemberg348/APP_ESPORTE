@@ -22,7 +22,7 @@ Credenciais do primeiro administrador ficam em `apps/api/.env`:
 - `ADMIN_NAME`: nome exibido no app.
 - `ADMIN_PASSWORD`: senha aleatória já preenchida localmente. Em uma instalação nova, `npm run setup` cria essa senha quando o campo está vazio.
 
-Você pode editar esses campos antes do primeiro `db:prepare`. Não use o cadastro público para criar um administrador. Se o e-mail já pertencer a uma conta de torcedor, o bootstrap exige outro e-mail. Repetir o bootstrap não troca senhas nem promove uma conta existente. Mais administradores podem ser criados com outros e-mails usando o mesmo script no servidor; não há promoção pública de perfil.
+Você pode editar esses campos antes do primeiro `db:prepare`. Não use o cadastro público para criar um administrador. Se o e-mail já pertencer a uma conta de torcedor, o bootstrap exige outro e-mail. O bootstrap cria o master (`OWNER`) ou converte o ADMIN ativo do e-mail configurado, aplicando a senha do ambiente nessa conversão. Repetir o comando para o mesmo OWNER preserva sua senha. O master cria os administradores do clube em Funcionários.
 
 ## Executar API e app
 

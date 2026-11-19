@@ -26,7 +26,7 @@ services:
       NODE_ENV: production
       NPM_CONFIG_CACHE: /tmp/nacional-npm-cache
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
-      ADMIN_NAME: ${ADMIN_NAME:-Administrador Esporte}
+      ADMIN_NAME: ${ADMIN_NAME:-Administração geral}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       HOST: 0.0.0.0
       TRUST_PROXY: ${DOCKER_NETWORK_GATEWAY:-172.30.77.1}

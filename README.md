@@ -25,7 +25,7 @@ npm run db:prepare
 
 `setup` mantém os `.env` existentes e gera uma senha administrativa local quando necessário. `db:prepare` gera Prisma, aplica migrations e cria o administrador, a instituição e o plano inicial. **Não cria contas de torcedores nem jogos fictícios.** Não inicia app/API/Docker.
 
-Primeiro login administrativo: `ADMIN_EMAIL` e `ADMIN_PASSWORD` de [apps/api/.env](apps/api/.env). O e-mail local inicial é `admin@nacional.local`; a senha local foi gerada aleatoriamente. Torcedores criam suas contas pela tela **Quero me cadastrar**. O cadastro público nunca cria um administrador.
+Login master da empresa (`OWNER`) após `npm run db:bootstrap`: `ADMIN_EMAIL` e `ADMIN_PASSWORD` de [apps/api/.env](apps/api/.env). O e-mail local inicial é `admin@nacional.local`; a senha local foi gerada aleatoriamente. Torcedores criam suas contas pela tela **Quero me cadastrar**. O cadastro público nunca cria um administrador.
 
 Em terminais separados:
 
@@ -43,7 +43,7 @@ Ou use `npm run web` para o app/painel no navegador. A API usa `http://localhost
 
 O login ADMIN abre o painel na versão web. Se o Expo já estiver usando 8081, a versão web pode abrir em 8082; as duas origens locais estão previstas no `CORS_ORIGINS`. Ao usar outro IP/porta, inclua a origem exata na configuração da API e recarregue-a.
 
-No navegador, `/` abre o app do torcedor. Em `/acesso/`, o perfil da conta abre a portaria, a bilheteria, o caixa ou a administração do time. A empresa usa `/administracao-geral/`. Contas GATE abrem diretamente a portaria também no app. A sessão web é preservada ao atualizar. [Acesso administrativo](docs/admin-login.md) e [portaria V1](docs/ingresso-v1.md).
+No navegador, `/` abre o app do torcedor. Em `/acesso/`, o cargo abre a portaria, a bilheteria, o caixa, a administração do time ou a administração geral da empresa. Contas GATE abrem diretamente a portaria também no app. A sessão web é preservada ao atualizar. [Acesso administrativo](docs/admin-login.md) e [portaria V1](docs/ingresso-v1.md).
 
 O admin tem identidade própria com fonte Inter, paleta neutra, detalhes na cor do clube (vermelho no Esporte) e temas claro/escuro independentes. No PC, a partir de 1024 px, ocupa a largura da janela e usa menu lateral recolhível, visão geral e tabelas. No celular, o menu abre pela lateral e as consultas usam cartões. Os formulários se adaptam à largura disponível. [Organização do painel administrativo](docs/admin-desktop.md).
 

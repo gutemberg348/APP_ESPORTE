@@ -1,3 +1,4 @@
+import { clubCatalog } from './match-inventory.js';
 import { randomUUID } from 'node:crypto';
 import { env } from '../config/env.js';
 import { db } from '../config/database.js';
@@ -15,7 +16,7 @@ export const adminModel = {
     const clubMatch = { estadio: { tenant: { slug: env.TENANT_SLUG } } };
     const [users, matches, issued, pending, counterMatches, counterIssued, counterPending, upcomingCounterMatches] = await Promise.all([
       db.user.count(),
-      db.match.count(),
+      db.match.count({ where: { partidaV1Id: null } }),
       db.ticket.aggregate({ where: { deletedAt: null, status: { in: ['ISSUED', 'USED'] } }, _sum: { quantity: true, voidedQuantity: true } }),
       db.ticket.count({ where: { deletedAt: null, status: 'PENDING', expiresAt: { gt: now } } }),
       db.partidaIngressoV1.count({ where: clubMatch }),
@@ -28,21 +29,16 @@ export const adminModel = {
       pendingReservations: pending + counterPending, upcomingCounterMatches };
   },
   async matches({ limit, offset }) {
-    return withAvailability(db, await db.match.findMany({ orderBy: { startsAt: 'desc' }, include: { sectors: { orderBy: { priceCents: 'asc' } } }, take: limit, skip: offset }));
+    return withAvailability(db, await db.match.findMany({ where: clubCatalog(env.TENANT_SLUG), orderBy: { startsAt: 'desc' }, include: { sectors: { orderBy: { priceCents: 'asc' } } }, take: limit, skip: offset }));
   },
-  createMatch(actorId, data) {
-    assertMatchSchedule(data);
-    if (data.startsAt <= new Date() || data.published) throw new AppError(422, 'INVALID_NEW_MATCH', 'Crie um jogo futuro como rascunho antes de cadastrar os setores.');
-    return serializable(db, async (tx) => {
-      const match = await tx.match.create({ data: { ...data, slug: randomUUID() }, include: { sectors: true } });
-      await writeAudit(tx, actorId, 'MATCH_CREATED', match.id, { homeTeam: match.homeTeam, awayTeam: match.awayTeam, published: match.published });
-      return match;
-    });
+  createMatch() {
+    throw new AppError(409, 'MATCH_MANAGED_IN_CALENDAR', 'Cadastre a partida em Partidas → Calendário com o estádio e os setores.');
   },
   updateMatch(actorId, { id, openGateNow: openNow, ...fields }) {
     return serializable(db, async (tx) => {
       const current = await tx.match.findUnique({ where: { id } });
       if (!current) throw new AppError(404, 'MATCH_NOT_FOUND', 'Jogo não encontrado.');
+      if (current.partidaV1Id) throw new AppError(409, 'MATCH_MANAGED_IN_CALENDAR', 'Edite esta partida no calendário.');
       const data = openNow ? openGateNow(current) : fields;
       assertMatchSchedule({ ...current, ...data });
       if (data.published === true && current.startsAt <= new Date() && !data.startsAt) throw new AppError(422, 'PAST_MATCH', 'A publicação exige um jogo futuro.');
@@ -56,7 +52,9 @@ export const adminModel = {
   },
   createSector(actorId, data) {
     return serializable(db, async (tx) => {
-      if (!await tx.match.findUnique({ where: { id: data.matchId } })) throw new AppError(404, 'MATCH_NOT_FOUND', 'Jogo não encontrado.');
+      const match = await tx.match.findUnique({ where: { id: data.matchId } });
+      if (match?.partidaV1Id) throw new AppError(409, 'MATCH_MANAGED_IN_CALENDAR', 'Edite os setores desta partida no calendário.');
+      if (!match) throw new AppError(404, 'MATCH_NOT_FOUND', 'Jogo não encontrado.');
       const sector = await tx.sector.create({ data });
       await writeAudit(tx, actorId, 'SECTOR_CREATED', sector.id, { matchId: data.matchId, capacity: data.capacity, priceCents: data.priceCents });
       return sector;
@@ -66,6 +64,7 @@ export const adminModel = {
     return serializable(db, async (tx) => {
       const sector = await tx.sector.findUnique({ where: { id } });
       if (!sector) throw new AppError(404, 'SECTOR_NOT_FOUND', 'Setor não encontrado.');
+      if (sector.alocacaoV1Id) throw new AppError(409, 'MATCH_MANAGED_IN_CALENDAR', 'Edite os setores desta partida no calendário.');
       if (data.capacity !== undefined) {
         const reserved = await tx.ticket.aggregate({ where: { sectorId: id, ...inventoryWhere() }, _sum: { quantity: true, voidedQuantity: true } });
         if (data.capacity < occupiedQuantity(reserved._sum)) throw new AppError(409, 'CAPACITY_BELOW_OCCUPIED', 'A capacidade não pode ser menor que os ingressos e reservas válidos.');
@@ -122,8 +121,8 @@ export const adminModel = {
       return { userId, active };
     });
   },
-  async audit({ limit, offset }) {
-    const rows = await db.auditLog.findMany({ orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], include: { actor: { select: { name: true } } }, take: limit, skip: offset });
+  async audit({ limit, offset }, role) {
+    const rows = await db.auditLog.findMany({ where: role === 'OWNER' ? {} : { actor: { role: { not: 'OWNER' } } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], include: { actor: { select: { name: true } } }, take: limit, skip: offset });
     return rows.map(row => {
       if (!row.details?.chaveQr) return row;
       const { chaveQr, ...details } = row.details;

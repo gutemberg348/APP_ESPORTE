@@ -7,7 +7,7 @@ export function useWebPortal() {
   const browser = Platform.OS === 'web' && typeof window !== 'undefined';
   const portal = browser ? webPortal(window.location.pathname) : nativePortal;
   useEffect(() => {
-    if (!browser || (portal !== 'staff' && portal !== 'owner')) return;
+    if (!browser || portal !== 'staff') return;
     const { pathname, search, hash } = window.location;
     if (pathname !== portalPaths[portal]) window.history.replaceState(null, '', portalPaths[portal] + search + hash);
   }, [browser, portal]);

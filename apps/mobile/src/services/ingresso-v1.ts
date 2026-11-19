@@ -84,6 +84,7 @@ export interface EstadioIngressoV1 {
   criadoEm: string;
   atualizadoEm: string;
   setores?: {
+    ativo: boolean;
     id: string;
     nome: string;
     corSetorHex?: string;
@@ -345,6 +346,7 @@ export interface LoteIngressoPartidaV1 {
 }
 
 export interface AlocacaoSetorPartidaIngressoV1 {
+  ocupadosApp?: number;
   id: string;
   partidaId: string;
   setorId: string;
@@ -376,6 +378,7 @@ export interface AlocacaoSetorPartidaIngressoV1 {
 }
 
 export interface PartidaIngressoV1 {
+  appMatch?: { id: string } | null;
   id: string;
   estadioId: string;
   templateVendaId?: string | null;

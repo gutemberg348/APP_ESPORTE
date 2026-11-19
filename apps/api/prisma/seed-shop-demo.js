@@ -69,7 +69,7 @@ const fixtures = [
 ];
 try {
   const actor = await db.user.findFirst({
-    where: { role: "ADMIN", active: true },
+    where: { role: { in: ["ADMIN", "OWNER"] }, active: true },
     orderBy: { createdAt: "asc" },
     select: { id: true },
   });

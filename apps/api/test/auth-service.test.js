@@ -87,7 +87,7 @@ test('web portals issue sessions only to accounts in their own area', async () =
     user.role = role;
     for (const portal of ['FAN', 'STAFF', 'OWNER']) {
       const before = sessions.size;
-      if (portal === allowed) assert.equal((await service.login({ ...input, portal })).member.role, role);
+      if (portal === allowed || (portal === 'STAFF' && role === 'OWNER')) assert.equal((await service.login({ ...input, portal })).member.role, role);
       else {
         await assert.rejects(service.login({ ...input, portal }), { code: 'INVALID_CREDENTIALS' });
         assert.equal(sessions.size, before);

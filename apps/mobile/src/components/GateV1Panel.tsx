@@ -26,6 +26,10 @@ export function GateV1Panel() {
   const [pending, setPending] = useState<GateV1Operation | null>(null), [storageReady, setStorageReady] = useState(false), [resetAllowed, setResetAllowed] = useState(false), [history, setHistory] = useState(false), [revision, setRevision] = useState(0);
   const lock = useRef(false), mounted = useRef(true), storageKey = `nacional.gate-v1.pending.${member!.id}`;
   const selected = matches.find((row) => row.id === matchId), blocked = loading || busy || readingImage || !!pending || !storageReady;
+  const sector = selected?.alocacoesSetor.find(row => row.id === allocationId);
+  const [historyApp, setHistoryApp] = useState(false);
+  const appScope = selected?.source ? { partidaId: matchId, alocacaoId: allocationId } : sector?.appScope;
+  const showAppHistory = !!selected?.source || !!sector?.appOnly || (!!appScope && historyApp);
   async function load() { setLoading(true); try { const value = await gateV1Api.matches(token!, true); if (mounted.current) setMatches(value); } catch (err) { if (mounted.current) setError(messageOf(err)); } finally { if (mounted.current) setLoading(false); } }
   async function restore() {
     try {
@@ -43,11 +47,14 @@ export function GateV1Panel() {
     if (lock.current || pending || !storageReady) return;
     clearReview();
     if (!selected || !allocationId || !selected.alocacoesSetor.some(row => row.id === allocationId)) throw new Error('Selecione a partida e o setor físico da portaria.');
-    const appCredential = selected.source === 'app' ? gateCredential(raw) : null;
+    const counterCode = /^INGV1\./.test(raw.trim()) || /^[A-Fa-f0-9]{16}$/.test(raw.replace(/[\s-]/g, ''));
+    const useApp = !!selected.source || !!sector?.appOnly || (!!appScope && !counterCode);
+    const scope = useApp && appScope ? { ...appScope, source: 'app' as const } : { partidaId: matchId, alocacaoId: allocationId };
+    const appCredential = useApp ? gateCredential(raw) : null;
     const value = appCredential ? (appCredential.token || appCredential.code)! : gateV1Input(raw);
     lock.current = true; setBusy(true);
     try {
-      const ticket = await gateV1Api.inspect(token!, { partidaId: matchId, alocacaoId: allocationId, source: selected.source, catracaId: gate.trim() || undefined, chaveQr: value });
+      const ticket = await gateV1Api.inspect(token!, { ...scope, catracaId: gate.trim() || undefined, chaveQr: value });
       if (mounted.current) { setReview(ticket); setCredential(value); setInput(''); setScanner(false); }
     } catch (err) { if (mounted.current) setError(messageOf(err)); throw err; }
     finally { lock.current = false; if (mounted.current) setBusy(false); }
@@ -65,7 +72,7 @@ export function GateV1Panel() {
     if (!selected?.alocacoesSetor.some(row => row.id === allocationId)) {
       clearReview(); setError('A escala mudou. Selecione novamente a partida e o setor.'); return;
     }
-    const operation = { partidaId: matchId, alocacaoId: allocationId, catracaId: gate.trim(), requestKey: requestKey(), source: selected.source, ticketId: review.id };
+    const operation = { partidaId: review.partida.id, alocacaoId: review.alocacao.id, catracaId: gate.trim(), requestKey: requestKey(), source: review.remainingQuantity !== undefined ? 'app' as const : undefined, ticketId: review.id };
     if (!operation.catracaId) { setError('Identifique o portão ou a catraca.'); return; }
     lock.current = true; setBusy(true); setError(''); setResult(null); setResetAllowed(false);
     try {
@@ -93,7 +100,7 @@ export function GateV1Panel() {
     <Panel><AdminSection title="Conferir ingresso" description="Selecione a partida e o setor. A leitura consulta o ingresso; a entrada só é autorizada após confirmar no servidor.">
       <AdminButton label="Atualizar escala" loading={loading} disabled={blocked} onPress={() => { clearReview(); void load(); }} />
       {!loading && !matches.length && <AdminNotice>Nenhuma escala disponível. O administrador deve liberar a partida e o setor em Funcionários.</AdminNotice>}
-      <AdminSelect label="Partida" value={matchId} disabled={blocked} options={matches.map((row) => ({ value: row.id, label: `${row.timeMandante} × ${row.timeVisitante} · ${row.source ? 'App' : 'V1'}`, description: row.portariaAtiva ? 'Portaria habilitada · conferir horário' : 'Portaria desativada' }))} onChange={(id) => { setMatch(id); setAllocation(''); clearReview(); }} placeholder="Selecione a partida" />
+      <AdminSelect label="Partida" value={matchId} disabled={blocked} options={matches.map((row) => ({ value: row.id, label: `${row.timeMandante} × ${row.timeVisitante}`, description: row.portariaAtiva ? 'Portaria habilitada · conferir horário' : 'Portaria desativada' }))} onChange={(id) => { setMatch(id); setAllocation(''); clearReview(); }} placeholder="Selecione a partida" />
       <AdminSelect label="Setor desta portaria" value={allocationId} disabled={blocked || !selected} options={(selected?.alocacoesSetor || []).map((row) => ({ value: row.id, label: row.setor.nome }))} onChange={(id) => { setAllocation(id); setGate(selected?.alocacoesSetor.find((row) => row.id === id)?.setor.portaoEntrada?.slice(0, 50) || 'PORTAO-01'); clearReview(); }} placeholder="Selecione o setor" />
       <AdminField label="Portão / catraca" value={gate} onChange={setGate} maxLength={50} editable={!blocked} required />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -108,7 +115,7 @@ export function GateV1Panel() {
     {review && !pending && <Panel><AdminSection title="Confira antes de liberar" description="Entrada ainda não autorizada.">
       <Text style={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>{review.nomeTitular}</Text>
       {!!review.cpfFinal && review.nomeTitular !== `CPF final ${review.cpfFinal}` && <Text style={{ color: colors.muted }}>CPF do titular · final {review.cpfFinal}</Text>}
-      <Text style={{ color: colors.muted }}>{review.alocacao.setor.nome} · {selected?.source ? `Saldo de ${review.remainingQuantity} entrada(s)` : review.blocoEscolhido ? `Bloco ${review.blocoEscolhido} · Fileira ${review.fileiraEscolhida} · Assento ${review.assentoEscolhido}` : 'Assento livre'}</Text>
+      <Text style={{ color: colors.muted }}>{review.alocacao.setor.nome} · {review.remainingQuantity !== undefined ? `Saldo de ${review.remainingQuantity} entrada(s)` : review.blocoEscolhido ? `Bloco ${review.blocoEscolhido} · Fileira ${review.fileiraEscolhida} · Assento ${review.assentoEscolhido}` : 'Assento livre'}</Text>
       {!!review.alocacao.setor.instrucaoAcomodacao && <Text style={{ color: colors.muted }}>{review.alocacao.setor.instrucaoAcomodacao}</Text>}
       <AdminButton label="Confirmar e registrar uma entrada" primary disabled={busy} loading={busy} onPress={() => void admit()} />
     </AdminSection></Panel>}
@@ -118,7 +125,8 @@ export function GateV1Panel() {
     </AdminSection></Panel>}
     {!!result && <AdminNotice tone={result.duplicate ? 'warning' : 'success'}><View style={{ gap: 8 }}><Text style={{ color: result.duplicate ? colors.gold : colors.primary, fontSize: 20, fontWeight: '700' }}>{result.duplicate ? 'Entrada já registrada — conferir' : 'Entrada confirmada — 1 pessoa'}</Text><Text style={{ color: colors.text }}>{result.ticket.nomeTitular} · {result.ticket.alocacao.setor.nome}</Text><Text style={{ color: colors.muted }}>{result.duplicate ? 'Confira se a pessoa desta operação já passou. Não autorize outra passagem.' : (result.ticket.remainingQuantity ? `Saldo do grupo: ${result.ticket.remainingQuantity}. Peça o próximo QR para outra entrada.` : 'Ingresso utilizado.')}</Text><Text selectable style={{ color: colors.muted, fontSize: 12 }}>Protocolo: {result.admission.id}</Text></View></AdminNotice>}
     <AdminButton label={history ? 'Ocultar histórico' : 'Histórico de entradas'} onPress={() => setHistory(!history)} />
-    {history && <GateV1History refreshKey={revision} source={selected?.source} partidaId={matchId || undefined} alocacaoId={allocationId || undefined} />}
+    {history && sector?.appScope && !sector.appOnly && <AdminSelect label="Histórico de entradas" value={showAppHistory ? 'app' : 'counter'} options={[{ value: 'app', label: 'Ingressos do app' }, { value: 'counter', label: 'Bilheteria e emissão manual' }]} onChange={v => setHistoryApp(v === 'app')} />}
+    {history && <GateV1History refreshKey={revision} source={showAppHistory ? 'app' : undefined} partidaId={(showAppHistory ? appScope?.partidaId : matchId) || undefined} alocacaoId={(showAppHistory ? appScope?.alocacaoId : allocationId) || undefined} />}
     {scanner && <PaymentQrScanner ticketMode title="Ler ingresso" instructions="Leia o QR do ingresso ou o código de barras impresso. Confira o titular antes de confirmar." placeholder="QR ou código do ingresso" manualLabel="Consultar ingresso" onRead={inspect} onClose={() => setScanner(false)} />}
   </View>;
 }

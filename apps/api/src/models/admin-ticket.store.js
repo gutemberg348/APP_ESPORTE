@@ -34,6 +34,7 @@ export function createAdminTicketStore(client, { now = () => new Date() } = {}) 
     if (!sector) throw new AppError(422, 'INVALID_SECTOR', 'O setor não pertence ao jogo desta venda.');
     if (input.quantity < ticket.usedQuantity) throw new AppError(409, 'QUANTITY_BELOW_USED', `Já foram utilizadas ${ticket.usedQuantity} entradas. A quantidade não pode ser menor.`);
     if (ticket.usedQuantity > 0 && sector.id !== ticket.sectorId) throw new AppError(409, 'USED_SECTOR_PROTECTED', 'Após uma entrada, mantenha o setor para preservar o histórico da portaria.');
+    if (sector.alocacaoV1Id && !sector.salesEnabled && (sector.id !== ticket.sectorId || input.quantity > ticket.quantity)) throw new AppError(409, 'SECTOR_UNAVAILABLE', 'Este setor não está disponível para novas entradas no app.');
     const paid = Boolean(ticket.payment);
     if (!paid) {
       if (!ticket.user?.active || !['USER', 'ADMIN'].includes(ticket.user.role)) throw new AppError(409, 'HOLDER_DISABLED', 'O titular desta reserva não está habilitado para comprar.');

@@ -38,5 +38,5 @@ export const adminService = {
   inspect: ticketEntryService.inspect,
   admit: ticketEntryService.admit,
   receipt: ticketEntryService.receipt,
-  audit: guard((_, query) => adminModel.audit(query)),
+  audit: guard((_, query, role) => adminModel.audit(query, role)),
 };

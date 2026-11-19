@@ -6,6 +6,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/client/index.js";
+import { provisionOwner } from "../prisma/bootstrap-owner.js";
 import { createPasswordRecoveryStore } from "../src/models/password-recovery.store.js";
 import { createPartnerStore } from "../src/models/partner.store.js";
 import { createStaffModel } from "../src/models/staff.model.js";
@@ -767,6 +768,25 @@ test(
         assert.ok(!(await staff.list({}, admin.role)).some((u) => u.id === admin.id));
       },
     );
+    await t.test("bootstrap provisions the configured owner and revokes pre-promotion access", async () => {
+      const provision = (email, passwordHash) => db.$transaction(tx => provisionOwner(tx, { name: "Empresa", email, passwordHash }));
+      const email = "bootstrap@empresa.test";
+      const club = await db.user.create({ data: { email, name: "Admin", passwordHash: "old", role: "ADMIN" } });
+      const expiresAt = new Date(Date.now() + 60000);
+      const session = await db.session.create({ data: { userId: club.id, tokenHash: randomUUID(), expiresAt } });
+      const reset = await db.passwordResetToken.create({ data: { userId: club.id, tokenHash: randomUUID(), expiresAt, emailAtIssue: email, credentialHash: "old" } });
+      const owner = await provision(email, "changed");
+      assert.equal(owner.role, "OWNER");
+      assert.equal(owner.id, club.id);
+      assert.ok((await db.session.findUniqueOrThrow({ where: { id: session.id } })).revokedAt);
+      assert.ok((await db.passwordResetToken.findUniqueOrThrow({ where: { id: reset.id } })).usedAt);
+      assert.equal((await provision(email, "ignored")).passwordHash, "changed");
+      assert.equal(await db.auditLog.count({ where: { actorId: club.id, action: "PLATFORM_OWNER_PROMOTED" } }), 1);
+      assert.equal((await provision("new-owner@empresa.test", "fresh")).role, "OWNER");
+      const fanEmail = "bootstrap-fan@empresa.test";
+      await db.user.create({ data: { email: fanEmail, name: "Torcedor", passwordHash: "fan" } });
+      await assert.rejects(provision(fanEmail, "ignored"), /exclusivo/);
+    });
     await t.test("company provisions club access and club administrators manage only operational profiles", async () => {
       const owner = await user("OWNER");
       const registration = { name: "Gestor do clube", role: "ADMIN", email: `${randomUUID()}@test.local`, passwordHash: "test-hash" };

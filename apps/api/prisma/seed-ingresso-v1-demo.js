@@ -19,7 +19,7 @@ async function main() {
     throw new Error('Este seed é exclusivo do banco local de desenvolvimento.');
   const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
   if (!email) throw new Error('Configure ADMIN_EMAIL no .env da API para identificar o responsável pelo seed.');
-  const actor = await db.user.findFirst({ where: { email, role: 'ADMIN', active: true }, select: { id: true, role: true, active: true } });
+  const actor = await db.user.findFirst({ where: { email, role: { in: ['ADMIN', 'OWNER'] }, active: true }, select: { id: true, role: true, active: true } });
   if (!actor) throw new Error('Administrador configurado não encontrado ou inativo. Prepare a conta administrativa primeiro.');
 
   let template = (await service.templatesSetor(actor, { ativo: 'all' })).find((row) => row.slug === 'teste-local-arquibancada-v1' || row.nome === names.sectorTemplate);

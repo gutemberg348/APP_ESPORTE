@@ -17,8 +17,11 @@ function after(field, channel, cursor) {
 export function listAdminTickets(db, tenantSlug, { search, matchId, channel, cursor, limit }) {
   return db.$transaction(async tx => {
     const take = limit + 1;
+    const linked = matchId && !channel ? await tx.match.findFirst({
+      where: { partidaV1Id: matchId, partidaV1: { estadio: { tenant: { slug: tenantSlug } } } }, select: { id: true },
+    }) : null;
     const app = channel === 'counter' ? [] : await tx.ticket.findMany({
-      where: { AND: [salesWhere({ matchId, search }), after('createdAt', 'app', cursor)] },
+      where: { AND: [salesWhere({ matchId: linked?.id || matchId, search }), after('createdAt', 'app', cursor)] },
       include: { ...ticketInclude, user: { select: { id: true, name: true, email: true } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take,
     });

@@ -15,6 +15,7 @@ const templateInclude = {
 const include = {
   setores: {
     select: {
+      ativo: true,
       id: true,
       nome: true,
       corSetorHex: true,

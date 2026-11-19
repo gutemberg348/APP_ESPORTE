@@ -1,3 +1,5 @@
+import { env } from '../config/env.js';
+import { clubCatalog } from './match-inventory.js';
 import { db } from "../config/database.js";
 import { serializable } from "../lib/business-rules.js";
 import { AppError } from "../lib/errors.js";
@@ -22,7 +24,7 @@ function safe(user) {
     role: user.role,
     assignmentsV1: (user.gateAssignmentsV1 || []).map((item) => ({ allocationId: item.alocacaoId, sectorName: item.alocacao.setor.nome, matchId: item.alocacao.partidaId, matchLabel: `${item.alocacao.partida.timeMandante} × ${item.alocacao.partida.timeVisitante}`, active: item.active })),
     assignments: user.gateAssignments.map((item) => ({
-      sectorId: item.sectorId,
+      sectorId: item.sectorId, allocationId: item.sector.alocacaoV1Id,
       sectorName: item.sector.name,
       matchId: item.sector.matchId,
       matchLabel: `${item.sector.match.homeTeam} × ${item.sector.match.awayTeam}`,
@@ -148,8 +150,9 @@ export function createStaffModel(db) {
       return db.match.findMany({
         where:
           isAdminRole(user.role)
-            ? {}
+            ? clubCatalog(env.TENANT_SLUG)
             : {
+                ...clubCatalog(env.TENANT_SLUG),
                 sectors: {
                   some: {
                     gateAssignments: {

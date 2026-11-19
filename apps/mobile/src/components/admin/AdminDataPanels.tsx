@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
+import { adminApi } from '../../services/admin';
+import { ReportError, useAdminReport } from './AdminReportControls';
 import { View, Pressable } from 'react-native';
 import { CalendarDays, MapPin, Pencil, Plus, Search, Users, History } from 'lucide-react-native';
 import type { Match, Sector, Member, ClubPlan, AuditEvent } from '@nacional/shared/types';
@@ -58,7 +60,20 @@ export function AdminPlanGrid({ plans, onEdit, busy }: { plans: ClubPlan[]; onEd
   return <View style={{ flexDirection: desktop ? 'row' : 'column', flexWrap: 'wrap', gap: 18 }}>{plans.map((plan) => <Panel key={plan.id} style={{ flexBasis: desktop ? 270 : undefined, flexGrow: desktop ? 1 : undefined, minWidth: 0, borderRadius: 10, padding: 24, gap: 18 }}><Text heading style={{ color: colors.text, fontSize: 19, fontWeight: '600' }}>{plan.name}</Text><View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 5 }}><Text heading style={{ color: colors.primary, fontSize: 28, lineHeight: 38, fontWeight: '600' }}>{money(plan.priceCents)}</Text><Text style={{ color: colors.muted, fontSize: 12 }}>/ {plan.durationDays || 30} dias</Text></View><View style={{ paddingVertical: 16, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border, gap: 4 }}><Text style={{ color: colors.text, fontSize: 13 }}>{plan.discountPercent}% de desconto em ingressos</Text><Text style={{ color: colors.subtle, fontSize: 11 }}>Aplicado para associações ativas e válidas.</Text></View><Text style={{ color: colors.muted, fontSize: 12 }}>{plan.active === false ? 'Oculto no aplicativo' : 'Disponível no aplicativo'}</Text><AdminAction label="Editar plano" icon={Pencil} disabled={busy} onPress={() => onEdit(plan)} /></Panel>)}</View>;
 }
 
-export function AdminAuditPanel({ audit, loading }: { audit: AuditEvent[]; loading: boolean }) {
+const auditPageSize = 50;
+export function AdminAuditPanel({ refreshKey }: { refreshKey: number }) {
+  const [offset, setOffset] = useState(0);
+  const filters = useMemo(() => ({ limit: String(auditPageSize + 1), offset: String(offset) }), [offset]);
+  const { data, loading, error } = useAdminReport(adminApi.audit, filters, refreshKey);
+  return <View style={{ gap: 14 }}><ReportError error={error} />
+    {!error && <AuditRows audit={data?.slice(0, auditPageSize) || []} loading={loading} />}
+    {(offset > 0 || (data?.length || 0) > auditPageSize) && <View style={{ flexDirection: 'row', gap: 10 }}>
+      <AdminAction label="Anterior" disabled={loading || offset === 0} onPress={() => setOffset(offset - auditPageSize)} />
+      <AdminAction label="Próxima" disabled={loading || (data?.length || 0) <= auditPageSize || offset >= 10000} onPress={() => setOffset(offset + auditPageSize)} />
+    </View>}
+  </View>;
+}
+function AuditRows({ audit, loading }: { audit: AuditEvent[]; loading: boolean }) {
   const { colors } = useTheme();
   const desktop = useDesktopAdmin();
   return desktop ? <AdminTable minWidth={730} loading={loading} columns={[{ label: 'Operação', flex: 1.3 }, { label: 'Responsável' }, { label: 'Entidade', flex: 1.3 }, { label: 'Data e hora', width: 155 }]} rows={audit.map((event) => ({ id: event.id, cells: [<Text style={{ color: colors.text, fontSize: 11, fontWeight: '600' }}>{event.action.replaceAll('_', ' ')}</Text>, <Text style={{ color: colors.muted, fontSize: 12 }}>{event.actor.name}</Text>, <Text selectable style={{ color: colors.subtle, fontSize: 10 }}>{event.entityId}</Text>, <Text style={{ color: colors.muted, fontSize: 11 }}>{new Date(event.createdAt).toLocaleString('pt-BR', { timeZone: 'America/Fortaleza' })}</Text>] }))} empty="Nenhuma atividade registrada." /> : <View style={{ gap: 13 }}>{audit.map((event) => <Panel key={event.id} style={{ padding: 18, gap: 7 }}><Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }}>{event.action.replaceAll('_', ' ')}</Text><Text style={{ color: colors.muted, fontSize: 12 }}>{event.actor.name} · {new Date(event.createdAt).toLocaleString('pt-BR')}</Text><Text selectable style={{ color: colors.subtle, fontSize: 10 }}>{event.entityId}</Text></Panel>)}{!audit.length && !loading && <AdminEmpty icon={History} title="Nenhuma atividade ainda" description="As operações administrativas vão aparecer aqui." />}</View>;

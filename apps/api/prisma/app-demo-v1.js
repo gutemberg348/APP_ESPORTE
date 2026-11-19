@@ -63,7 +63,12 @@ export async function seedDemoV1(tx, { tenantSlug, schedule }) {
         lotes: { create: categories.map(category => ({ nome: category.nome, tipoCategoria: category.tipoCategoria,
           precoCentavos: Math.round(sector.preco * (100 - category.percentualDesconto) / 100), quantidadeMaxima: Math.floor(sector.capacidade / 2) })) },
       })) },
-    } }); matchesCreated++;
+    } });
+    if (!await tx.match.findUnique({ where: { slug: match.slug } })) {
+      await tx.$executeRaw`SELECT sync_app_match(${id}::uuid)`;
+      await tx.match.update({ where: { partidaV1Id: id }, data: { slug: match.slug, competition: match.competition } });
+    }
+    matchesCreated++;
   }
   return { templatesCreated, stadiumsCreated, salesTemplatesCreated, matchesCreated };
 }

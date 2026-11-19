@@ -53,16 +53,7 @@ As rotas sem sufixo são `/v1/admin/withdrawals`, sem barra final. Para comprova
 
 Após subir o código, execute `sudo docker compose up -d --build api web`. A API aplica a migration `20261118210000_platform_owner` e os usuários administrativos existentes passam a operar como administradores do clube.
 
-No terminal da VPS, substitua o e-mail e o nome de exemplo pelos dados da empresa e cadastre a conta com senha própria:
-
-```bash
-read -rsp 'Senha do administrador geral: ' owner_password
-printf '\n'
-printf '%s\n' "$owner_password" | sudo docker compose exec -T api node scripts/create-owner.mjs 'financeiro@suaempresa.com.br' 'Financeiro da empresa'
-unset owner_password
-```
-
-O e-mail é exclusivo do administrador geral. O comando preserva contas existentes e o painel da empresa abre em **Saques** após o login. O fluxo opera sobre o financeiro desta instalação do Esporte.
+Configure o e-mail, o nome e a senha exclusivos da empresa em `ADMIN_EMAIL`, `ADMIN_NAME` e `ADMIN_PASSWORD` no `.env` da VPS antes de recriar a API. Depois execute `sudo docker compose exec -T api npm run db:bootstrap` e entre em `/acesso/`. O painel da empresa abre em **Saques**. [Conta master e acessos](admin-login.md).
 
 Execute `npm install`, `npm run db:generate` e `npm run db:deploy` no ambiente de destino e reinicie a API pelos comandos habituais. A migration `20261109040000_withdrawals_receipts` adiciona as tabelas, relações e restrições; não apaga repasses antigos. Não há nova credencial de gateway ou variável de armazenamento para os anexos.
 

@@ -2,6 +2,14 @@
 
 A gestão V1 usa estádios, setores, templates, partidas, alocações, lotes, pedidos e ingressos próprios (`ingresso_v1_*`). A portaria visível no admin e no acesso do funcionário agora atende esse modelo e os ingressos comprados no app.
 
+## Calendário e canais de venda
+
+Cadastre a partida em **Partidas → Calendário**. Ali ficam estádio, setores, lotes, preços, cotas e horários de venda e portaria. Salvar uma partida do calendário atualiza o catálogo do aplicativo na mesma transação. Publicar e habilitar as vendas libera a compra no período configurado.
+
+O app vende o primeiro lote inteiro ativo por ordem de criação em cada setor sem numeração e aplica o desconto de associação vigente. A bilheteria oferece os lotes ativos e permite escolher assento em setor numerado. Cada reserva consome a disponibilidade do setor e do lote. As entradas vendidas no app continuam vinculadas ao comprador, ao Pix e à credencial já emitida.
+
+A migração `20261119170000_match_catalog` vincula os pares conhecidos do seed pelos identificadores de origem e preserva os IDs dos bilhetes. O painel mostra esses jogos uma vez. Jogos antigos exclusivos do app permanecem identificados como **Cadastro anterior · App**. Uma partida antiga da bilheteria passa a alimentar o app ao ser salva no calendário. Cadastros de origem incerta exigem conferência antes de qualquer unificação de histórico.
+
 ## Preparação depois do pull
 
 Na raiz, com o PostgreSQL já disponível:

@@ -1,3 +1,4 @@
+import { appOccupancy, standardLot } from '../models/match-inventory.js';
 import { publicIntent } from '../payments/pix-contract.js';
 import { processTerminalCommand } from './pagbank-counter.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -17,7 +18,7 @@ const orderSelect = { id: true, chaveBalcao: true, criadoEm: true, expiraEm: tru
 const withTickets = { ...orderSelect, ingressos: { select: ticketSelect, orderBy: [{ criadoEm: 'asc' }, { id: 'asc' }] } };
 
 function openMatches(slug, now) {
-  return { status: 'PUBLICADA', vendasAtivas: true, estadio: { ativo: true, tenant: { slug, active: true } },
+  return { status: 'PUBLICADA', vendasAtivas: true, dataPartida: { gt: now }, estadio: { ativo: true, tenant: { slug, active: true } },
     AND: [{ OR: [{ inicioVendas: null }, { inicioVendas: { lte: now } }] },
       { OR: [{ fimVendas: { gt: now } }, { fimVendas: null, dataPartida: { gt: now } }] }] };
 }
@@ -28,14 +29,16 @@ export function createTicketCounter(client, slug, settings = env) {
     const lots = await client.loteIngressoPartidaV1.findMany({
       where: { ativo: true, alocacao: { partida: openMatches(slug, new Date()), setor: { ativo: true } } },
       select: { id: true, nome: true, precoCentavos: true, quantidadeVendida: true, quantidadeMaxima: true, quantidadeReservada: true, alocacao: {
-        select: { capacidadeLiberada: true, quantidadeVendida: true, quantidadeReservada: true,
+        select: { id: true, lotes: { select: { id: true, ativo: true, tipoCategoria: true, criadoEm: true } }, capacidadeLiberada: true, quantidadeVendida: true, quantidadeReservada: true,
           partida: { select: { id: true, timeMandante: true, timeVisitante: true, dataPartida: true } },
           setor: { select: { nome: true, numerado: true } } } } },
       orderBy: [{ alocacao: { partida: { dataPartida: 'asc' } } }, { nome: 'asc' }] });
+    const appUsage = await appOccupancy(client, [...new Set(lots.map(lot => lot.alocacao.id))]);
     return lots.map(lot => {
       const a = lot.alocacao;
+      const appUsed = appUsage.get(a.id) || 0;
       return { id: lot.id, name: lot.nome, unitCents: lot.precoCentavos, match: a.partida, sector: a.setor, pixAvailable: settings.PAYMENT_MODE === 'sicredi',
-        available: Math.min(lot.quantidadeMaxima - lot.quantidadeVendida - lot.quantidadeReservada, a.capacidadeLiberada - a.quantidadeVendida - a.quantidadeReservada) };
+        available: Math.min(lot.quantidadeMaxima - lot.quantidadeVendida - lot.quantidadeReservada - (standardLot(a.lotes)?.id === lot.id ? appUsed : 0), a.capacidadeLiberada - a.quantidadeVendida - a.quantidadeReservada - appUsed) };
     }).filter(lot => lot.available > 0);
   }
   async function sale(userId, input) {

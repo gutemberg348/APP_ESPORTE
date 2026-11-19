@@ -43,7 +43,7 @@ const apiEnv = new URL('apps/api/.env', root);
 const apiContent = await readFile(apiEnv, 'utf8');
 if (!/^ADMIN_PASSWORD=.+$/m.test(apiContent)) {
   const entry = `ADMIN_PASSWORD=${randomBytes(18).toString('base64url')}`;
-  await writeFile(apiEnv, /^ADMIN_PASSWORD=$/m.test(apiContent) ? apiContent.replace(/^ADMIN_PASSWORD=$/m, entry) : `${apiContent.trimEnd()}\nADMIN_EMAIL=admin@nacional.local\nADMIN_NAME=Administrador Nacional\n${entry}\n`);
+  await writeFile(apiEnv, /^ADMIN_PASSWORD=$/m.test(apiContent) ? apiContent.replace(/^ADMIN_PASSWORD=$/m, entry) : `${apiContent.trimEnd()}\nADMIN_EMAIL=admin@nacional.local\nADMIN_NAME=Administração geral\n${entry}\n`);
   console.log('Senha administrativa local criada em apps/api/.env.');
 }
 for (const path of ['.env', 'apps/api/.env']) {
@@ -98,7 +98,7 @@ for (const path of ['.env', 'apps/api/.env']) {
   const target = new URL('.env', root);
   let source = await readFile(target, 'utf8');
   const local = await readFile(new URL('apps/api/.env', root), 'utf8');
-  for (const [key, fallback] of Object.entries({ ADMIN_EMAIL: 'admin@nacional.local', ADMIN_NAME: 'Administrador Esporte', ADMIN_PASSWORD: randomBytes(18).toString('base64url') })) {
+  for (const [key, fallback] of Object.entries({ ADMIN_EMAIL: 'admin@nacional.local', ADMIN_NAME: 'Administração geral', ADMIN_PASSWORD: randomBytes(18).toString('base64url') })) {
     const value = local.match(new RegExp(`^${key}=(.+)$`, 'm'))?.[1] || fallback;
     if (!new RegExp(`^${key}=`, 'm').test(source)) source += `\n${key}=${value}\n`;
     else if (new RegExp(`^${key}=$`, 'm').test(source)) source = source.replace(new RegExp(`^${key}=$`, 'm'), `${key}=${value}`);

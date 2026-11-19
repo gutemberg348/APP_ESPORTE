@@ -26,6 +26,12 @@ import { recoveryApi } from "../services/recovery";
 import { AdminAccountForm } from "./admin/AdminAccountForm";
 import { staffRoleOptions } from "../utils/staff-roles";
 
+function physicalAssignments(employee: Employee) {
+  const rows = new Map<string, { matchLabel: string; sectorName: string }>();
+  for (const a of employee.assignments) if (a.active) rows.set(a.allocationId || a.sectorId, a);
+  for (const a of employee.assignmentsV1) if (a.active) rows.set(a.allocationId, a);
+  return [...rows.values()];
+}
 export function EmployeePanel({
   desktop = false,
 }: {
@@ -288,8 +294,7 @@ export function EmployeePanel({
               <Text
                 style={{ color: colors.muted, fontSize: 12, lineHeight: 21 }}
               >
-                {[...employee.assignmentsV1, ...employee.assignments]
-                  .filter((item) => item.active)
+                {physicalAssignments(employee)
                   .map((item) => item.matchLabel + " · " + item.sectorName)
                   .join("\n") || (employee.role === "GATE" ? "Sem setores liberados" : "—")}
               </Text>,
@@ -329,7 +334,7 @@ export function EmployeePanel({
               </Text>
               <Text style={{ color: colors.subtle, fontSize: 12 }}>
                 {roles.find(item => item.value === employee.role)?.label}
-                {employee.role === "GATE" && ` · ${[...employee.assignmentsV1, ...employee.assignments].filter(item => item.active).length} setor(es) na escala`}
+                {employee.role === "GATE" && ` · ${physicalAssignments(employee).length} setor(es) na escala`}
               </Text>
               {actions(employee)}
             </Panel>
@@ -450,7 +455,7 @@ export function EmployeePanel({
                 <AdminSection
                   key={match.id}
                   title={match.timeMandante + " × " + match.timeVisitante}
-                  description={`${match.source ? 'App' : 'V1'} · ${matchDate(match.dataPartida)}`}
+                  description={matchDate(match.dataPartida)}
                 >
                   {match.alocacoesSetor.map((sector) => (
                     <AdminToggle
@@ -458,21 +463,20 @@ export function EmployeePanel({
                       checkbox
                       disabled={busy}
                       label={sector.setor.nome}
-                      value={(match.source ? appSectors : sectors).includes(sector.id)}
-                      onChange={(checked) =>
-                        (match.source ? setAppSectors : setSectors)((previous) =>
-                          checked
-                            ? [...previous, sector.id]
-                            : previous.filter((id) => id !== sector.id),
-                        )
-                      }
+                      value={match.source || sector.appOnly ? appSectors.includes(sector.id) : sectors.includes(sector.id) && (!sector.appScope || appSectors.includes(sector.appScope.alocacaoId))}
+                      onChange={checked => {
+                        const toggle = (ids: string[], id: string) => checked ? [...new Set([...ids, id])] : ids.filter(value => value !== id);
+                        if (!match.source && !sector.appOnly) setSectors(ids => toggle(ids, sector.id));
+                        const appId = match.source ? sector.id : sector.appScope?.alocacaoId;
+                        if (appId) setAppSectors(ids => toggle(ids, appId));
+                      }}
                     />
                   ))}
                 </AdminSection>
               ))}
               <AdminButton
                 primary
-                label={"Salvar escala · " + (sectors.length + appSectors.length) + " setor(es)"}
+                label="Salvar escala"
                 loading={busy}
                 onPress={() =>
                   void perform(

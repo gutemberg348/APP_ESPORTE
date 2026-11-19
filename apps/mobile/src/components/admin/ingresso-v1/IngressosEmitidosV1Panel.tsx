@@ -54,7 +54,7 @@ export function IngressosEmitidosV1Panel({
   const { colors } = useTheme();
   const [rows, setRows] = useState<AdminTicketRow[]>([]);
   const [partidas, setPartidas] = useState<PartidaIngressoV1[]>([]);
-  const [filtroPartidaId, setFiltroPartidaId] = useState(initialPartidaId ? 'counter:' + initialPartidaId : '');
+  const [filtroPartidaId, setFiltroPartidaId] = useState(initialPartidaId ? 'game:' + initialPartidaId : '');
   const [search, setSearch] = useState('');
   const [pages, setPages] = useState<string[]>([]);
   const [next, setNext] = useState<string | null>(null);
@@ -84,7 +84,7 @@ export function IngressosEmitidosV1Panel({
     setLoading(true);
     try {
       const [channel, matchId] = targetPartidaId.split(':');
-      const result = await adminApi.ticketDirectory(token, { channel: channel || '', matchId: matchId || '', search: search.trim(), cursor });
+      const result = await adminApi.ticketDirectory(token, { channel: channel === 'game' ? '' : channel || '', matchId: matchId || '', search: search.trim(), cursor });
       if (current !== revision.current) return;
       setRows(result.items);
       setNext(result.next);
@@ -111,7 +111,7 @@ export function IngressosEmitidosV1Panel({
 
   useEffect(() => {
     if (initialPartidaId) {
-      setFiltroPartidaId('counter:' + initialPartidaId);
+      setFiltroPartidaId('game:' + initialPartidaId);
       setPages([]);
     }
   }, [initialPartidaId]);
@@ -146,7 +146,7 @@ export function IngressosEmitidosV1Panel({
 
   function openEmitir() {
     mapRequest.current++;
-    setPartidaId(filtroPartidaId.startsWith('counter:') ? filtroPartidaId.slice(8) : '');
+    setPartidaId(initialPartidaId || (filtroPartidaId.startsWith('game:') ? filtroPartidaId.slice(5) : ''));
     setAlocacaoId('');
     setLoteId('');
     setNomeTitular('');
@@ -175,7 +175,8 @@ export function IngressosEmitidosV1Panel({
     const aloc = p?.alocacoesSetor.find((a) => a.id === nextAlocacaoId);
     mapRequest.current++;
     setAlocacaoId(nextAlocacaoId);
-    setLoteId(aloc?.lotes.length === 1 ? aloc.lotes[0]?.id || '' : '');
+    const activeLots = aloc?.lotes.filter(l => l.ativo) || [];
+    setLoteId(activeLots.length === 1 ? activeLots[0]?.id || '' : '');
     setMapaBloco(null);
     setBlocoEscolhido(null);
     setFileiraEscolhida('');
@@ -283,10 +284,10 @@ export function IngressosEmitidosV1Panel({
             disabled={busy}
             options={[
               { value: '', label: 'Todas as partidas' },
-              ...appMatches.map(m => ({ value: 'app:' + m.id, label: `${m.homeTeam} × ${m.awayTeam} · App` })),
+              ...appMatches.filter(m => !m.partidaV1Id).map(m => ({ value: 'app:' + m.id, label: `${m.homeTeam} × ${m.awayTeam} · App` })),
               ...partidas.map((p) => ({
-                value: 'counter:' + p.id,
-                label: `${p.timeMandante} × ${p.timeVisitante} (${p.estadio.nomePopular || p.estadio.nome}) · Bilheteria`,
+                value: 'game:' + p.id,
+                label: `${p.timeMandante} × ${p.timeVisitante} (${p.estadio.nomePopular || p.estadio.nome})`,
               })),
             ]}
             onChange={value => { setFiltroPartidaId(value); setPages([]); }}
@@ -430,7 +431,7 @@ export function IngressosEmitidosV1Panel({
                 disabled={busy || !partidaSelecionada}
                 options={(partidaSelecionada?.alocacoesSetor || []).map((a) => ({
                   value: a.id,
-                  label: `${a.setor.nome} (${Math.max(0, a.capacidadeLiberada - a.quantidadeVendida - a.quantidadeReservada)} livres)`,
+                  label: `${a.setor.nome} (${Math.max(0, a.capacidadeLiberada - a.quantidadeVendida - a.quantidadeReservada - (a.ocupadosApp || 0))} livres)`,
                 }))}
                 onChange={handleSelectAlocacao}
               />
@@ -439,7 +440,7 @@ export function IngressosEmitidosV1Panel({
                 value={loteId}
                 placeholder="Selecione o lote..."
                 disabled={busy || !alocacaoSelecionada}
-                options={(alocacaoSelecionada?.lotes || []).map((l) => ({
+                options={(alocacaoSelecionada?.lotes || []).filter(l => l.ativo).map((l) => ({
                   value: l.id || '',
                   label: `${l.nome} — ${money(l.precoCentavos)}`,
                 }))}

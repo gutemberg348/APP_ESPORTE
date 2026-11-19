@@ -51,20 +51,20 @@ export function AppNavigator() {
   const { member, loading, bootError, retry, demoMode, resumeDemo, clearSession } = useSession();
   const { portal, navigate } = useWebPortal();
   const recovery = usePasswordRecoveryLink();
-  if (recovery.link) return <PasswordResetScreen {...recovery.link} onDone={() => { const destination = recovery.link!.portal; void clearSession().then(() => { recovery.clear(); navigate(destination === 'OWNER' ? 'owner' : destination === 'ADMIN' ? 'staff' : 'app'); }); }} />;
+  if (recovery.link) return <PasswordResetScreen {...recovery.link} onDone={() => { const destination = recovery.link!.portal; void clearSession().then(() => { recovery.clear(); navigate(destination === 'APP' ? 'app' : 'staff'); }); }} />;
   if (Platform.OS === 'web' && portal === 'business') {
     const refs = new URL(window.location.href).searchParams.getAll('ref');
     return <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <BusinessInvitationPage key={refs.join(',')} code={refs.length === 1 ? refs[0]! : null} onDone={() => navigate('app')} />
     </SafeAreaView>;
   }
-  if ((portal === 'staff' || portal === 'owner') && !member) {
-    return <AdminLoginScreen key={portal} portal={portal} loading={loading} bootError={bootError} onRetry={() => void retry()} onOpenApp={() => navigate('app')} />;
+  if (portal === 'staff' && !member) {
+    return <AdminLoginScreen loading={loading} bootError={bootError} onRetry={() => void retry()} onOpenApp={() => navigate('app')} />;
   }
   if (Platform.OS === 'web' && member && accountPortal(member.role) !== portal) {
     return <View style={[layout.center, { padding: 24, gap: 16 }]}><Text>Esta conta não tem acesso a esta área.</Text><Button label="Trocar de conta" onPress={() => void clearSession()} /></View>;
   }
-  if (member?.role === 'OWNER' || (portal === 'staff' && member?.role === 'ADMIN')) return <AdminScreen key={member.id} onBack={portal === 'staff' ? () => navigate('app') : undefined} />;
+  if (member?.role === 'OWNER' || (portal === 'staff' && member?.role === 'ADMIN')) return <AdminScreen key={member.id} onBack={portal === 'staff' && member.role === 'ADMIN' ? () => navigate('app') : undefined} />;
   if (portal === 'seller' && member && !['TICKET_SELLER','ADMIN'].includes(member.role)) return <View style={layout.center}><Text>Use uma conta de bilheteria.</Text><Button label="Trocar de conta" onPress={() => void clearSession()} /></View>;
   if (member && (member.role === 'TICKET_SELLER' || portal === 'seller')) return <AdminThemeProvider><CounterFrame><TicketCounterScreen key={member.id} /></CounterFrame></AdminThemeProvider>;
   if (portal === 'seller' && !member && !loading && !bootError && !demoMode) return <AdminThemeProvider><CounterFrame><LoginScreen sellerOnly onBack={() => navigate('app')} /></CounterFrame></AdminThemeProvider>;

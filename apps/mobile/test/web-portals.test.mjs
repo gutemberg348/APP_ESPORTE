@@ -9,14 +9,14 @@ const { webPortal, accountPortal, portalPaths } = await import('data:text/javasc
 
 test('canonical URLs, staff bookmarks and public invitation routes', () => {
   for (const [area, path] of Object.entries(portalPaths)) assert.equal(webPortal(path), area);
-  for (const path of ['/portaria', '/bilheteria/', '/admin', '/acesso']) assert.equal(webPortal(path), 'staff');
+  for (const path of ['/portaria', '/bilheteria/', '/admin', '/acesso', '/administracao-geral/']) assert.equal(webPortal(path), 'staff');
   for (const path of ['/app', '/app/indicar', '/reset-password', '/unknown', '/acessos']) assert.equal(webPortal(path), 'app');
   assert.equal(webPortal('/app/parceiro/'), 'business');
 });
 
 test('restored sessions belong to their assigned area', () => {
   for (const role of ['ADMIN', 'GATE', 'TICKET_SELLER', 'CASHIER']) assert.equal(accountPortal(role), 'staff');
-  assert.equal(accountPortal('OWNER'), 'owner');
+  assert.equal(accountPortal('OWNER'), 'staff');
   assert.equal(accountPortal('USER'), 'app');
   assert.equal(accountPortal('UNKNOWN'), null);
 });
