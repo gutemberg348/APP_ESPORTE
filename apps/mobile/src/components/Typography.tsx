@@ -1,5 +1,5 @@
 import React, { createContext, useContext, forwardRef } from 'react';
-import { Text as NativeText, TextInput as NativeInput, StyleSheet, type TextProps, type TextInputProps } from 'react-native';
+import { Platform, Text as NativeText, TextInput as NativeInput, StyleSheet, type TextProps, type TextInputProps } from 'react-native';
 import { maskInput, type InputMask } from '@nacional/shared/forms';
 export const fonts = {
   body: { regular: 'DMSans_400Regular', medium: 'DMSans_500Medium', semibold: 'DMSans_600SemiBold', bold: 'DMSans_700Bold' },
@@ -22,5 +22,9 @@ export const TextInput = forwardRef<React.ComponentRef<typeof NativeInput>, Text
   const { families, compact } = useContext(TypographyContext);
   const label = `${props.accessibilityLabel || ''} ${props.placeholder || ''}`;
   const kind = mask || (/CPF|CNPJ/i.test(label) ? 'document' : /\bCEP\b/i.test(label) ? 'postalCode' : props.keyboardType === 'phone-pad' ? 'phone' : undefined);
-  return <NativeInput ref={ref} {...props} value={value === undefined ? undefined : kind ? maskInput(value, kind) : value} onChangeText={(text) => onChangeText?.(maskInput(text, kind))} style={[{ fontFamily: families.body.regular, fontSize: compact ? 14 : 16 }, style]} />;
+  const defaultSize = compact ? 14 : 16;
+  // iOS Safari zooms the page on focus when the input text is smaller than 16 CSS pixels.
+  const touchWeb = Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0;
+  const focusStyle = touchWeb ? { fontSize: Math.max(16, StyleSheet.flatten(style)?.fontSize ?? defaultSize) } : undefined;
+  return <NativeInput ref={ref} {...props} value={value === undefined ? undefined : kind ? maskInput(value, kind) : value} onChangeText={(text) => onChangeText?.(maskInput(text, kind))} style={[{ fontFamily: families.body.regular, fontSize: defaultSize }, style, focusStyle]} />;
 });
