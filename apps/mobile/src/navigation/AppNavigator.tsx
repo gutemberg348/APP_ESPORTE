@@ -42,7 +42,7 @@ import { PasswordResetScreen } from '../screens/PasswordResetScreen';
 import { AdminThemeProvider } from '../theme/AdminThemeProvider';
 import { TicketCounterScreen } from '../screens/TicketCounterScreen';
 import { CashierScreen } from '../screens/CashierScreen';
-function CounterFrame({ children }: React.PropsWithChildren) {
+function StaffFrame({ children }: React.PropsWithChildren) {
   const { colors, isDark } = useTheme();
   return <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}><StatusBar style={isDark ? 'light' : 'dark'} />{children}</SafeAreaView>;
 }
@@ -65,10 +65,14 @@ export function AppNavigator() {
     return <View style={[layout.center, { padding: 24, gap: 16 }]}><Text>Esta conta não tem acesso a esta área.</Text><Button label="Trocar de conta" onPress={() => void clearSession()} /></View>;
   }
   if (member?.role === 'OWNER' || (portal === 'staff' && member?.role === 'ADMIN')) return <AdminScreen key={member.id} onBack={portal === 'staff' && member.role === 'ADMIN' ? () => navigate('app') : undefined} />;
-  if (member?.role === 'TICKET_SELLER') return <AdminThemeProvider><CounterFrame><TicketCounterScreen key={member.id} /></CounterFrame></AdminThemeProvider>;
+  if (member?.role === 'TICKET_SELLER' || member?.role === 'GATE') {
+    return <AdminThemeProvider><StaffFrame>
+      {member.role === 'GATE' ? <GateScreen key={member.id} /> : <TicketCounterScreen key={member.id} />}
+    </StaffFrame></AdminThemeProvider>;
+  }
   if (member?.role === 'CASHIER') return <PaymentsProvider><CashierScreen /></PaymentsProvider>;
-  return <View style={{ flex: 1, backgroundColor: colors.outer, alignItems: 'center' }}><StatusBar style={isDark ? 'light' : 'dark'} /><SafeAreaView edges={member?.role === 'ADMIN' ? [] : ['top']} style={{ flex: 1, width: '100%', maxWidth: member?.role === 'ADMIN' ? undefined : Platform.OS === 'web' && member?.role === 'GATE' ? 1180 : 448, backgroundColor: colors.background }}>
-    {loading ? <View style={layout.center}><ActivityIndicator color={colors.primary} /></View> : bootError ? <View style={[layout.center, { padding: 32, gap: 16 }]}><Text style={{ color: colors.danger, textAlign: 'center' }}>{bootError}</Text><Button label="Tentar novamente" onPress={() => void retry()} /></View> : member ? member.role === 'GATE' ? <GateScreen /> : <ClubProvider><PaymentsProvider><MainNavigator /></PaymentsProvider></ClubProvider> : demoMode ? <View style={[layout.center, { padding: 32, gap: 22 }]}><Crest size={78} height={98} /><Text heading style={{ color: colors.text, fontSize: 28, lineHeight: 36, fontWeight: '800', textAlign: 'center' }}>Sua torcida está aqui.</Text><Button label={`Voltar ao ${club.shortName}`} onPress={resumeDemo} /></View> : <LoginScreen onStaffLogin={() => navigate('staff')} />}
+  return <View style={{ flex: 1, backgroundColor: colors.outer, alignItems: 'center' }}><StatusBar style={isDark ? 'light' : 'dark'} /><SafeAreaView edges={member?.role === 'ADMIN' ? [] : ['top']} style={{ flex: 1, width: '100%', maxWidth: member?.role === 'ADMIN' ? undefined : 448, backgroundColor: colors.background }}>
+    {loading ? <View style={layout.center}><ActivityIndicator color={colors.primary} /></View> : bootError ? <View style={[layout.center, { padding: 32, gap: 16 }]}><Text style={{ color: colors.danger, textAlign: 'center' }}>{bootError}</Text><Button label="Tentar novamente" onPress={() => void retry()} /></View> : member ? <ClubProvider><PaymentsProvider><MainNavigator /></PaymentsProvider></ClubProvider> : demoMode ? <View style={[layout.center, { padding: 32, gap: 22 }]}><Crest size={78} height={98} /><Text heading style={{ color: colors.text, fontSize: 28, lineHeight: 36, fontWeight: '800', textAlign: 'center' }}>Sua torcida está aqui.</Text><Button label={`Voltar ao ${club.shortName}`} onPress={resumeDemo} /></View> : <LoginScreen onStaffLogin={() => navigate('staff')} />}
   </SafeAreaView></View>;
 }
 function MainNavigator() {

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, ScrollView, Pressable, Modal, useWindowDimensions, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { LayoutDashboard, CalendarDays, Ticket, Users, BadgeCheck, UserRoundCog, ScanLine, History, ArrowUpRight, LogOut, RefreshCw, Sun, Moon, ChevronRight, Building2, Menu, X, CalendarPlus, PanelLeftClose, PanelLeftOpen, ShoppingBag, Settings2, ShieldCheck } from 'lucide-react-native';
+import { LayoutDashboard, CalendarDays, Ticket, ChartNoAxesColumn, Users, BadgeCheck, UserRoundCog, ScanLine, History, ArrowUpRight, LogOut, RefreshCw, Sun, Moon, ChevronRight, Building2, Menu, X, CalendarPlus, PanelLeftClose, PanelLeftOpen, ShoppingBag, Settings2, ShieldCheck } from 'lucide-react-native';
 import { Text } from '../Typography';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useSession } from '../../providers/SessionProvider';
@@ -14,6 +14,7 @@ export const adminSections = [
   { name: 'Visão geral', icon: LayoutDashboard, group: 'Operação', description: 'Os números e as próximas ações do clube.' },
   { name: 'Partidas', icon: CalendarDays, group: 'Operação', description: 'Calendário, estádios e modelos de setores e vendas.' },
   { name: 'Ingressos', icon: Ticket, group: 'Operação', description: 'Emissão manual, bilhetes da bilheteria e compras do app.' },
+  { name: 'Relatórios', icon: ChartNoAxesColumn, group: 'Operação', description: 'Vendas pelo app, receita confirmada e disponibilidade por setor.' },
   { name: 'Loja', icon: ShoppingBag, group: 'Operação', description: 'Produtos, pedidos, estoque e opções de entrega.' },
   { name: 'Pagamentos', icon: BadgeCheck, group: 'Operação', description: 'Pix, conciliação e devoluções.' },
   { name: 'Saques', icon: BadgeCheck, group: 'Operação', description: 'Pedidos de saque, envios realizados e comprovantes do time.' },

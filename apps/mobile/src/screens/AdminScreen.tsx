@@ -42,8 +42,7 @@ import { PartidasIngressoV1Panel } from '../components/admin/ingresso-v1/Partida
 import { IngressosEmitidosV1Panel } from '../components/admin/ingresso-v1/IngressosEmitidosV1Panel';
 import { PortariaIngressoV1Panel } from '../components/admin/ingresso-v1/PortariaIngressoV1Panel';
 const matchViews = ['Calendário', 'Estádios', 'Templates de setores', 'Templates de venda'] as const;
-const ticketViews = ['Todos os ingressos', 'Relatório do app'] as const;
-type TicketView = typeof matchViews[number] | typeof ticketViews[number];
+type MatchView = typeof matchViews[number];
 
 export function AdminScreen({ onBack }: { onBack?: () => void }) {
   return <AdminThemeProvider><AdminWorkspace onBack={onBack} /></AdminThemeProvider>;
@@ -55,8 +54,8 @@ function AdminWorkspace({ onBack }: { onBack?: () => void }) {
   const owner = member?.role === 'OWNER';
   const [security, setSecurity] = useState(false);
   const [tab, setTab] = useState(owner ? 'Saques' : 'Visão geral');
-  const [ticketView, setTicketView] = useState<TicketView>('Calendário');
-  const sectionViews = tab === 'Partidas' ? matchViews : tab === 'Ingressos' ? ticketViews : [];
+  const [matchView, setMatchView] = useState<MatchView>('Calendário');
+  const sectionViews = tab === 'Partidas' ? matchViews : [];
   const [legacyGateHistory, setLegacyGateHistory] = useState(false);
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -114,8 +113,8 @@ function AdminWorkspace({ onBack }: { onBack?: () => void }) {
   if (!member || (!owner && member.role !== 'ADMIN')) return <Page><Text style={{ color: colors.danger }}>Acesso administrativo necessário.</Text></Page>;
   if (tab === 'Bilheteria' && !owner) return <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}><TicketCounterScreen onBack={() => setTab('Ingressos')} /></SafeAreaView>;
   if (security) return <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}><SecurityScreen onBack={() => setSecurity(false)} /></SafeAreaView>;
-  function select(section: string, view?: TicketView) {
-    setTicketView(view ?? (section === 'Ingressos' ? 'Todos os ingressos' : 'Calendário'));
+  function select(section: string, view: MatchView = 'Calendário') {
+    setMatchView(view);
     setSelectedPartidaV1Id(undefined);
     setTab(section);
     if (section === 'Visão geral') void refresh();
@@ -157,25 +156,25 @@ function AdminWorkspace({ onBack }: { onBack?: () => void }) {
       <AdminAction label="Emitir ingresso manual" disabled={busy} onPress={() => issueTicket()} />
     </View>;
     if (tab === 'Planos') return actionButton('Criar plano', () => setPlanEdit(null));
-    if (tab === 'Ingressos') return actionButton('Emitir ingresso manual', () => issueTicket(ticketView === 'Todos os ingressos' ? selectedPartidaV1Id : undefined));
+    if (tab === 'Ingressos') return actionButton('Emitir ingresso manual', () => issueTicket(selectedPartidaV1Id));
     if (tab !== 'Partidas') return;
-    switch (ticketView) {
+    switch (matchView) {
       case 'Estádios': return actionButton('Cadastrar estádio', () => setEstadioCreateOpen(true));
       case 'Templates de setores': return actionButton('Criar template de setores', () => setTemplateCreateOpen(true));
       case 'Templates de venda': return actionButton('Criar template de venda', () => setTemplateVendaCreateOpen(true));
       default: return actionButton('Cadastrar partida', createPartida);
     }
   }
-  return <AdminLayout onCreateMatch={createPartida} onIssueTicket={() => issueTicket()} subpages={sectionViews} currentSubpage={ticketView} onSubpage={page => select(tab, page as TicketView)} active={tab} onSelect={select} onBack={onBack} onSecurity={() => setSecurity(true)} onSignOut={() => void perform(signOut, false)} refreshing={loading} onRefresh={() => void refresh()} busy={busy} action={headerAction()}>
+  return <AdminLayout onCreateMatch={createPartida} onIssueTicket={() => issueTicket()} subpages={sectionViews} currentSubpage={matchView} onSubpage={page => select('Partidas', page as MatchView)} active={tab} onSelect={select} onBack={onBack} onSecurity={() => setSecurity(true)} onSignOut={() => void perform(signOut, false)} refreshing={loading} onRefresh={() => void refresh()} busy={busy} action={headerAction()}>
     {!!error && <Panel style={{ borderColor: colors.danger, borderRadius: 12, padding: 16 }}><Text accessibilityRole="alert" style={{ color: colors.danger, fontSize: 13 }}>{error}</Text></Panel>}
     {!!notice && <Text accessibilityRole="alert" style={{ color: colors.primary, fontSize: 13 }}>{notice}</Text>}
     {!['Financeiro', 'Saques'].includes(tab) && <AdminPayoutAlert refreshKey={reportRefresh} onOpen={()=>select('Saques')}/>}
     {sectionViews.length > 0 && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-      {sectionViews.map(view => <AdminButton key={view} label={view} primary={ticketView === view} disabled={busy} onPress={() => select(tab, view)} />)}
+      {sectionViews.map(view => <AdminButton key={view} label={view} primary={matchView === view} disabled={busy} onPress={() => select('Partidas', view)} />)}
     </View>}
-    {tab === 'Visão geral' && <><AdminStats overview={overview} /><AdminOverviewPanel overview={overview} matches={matches} tickets={tickets} loading={loading} onOpenMatches={() => select('Partidas')} onOpenSales={() => select('Ingressos', 'Relatório do app')} onCreate={createPartida} /></>}
+    {tab === 'Visão geral' && <><AdminStats overview={overview} /><AdminOverviewPanel overview={overview} matches={matches} tickets={tickets} loading={loading} onOpenMatches={() => select('Partidas')} onOpenSales={() => select('Relatórios')} onCreate={createPartida} /></>}
     {legacyMatch && !matchEdit && !sectorEdit && <Sheet visible title="Partida do app" onClose={() => setLegacyId('')}><AdminMatchGrid matches={[legacyMatch]} busy={busy} loading={loading} onEdit={setMatchEdit} onSector={(match, sector) => setSectorEdit({ match, sector })} onCreateSector={(match) => setSectorEdit({ match, sector: null })} onToggle={(match, field) => void perform(() => adminApi.updateMatch(token!, { id: match.id, [field]: !match[field] }))} onOpenGate={setAppGate} /></Sheet>}
-    {tab === 'Ingressos' && ticketView === 'Relatório do app' && <AdminSalesReport matches={matches} refreshKey={reportRefresh} busy={busy} {...appActions} />}
+    {tab === 'Relatórios' && <AdminSalesReport matches={matches} refreshKey={reportRefresh} busy={busy} {...appActions} />}
     {tab === 'Torcedores' && <AdminAccountsPanel onEdit={setAccountEdit} users={users} search={search} onSearchChange={setSearch} onSearch={() => void refresh()} loading={loading} busy={busy} currentUserId={member.id} onRecovery={(user) => void perform(async () => { await recoveryApi.forUser(token!, user.id); setNotice('Se a conta estiver ativa, o link será enviado para o email cadastrado.'); }, false)} onMembership={openMembership} onAccount={(user) => void perform(() => adminApi.account(token!, user.id, !user.active))} />}
     {tab === 'Planos' && <><AdminPlanGrid plans={plans} busy={busy} onEdit={setPlanEdit} /><MembershipCardCheck /></>}
     {tab === 'Funcionários' && <EmployeePanel matches={matches} desktop={desktop} />}
@@ -188,11 +187,11 @@ function AdminWorkspace({ onBack }: { onBack?: () => void }) {
     {tab === 'Parceiros' && <AdminPartnersPanel refreshKey={reportRefresh} />}
     {tab === 'Configurações' && <AdminSettingsPanel refreshKey={reportRefresh} onSelect={select} />}
     {tab === 'Email e acesso' && <AdminEmailPanel refreshKey={reportRefresh} users={users} />}
-    {tab === 'Partidas' && ticketView === 'Estádios' && <EstadiosIngressoV1Panel token={token!} busy={busy} onBusy={setBusy} onNotice={setNotice} onError={setError} createOpen={estadioCreateOpen} onConsumeCreate={() => setEstadioCreateOpen(false)} />}
-    {tab === 'Partidas' && ticketView === 'Templates de setores' && <TemplatesSetorIngressoV1Panel token={token!} busy={busy} onBusy={setBusy} onNotice={setNotice} onError={setError} createOpen={templateCreateOpen} onConsumeCreate={() => setTemplateCreateOpen(false)} />}
-    {tab === 'Partidas' && ticketView === 'Templates de venda' && <TemplatesVendaIngressoV1Panel token={token!} busy={busy} onBusy={setBusy} onNotice={setNotice} onError={setError} createOpen={templateVendaCreateOpen} onConsumeCreate={() => setTemplateVendaCreateOpen(false)} />}
-    {tab === 'Partidas' && ticketView === 'Calendário' && <PartidasIngressoV1Panel appMatches={matches} onAppGate={setAppGate} onEditApp={match => setLegacyId(match.id)} onSaved={() => void refresh()} refreshKey={reportRefresh} token={token!} busy={busy} onBusy={setBusy} onNotice={setNotice} onError={setError} createOpen={partidaV1CreateOpen} onConsumeCreate={() => setPartidaV1CreateOpen(false)} onOpenIngressos={issueTicket} />}
-    {tab === 'Ingressos' && ticketView === 'Todos os ingressos' && <IngressosEmitidosV1Panel appMatches={matches} appActions={appActions} refreshKey={reportRefresh} token={token!} busy={busy} onBusy={setBusy} onNotice={setNotice} onError={setError} createOpen={ingressoV1CreateOpen} onConsumeCreate={() => setIngressoV1CreateOpen(false)} initialPartidaId={selectedPartidaV1Id} />}
+    {tab === 'Partidas' && matchView === 'Estádios' && <EstadiosIngressoV1Panel token={token!} busy={busy} onBusy={setBusy} onNotice={setNotice} onError={setError} createOpen={estadioCreateOpen} onConsumeCreate={() => setEstadioCreateOpen(false)} />}
+    {tab === 'Partidas' && matchView === 'Templates de setores' && <TemplatesSetorIngressoV1Panel token={token!} busy={busy} onBusy={setBusy} onNotice={setNotice} onError={setError} createOpen={templateCreateOpen} onConsumeCreate={() => setTemplateCreateOpen(false)} />}
+    {tab === 'Partidas' && matchView === 'Templates de venda' && <TemplatesVendaIngressoV1Panel token={token!} busy={busy} onBusy={setBusy} onNotice={setNotice} onError={setError} createOpen={templateVendaCreateOpen} onConsumeCreate={() => setTemplateVendaCreateOpen(false)} />}
+    {tab === 'Partidas' && matchView === 'Calendário' && <PartidasIngressoV1Panel appMatches={matches} onAppGate={setAppGate} onEditApp={match => setLegacyId(match.id)} onSaved={() => void refresh()} refreshKey={reportRefresh} token={token!} busy={busy} onBusy={setBusy} onNotice={setNotice} onError={setError} createOpen={partidaV1CreateOpen} onConsumeCreate={() => setPartidaV1CreateOpen(false)} onOpenIngressos={issueTicket} />}
+    {tab === 'Ingressos' && <IngressosEmitidosV1Panel appMatches={matches} appActions={appActions} refreshKey={reportRefresh} token={token!} busy={busy} onBusy={setBusy} onNotice={setNotice} onError={setError} createOpen={ingressoV1CreateOpen} onConsumeCreate={() => setIngressoV1CreateOpen(false)} initialPartidaId={selectedPartidaV1Id} />}
     {tab === 'Portaria' && <PortariaIngressoV1Panel />}
     {accountEdit && <AdminAccountForm userId={accountEdit.id} onClose={() => setAccountEdit(null)} onSaved={async (signedOut) => { setAccountEdit(null); setNotice('Conta atualizada.'); if (!signedOut) await refresh(); }} />}
     {matchEdit !== undefined && <MatchForm match={matchEdit} onClose={() => setMatchEdit(undefined)} onSaved={async () => { setMatchEdit(undefined); await refresh(); }} />}

@@ -14,7 +14,7 @@ import { requestKey } from '../utils/payments';
 import { ApiError } from '../services/api';
 import { Text } from './Typography';
 import { Panel } from './ui';
-import { AdminButton, AdminField, AdminSelect, AdminNotice, AdminSection } from './admin/AdminControls';
+import { AdminButton, AdminField, AdminSelect, AdminNotice } from './admin/AdminControls';
 import { QrScannerContent } from './PaymentQrScanner';
 import { Sheet } from './Sheet';
 import { config } from '../config/env';
@@ -23,20 +23,28 @@ import { GateV1History } from './GateV1History';
 
 export function GateV1Panel() {
   const { token, member } = useSession(), { colors } = useTheme();
-  const [matches, setMatches] = useState<GateV1Match[]>([]), [matchId, setMatch] = useState(''), [allocationId, setAllocation] = useState(''), [gate, setGate] = useState('PORTAO-01');
+  const [matches, setMatches] = useState<GateV1Match[]>([]);
   const [input, setInput] = useState(''), [review, setReview] = useState<GateV1Ticket | null>(null), [credential, setCredential] = useState(''), [result, setResult] = useState<GateV1Receipt | null>(null);
   const [busy, setBusy] = useState(false), [loading, setLoading] = useState(true), [readingImage, setReadingImage] = useState(false), [error, setError] = useState(''), [scanner, setScanner] = useState(false);
   const [pending, setPending] = useState<GateV1Operation | null>(null), [storageReady, setStorageReady] = useState(false), [resetAllowed, setResetAllowed] = useState(false), [history, setHistory] = useState(false), [revision, setRevision] = useState(0);
-  const [showStation, setShowStation] = useState(false);
+  const [draft, setDraft] = useState<Station | null>(null);
   const [showManual, setShowManual] = useState(false);
   const [manualRevision, setManualRevision] = useState(0);
   const [readingMode, setReadingMode] = useState<'camera' | 'manual' | 'image'>('camera');
   const [registrationError, setRegistrationError] = useState('');
   const [lastStation, setLastStation] = useState<Station | null>(null);
   const [catalogReady, setCatalogReady] = useState(false);
+  const inspectedAt = useRef<Station | null>(null);
   const lock = useRef(false), mounted = useRef(true), catalogRequest = useRef(0);
   const storageKey = `nacional.gate-v1.pending.${member!.id}`;
   const stationKey = `nacional.gate.station.${encodeURIComponent(config.apiUrl)}.${config.tenantSlug}.${member!.id}`;
+  const station = storageReady ? resolveStation(matches, lastStation) : null;
+  const matchId = station?.partidaId ?? '', allocationId = station?.alocacaoId ?? '', gate = station?.catracaId ?? '';
+  const editingStation = !!draft || !station;
+  const draftMatch = matches.find(row => row.id === draft?.partidaId) ?? (matches.length === 1 ? matches[0] : undefined);
+  const draftSector = draftMatch?.alocacoesSetor.find(row => row.id === draft?.alocacaoId)
+    ?? (draftMatch?.alocacoesSetor.length === 1 ? draftMatch.alocacoesSetor[0] : undefined);
+  const draftGate = draft && draft.alocacaoId === draftSector?.id ? draft.catracaId : defaultGate(draftSector?.setor.portaoEntrada);
   const selected = matches.find((row) => row.id === matchId), blocked = loading || busy || readingImage || !!pending || !storageReady;
   const sector = selected?.alocacoesSetor.find(row => row.id === allocationId);
   const [historyApp, setHistoryApp] = useState(false);
@@ -47,7 +55,7 @@ export function GateV1Panel() {
     setLoading(true);
     try {
       const value = await gateV1Api.matches(token!, true);
-      if (mounted.current && sequence === catalogRequest.current) { setMatches(value); setCatalogReady(true); }
+      if (mounted.current && sequence === catalogRequest.current) { setMatches(value.filter(match => match.alocacoesSetor.length)); setCatalogReady(true); }
     } catch (err) {
       if (mounted.current && sequence === catalogRequest.current) setError(messageOf(err));
     } finally {
@@ -72,21 +80,17 @@ export function GateV1Panel() {
   }, [storageKey, stationKey]);
   useEffect(() => { void load(); return () => { catalogRequest.current++; }; }, [token]);
 
-  const restored = useRef(false);
   useEffect(() => {
-    if (!catalogReady || loading || !storageReady || restored.current) return;
-    restored.current = true;
-    const station = resolveStation(matches, lastStation);
-    if (!station) { setShowStation(true); return; }
-    setMatch(station.partidaId); setAllocation(station.alocacaoId); setGate(station.catracaId);
-  }, [matches, lastStation, catalogReady, loading, storageReady]);
-
+    if (!storageReady || !catalogReady || loading) return;
+    const next = resolveStation(matches, lastStation);
+    if (next !== lastStation) setLastStation(next);
+  }, [catalogReady, loading, storageReady, matches, lastStation]);
   useEffect(() => {
-    if (!sector || !storageReady || !gate.trim()) return;
-    const station: Station = { partidaId: matchId, alocacaoId: allocationId, catracaId: gate.trim() };
-    void AsyncStorage.setItem(stationKey, JSON.stringify(station)).catch(() => {});
-  }, [sector, matchId, allocationId, gate, storageReady, stationKey]);
-  function clearReview() { setReview(null); setCredential(''); setResult(null); setError(''); setRegistrationError(''); }
+    if (!storageReady) return;
+    const write = lastStation ? AsyncStorage.setItem(stationKey, JSON.stringify(lastStation)) : AsyncStorage.removeItem(stationKey);
+    void write.catch(() => { if (mounted.current) setError('Não foi possível salvar a preferência de portaria neste aparelho.'); });
+  }, [lastStation, storageReady, stationKey]);
+  function clearReview() { inspectedAt.current = null; setReview(null); setCredential(''); setResult(null); setError(''); setRegistrationError(''); }
   async function inspect(raw: string) {
     if (lock.current || pending || !storageReady) return;
     Keyboard.dismiss();
@@ -100,7 +104,7 @@ export function GateV1Panel() {
     lock.current = true; setBusy(true);
     try {
       const ticket = await gateV1Api.inspect(token!, { ...scope, catracaId: gate.trim() || undefined, chaveQr: value });
-      if (mounted.current) { setReview(ticket); setCredential(value); setInput(''); setScanner(false); }
+      if (mounted.current) { inspectedAt.current = station; setReview(ticket); setCredential(value); setInput(''); setScanner(false); }
     } catch (err) { if (mounted.current) setError(messageOf(err)); throw err; }
     finally { lock.current = false; if (mounted.current) setBusy(false); }
   }
@@ -114,8 +118,9 @@ export function GateV1Panel() {
   }
   async function admit() {
     if (lock.current || pending || !review || !credential || !storageReady || loading) return;
-    if (!selected?.alocacoesSetor.some(row => row.id === allocationId)) {
-      clearReview(); setError('A escala mudou. Selecione novamente a partida e o setor.'); return;
+    const original = inspectedAt.current;
+    if (!station || !original || original.partidaId !== matchId || original.alocacaoId !== allocationId || original.catracaId !== gate) {
+      clearReview(); setError('A portaria mudou. Confira seu posto e leia o ingresso novamente.'); return;
     }
     const operation = { partidaId: review.partida.id, alocacaoId: review.alocacao.id, catracaId: gate.trim(), requestKey: requestKey(), source: review.remainingQuantity !== undefined ? 'app' as const : undefined, ticketId: review.id };
     if (!operation.catracaId) { setError('Identifique o portão ou a catraca.'); return; }
@@ -156,8 +161,7 @@ export function GateV1Panel() {
     catch (err) { if (mounted.current) setError(messageOf(err)); }
     finally { if (mounted.current) setReadingImage(false); }
   }
-  const editingStation = showStation || !sector || !gate.trim();
-  const canScan = !blocked && !!sector && !!gate.trim();
+  const canScan = !blocked && !editingStation && !!sector;
   const confirming = Boolean(review) && !pending;
   const popupOpen = scanner || confirming || !!pending || !!result || !!registrationError;
   const title = pending ? (busy ? 'Registrando entrada' : 'Conferir registro')
@@ -191,37 +195,46 @@ export function GateV1Panel() {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <View style={{ backgroundColor: colors.primarySoft, padding: 10, borderRadius: 10 }}><DoorOpen color={colors.primary} size={20} /></View>
         <View style={{ flex: 1, gap: 4 }}>
-          <Text heading style={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>Posto de entrada</Text>
-          {!!selected && <Text style={{ color: colors.muted, fontSize: 13 }}>{selected.timeMandante} × {selected.timeVisitante}</Text>}
+          <Text style={{ color: colors.muted, fontSize: 12 }}>Posto de entrada</Text>
+          <Text heading style={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>{selected ? selected.timeMandante + ' × ' + selected.timeVisitante : 'Sua escala'}</Text>
         </View>
-        {sector && <AdminButton size="small" variant="ghost" label={showStation ? 'Fechar' : 'Trocar'} disabled={blocked} onPress={() => setShowStation(!showStation)} />}
+        {station && <AdminButton label={draft ? 'Cancelar' : 'Trocar'} disabled={blocked} onPress={() => {
+          clearReview(); setInput(''); setShowManual(false); setDraft(draft ? null : station);
+        }} />}
       </View>
       {loading && !selected && <Text style={{ color: colors.muted }}>Carregando sua escala…</Text>}
       {catalogReady && !loading && !matches.length && <AdminNotice>Você está sem jogos na escala. Solicite ao administrador o acesso ao setor.</AdminNotice>}
       {!editingStation && sector && <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
         <MapPin size={14} color={colors.muted} /><Text style={{ flex: 1, color: colors.muted, fontSize: 13 }}>{sector.setor.nome} · {gate}</Text>
       </View>}
-      {editingStation && !!matches.length && <View style={{ gap: 12 }}>
-        <AdminSelect label="Partida" value={matchId} disabled={blocked}
+      {storageReady && editingStation && !!matches.length && <View style={{ gap: 12 }}>
+        {matches.length === 1 ? <Text style={{ color: colors.text }}>{draftMatch?.timeMandante} × {draftMatch?.timeVisitante}</Text> : <AdminSelect label="Partida" value={draftMatch?.id ?? ''} disabled={blocked}
           options={matches.map(row => ({ value: row.id, label: `${row.timeMandante} × ${row.timeVisitante}`, description: matchDate(row.dataPartida) }))}
           placeholder="Selecione a partida" onChange={id => {
             const next = matches.find(row => row.id === id)?.alocacoesSetor ?? [];
             const only = next.length === 1 ? next[0] : undefined;
-            setMatch(id); setAllocation(only?.id || ''); setGate(defaultGate(only?.setor.portaoEntrada)); clearReview();
-          }} />
-        <AdminSelect label="Setor" value={allocationId} disabled={blocked || !selected}
-          options={(selected?.alocacoesSetor || []).map(row => ({ value: row.id, label: row.setor.nome }))}
+            setDraft({ partidaId: id, alocacaoId: only?.id || '', catracaId: defaultGate(only?.setor.portaoEntrada) });
+          }} />}
+        {draftMatch?.alocacoesSetor.length === 1 ? <Text style={{ color: colors.muted }}>{draftSector?.setor.nome}</Text> : <AdminSelect label="Setor" value={draftSector?.id ?? ''} disabled={blocked || !draftMatch}
+          options={(draftMatch?.alocacoesSetor || []).map(row => ({ value: row.id, label: row.setor.nome }))}
           placeholder="Selecione o setor" onChange={id => {
-            setAllocation(id); setGate(defaultGate(selected?.alocacoesSetor.find(row => row.id === id)?.setor.portaoEntrada)); clearReview();
-          }} />
-        <AdminField label="Portão / catraca" value={gate} onChange={setGate} maxLength={50} editable={!blocked} required />
-        {sector && <AdminButton label="Usar este posto" icon={Check} disabled={!canScan} onPress={() => setShowStation(false)} />}
+            if (draftMatch) setDraft({ partidaId: draftMatch.id, alocacaoId: id, catracaId: defaultGate(draftMatch.alocacoesSetor.find(row => row.id === id)?.setor.portaoEntrada) });
+          }} />}
+        {draftMatch && draftSector && <AdminField label="Portão / catraca" value={draftGate}
+          onChange={catracaId => setDraft({ partidaId: draftMatch.id, alocacaoId: draftSector.id, catracaId })}
+          maxLength={50} editable={!blocked} required />}
+        <AdminButton primary size="large" label="Usar esta portaria" icon={Check} disabled={blocked || !draftSector || !draftGate.trim()} onPress={() => {
+          if (!draftMatch || !draftSector || !draftGate.trim()) return;
+          setLastStation({ partidaId: draftMatch.id, alocacaoId: draftSector.id, catracaId: draftGate.trim() });
+          setDraft(null);
+        }} />
       </View>}
       {(editingStation || !catalogReady) && <AdminButton label="Atualizar escala" icon={RefreshCw} variant="ghost"
         loading={loading} disabled={busy || readingImage || !!pending} onPress={() => { clearReview(); void load(); }} />}
     </Panel>
-    <Panel style={{ gap: 12 }}>
-      <AdminButton label="Ler ingresso com a câmera" icon={Camera} primary disabled={!canScan} onPress={openScanner} />
+    {!editingStation && <Panel style={{ gap: 12 }}>
+      <Text heading style={{ color: colors.text, fontWeight: '700', fontSize: 19 }}>Conferir ingresso</Text>
+      <AdminButton label="Escanear com a câmera" size="large" icon={Camera} primary disabled={!canScan} onPress={openScanner} />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         <View style={{ flexGrow: 1 }}><AdminButton label="Ler imagem" icon={ImagePlus} loading={readingImage} disabled={!canScan} onPress={() => void image()} /></View>
         <View style={{ flexGrow: 1 }}><AdminButton label={showManual ? 'Ocultar código' : 'Código ou USB'} icon={KeyboardIcon} disabled={!canScan}
@@ -234,9 +247,9 @@ export function GateV1Panel() {
         <AdminButton label="Consultar ingresso" icon={ScanLine} primary loading={busy && !pending}
           disabled={!canScan || !input.trim()} onPress={readManual} />
       </View>}
-      {!!error && !popupOpen && <AdminNotice tone="error">{error}</AdminNotice>}
-      {!storageReady && !loading && <AdminButton label="Recuperar estado da portaria" onPress={() => void restore()} />}
-    </Panel>
+    </Panel>}
+    {!!error && !popupOpen && <AdminNotice tone="error">{error}</AdminNotice>}
+    {!storageReady && !loading && !!error && <AdminButton label="Recuperar estado da portaria" onPress={() => void restore()} />}
 
     <AdminButton label={history ? 'Ocultar histórico' : 'Histórico de entradas'} icon={History} variant="ghost" onPress={() => setHistory(!history)} />
     {history && sector?.appScope && !sector.appOnly && <AdminSelect label="Histórico de entradas" value={showAppHistory ? 'app' : 'counter'}

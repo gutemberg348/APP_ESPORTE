@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AppState, Platform, Pressable, View, useWindowDimensions } from 'react-native';
-import { ArrowRight, Banknote, ChevronRight, CreditCard, IdCard, LogOut, Minus, Plus, QrCode, RefreshCw, ShieldCheck } from 'lucide-react-native';
+import { ArrowRight, Banknote, ChevronRight, CreditCard, History, IdCard, LogOut, Minus, Plus, QrCode, RefreshCw, ShieldCheck, Ticket } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { validTaxId } from '@nacional/shared/forms';
 import { AdminButton, AdminField, AdminNotice, AdminSelect } from '../components/admin/AdminControls';
@@ -52,7 +52,7 @@ export function TicketCounterScreen({ onBack }: { onBack?: () => void }) {
   const n = Number(quantity), document = cpf.replace(/\D/g, '');
   const valid = !!lot && document.length === 11 && validTaxId(document) && Number.isInteger(n) && n >= 1 && n <= Math.min(10, lot.available) && (method !== 'PIX' || (lot.pixAvailable !== false && lot.unitCents > 0))
     && (!lot.sector.numerado || (Number(block) > 0 && /^[A-Z]{1,10}$/.test(row) && Number(first) > 0));
-  async function run(work: () => Promise<void>) {
+  async function run(work: () => Promise<unknown>) {
     if (lock.current) return;
     lock.current = true; setBusy(true); setError('');
     try { await work(); } catch (e) { setError(messageOf(e)); } finally { lock.current = false; setBusy(false); }
@@ -60,11 +60,18 @@ export function TicketCounterScreen({ onBack }: { onBack?: () => void }) {
   async function reload() {
     const [options, sales] = await Promise.all([counterApi.lots(token!), counterApi.recent(token!)]);
     setLots(options); setRecent(sales);
+    return options;
   }
   async function initialize() {
     const saved = await AsyncStorage.getItem(storage);
     key.current = saved || ''; setPending(saved || '');
-    await reload(); setReady(true);
+    const options = await reload();
+    const firstLot = options[0];
+    if (firstLot && options.every(item => item.match.id === firstLot.match.id)) {
+      setMatch(firstLot.match.id);
+      if (options.length === 1) setLotId(firstLot.id);
+    }
+    setReady(true);
   }
   useEffect(() => { void run(initialize); }, [storage]);
   const awaitingTerminal = receipt?.metodoBalcao === 'PAGBANK' && receipt.statusPagamento === 'PENDENTE' ? receipt.chaveBalcao : null;
@@ -121,7 +128,7 @@ export function TicketCounterScreen({ onBack }: { onBack?: () => void }) {
     await finish(await counterApi.settle(token!, receipt.chaveBalcao, pay));
   }
   if (security) return <SecurityScreen onBack={() => setSecurity(false)} />;
-  return <Page><View style={{ gap: 20, width: '100%', maxWidth: 1120, alignSelf: 'center' }}>
+  return <Page keyboardAware><View style={{ gap: 20, width: '100%', maxWidth: 1120, alignSelf: 'center' }}>
     <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12, paddingBottom: 14, borderBottomWidth: 1, borderColor: colors.border }}>
       <View style={{ flex: 1, minWidth: 120 }}><Title title="Bilheteria" subtitle={member?.name} /></View>
       {onBack && <AdminButton label="Voltar ao painel" variant="ghost" disabled={busy} onPress={onBack} />}
@@ -131,10 +138,10 @@ export function TicketCounterScreen({ onBack }: { onBack?: () => void }) {
     {!!error && <AdminNotice tone="error">{error}</AdminNotice>}
     {!!pending && <Panel><AdminNotice>Confira o resultado da última operação antes de cobrar novamente.</AdminNotice>
       <AdminButton label="Consultar venda" onPress={() => void run(recover)} loading={busy} /></Panel>}
-    {!ready && <AdminButton label="Carregar bilheteria" loading={busy} onPress={() => void run(initialize)} />}
-    {!wide && ready && !pending && <View style={{ flexDirection: 'row', gap: 8 }}>
-      <View style={{ flex: 1 }}><AdminButton label={receipt ? 'Venda atual' : 'Nova venda'} primary={!history} onPress={() => setHistory(false)} /></View>
-      <View style={{ flex: 1 }}><AdminButton label="Minhas vendas" primary={history} onPress={() => setHistory(true)} /></View>
+    {!ready && <AdminButton label={busy ? 'Carregando bilheteria' : 'Carregar bilheteria'} loading={busy} onPress={() => void run(initialize)} />}
+    {!wide && ready && !pending && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      <View style={{ flexGrow: 1, flexBasis: 130 }}><AdminButton icon={Ticket} size="large" label={receipt ? 'Venda atual' : 'Nova venda'} primary={!history} onPress={() => setHistory(false)} /></View>
+      <View style={{ flexGrow: 1, flexBasis: 130 }}><AdminButton icon={History} size="large" label="Minhas vendas" primary={history} onPress={() => setHistory(true)} /></View>
     </View>}
     <View style={{ flexDirection: wide ? 'row' : 'column', alignItems: 'stretch', gap: 18 }}>
     {(wide || !history) && <View style={{ flex: wide ? 1.55 : undefined, minWidth: 0 }}>
@@ -166,7 +173,7 @@ export function TicketCounterScreen({ onBack }: { onBack?: () => void }) {
           })}
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingTop: 14, borderTopWidth: 1, borderColor: colors.border }}><Text style={{ flex: 1, color: colors.muted }}>Total da venda</Text><Text heading style={{ color: colors.text, fontSize: 24, fontWeight: '700' }}>{lot ? money(n * lot.unitCents) : '—'}</Text></View>
-        <AdminButton icon={ArrowRight} label="Reservar ingressos" disabled={!valid || busy} primary onPress={() => void run(sell)} />
+        <AdminButton icon={ArrowRight} size="large" label="Confirmar reserva" disabled={!valid || busy} primary onPress={() => void run(sell)} />
     </Panel>}
     {receipt && !pending && <Panel style={{ gap: 14 }}>
       <Title title={receipt.statusPagamento === 'PENDENTE' ? 'Receber ' + money(receipt.valorTotalCentavos) : receipt.statusPagamento === 'PAGO' ? 'Bilhetes da venda' : 'Reserva encerrada'} subtitle={receipt.partida.timeMandante + ' × ' + receipt.partida.timeVisitante + ' · ' + money(receipt.valorTotalCentavos)} />

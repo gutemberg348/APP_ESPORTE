@@ -14,7 +14,7 @@ export function GateScreen() {
   const { member, signOut } = useSession(), { colors } = useTheme();
   const [security, setSecurity] = useState(false), [error, setError] = useState(''), [leaving, setLeaving] = useState(false);
   if (security) return <SecurityScreen onBack={() => setSecurity(false)} />;
-  return <Page compact>
+  return <View style={{ flex: 1, alignSelf: 'center', width: '100%', maxWidth: 760 }}><Page compact keyboardAware>
     <Title title="Portaria" subtitle={member?.name} />
     <GateV1Panel key={member?.id} />
     <MembershipCardCheck />
@@ -26,5 +26,5 @@ export function GateScreen() {
       }} />
     </View>
     {!!error && <Text accessibilityRole="alert" style={{ color: colors.danger }}>{error}</Text>}
-  </Page>;
+  </Page></View>;
 }

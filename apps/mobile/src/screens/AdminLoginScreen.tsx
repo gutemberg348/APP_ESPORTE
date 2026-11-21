@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { View, Keyboard, TextInput, StyleSheet, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, ArrowRight, LockKeyhole, Mail, Moon, ScanLine, Sun, Ticket } from 'lucide-react-native';
 import { Text } from '../components/Typography';
@@ -26,7 +26,7 @@ const stations = [
 ];
 export function AdminLoginScreen(props: Props) { return <AdminThemeProvider><AdminLoginPage {...props} /></AdminThemeProvider>; }
 function AdminLoginPage({ onOpenApp, loading, bootError, onRetry }: Props) {
-  const desktop = useWindowDimensions().width >= 820, { colors, isDark, toggle } = useTheme(), { signIn } = useSession(), insets = useSafeAreaInsets();
+  const desktop = useWindowDimensions().width >= 820, { colors, isDark, toggle } = useTheme(), { signIn } = useSession();
   const emailInput = useRef<React.ComponentRef<typeof TextInput>>(null);
   const passwordInput = useRef<React.ComponentRef<typeof TextInput>>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -54,12 +54,12 @@ function AdminLoginPage({ onOpenApp, loading, bootError, onRetry }: Props) {
   }
   return <View style={{ flex: 1, backgroundColor: colors.background }}>
     <StatusBar style={isDark ? 'light' : 'dark'} />
-    <View style={{ flex: 1, paddingTop: insets.top }}>
+    <SafeAreaView style={{ flex: 1 }}>
       <View style={{ minHeight: 60, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: desktop ? 48 : 16 }}>
         <AdminButton label="Área do torcedor" icon={ArrowLeft} variant="ghost" disabled={busy} onPress={onOpenApp} />
         <AdminButton label={isDark ? 'Usar tema claro' : 'Usar tema escuro'} icon={isDark ? Sun : Moon} iconOnly variant="ghost" onPress={toggle} />
       </View>
-      <KeyboardAwareScrollView bottomOffset={20} keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: desktop ? 32 : 12, paddingVertical: 12, paddingBottom: Math.max(insets.bottom, 24) }}>
+      <KeyboardAwareScrollView bottomOffset={20} keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, alignItems: 'center', justifyContent: desktop ? 'center' : 'flex-start', paddingHorizontal: desktop ? 32 : 16, paddingTop: 12, paddingBottom: 24 }}>
         <View style={[styles.card, { maxWidth: desktop ? 920 : 460, flexDirection: desktop ? 'row' : 'column', backgroundColor: colors.surface, borderColor: colors.border }]}>
           <LinearGradient colors={['#77192a', '#41101d']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
             style={[styles.brandPanel, desktop ? { flex: 0.9, padding: 36 } : { padding: 18 }]}>
@@ -77,7 +77,7 @@ function AdminLoginPage({ onOpenApp, loading, bootError, onRetry }: Props) {
           <View style={{ flex: desktop ? 1 : undefined, padding: desktop ? 36 : 20, gap: 22 }}>
           <View style={{ gap: 5 }}>
             <Text heading accessibilityRole="header" style={{ color: colors.text, fontSize: 27, lineHeight: 34, fontWeight: '700' }}>{loading ? 'Restaurando acesso' : 'Acesso da equipe'}</Text>
-            <Text style={{ color: colors.muted, fontSize: 14, lineHeight: 21 }}>Entre com sua conta do clube. Seu cargo abre a área certa.</Text>
+            <Text style={{ color: colors.muted, fontSize: 14, lineHeight: 21 }}>Use o e-mail e a senha que o clube cadastrou para você.</Text>
           </View>
           {loading ? <ActivityIndicator color={colors.primary} accessibilityLabel="Conferindo sua sessão" />
             : bootError ? <View style={{ gap: 12 }}>
@@ -102,7 +102,7 @@ function AdminLoginPage({ onOpenApp, loading, bootError, onRetry }: Props) {
           </View>
         </View>
       </KeyboardAwareScrollView>
-    </View>
+    </SafeAreaView>
     {forgot && <Sheet visible title="Recuperar acesso" onClose={() => setForgot(false)}>
       <PasswordRecoveryForm initialEmail={email} portal="ADMIN" onDone={() => setForgot(false)} />
     </Sheet>}

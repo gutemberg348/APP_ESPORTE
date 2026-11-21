@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Pressable, ActivityIndicator, ScrollView, RefreshControl, StyleSheet, type ViewStyle, type StyleProp } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import type { LucideIcon } from 'lucide-react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from './Typography';
@@ -30,9 +31,10 @@ export function Panel({ children, style }: React.PropsWithChildren<{ style?: Sty
   const { colors, variant } = useTheme();
   return <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }, variant === 'admin' && { borderRadius: 10, padding: 20 }, style]}>{children}</View>;
 }
-export function Page({ children, refreshing = false, onRefresh, compact = false }: React.PropsWithChildren<{ refreshing?: boolean; onRefresh?: () => void; compact?: boolean }>) {
+export function Page({ children, refreshing = false, onRefresh, compact = false, keyboardAware = false }: React.PropsWithChildren<{ refreshing?: boolean; onRefresh?: () => void; compact?: boolean; keyboardAware?: boolean }>) {
   const { colors } = useTheme();
-  return <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.page, compact && { paddingTop: 10, paddingBottom: 16 }]} refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} /> : undefined}>{children}</ScrollView>;
+  const Scroll = keyboardAware ? KeyboardAwareScrollView : ScrollView;
+  return <Scroll {...(keyboardAware && { bottomOffset: 20 })} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.page, compact && { paddingTop: 10, paddingBottom: 16 }]} refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} /> : undefined}>{children}</Scroll>;
 }
 export function Title({ title, subtitle, action }: { title: string; subtitle?: string; action?: React.ReactNode }) {
   const { colors } = useTheme();
